@@ -253,6 +253,7 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 		// The number of cores can be configured in the config.
 		// If not configured, it is set to the number of task slots
 		int numYarnVcores = conf.getInt(YarnConfiguration.NM_VCORES, YarnConfiguration.DEFAULT_NM_VCORES);
+		numYarnVcores = numYarnVcores <= 0 ? YarnConfiguration.DEFAULT_NM_VCORES : numYarnVcores;
 		int configuredVcores = flinkConfiguration.getInteger(YarnConfigOptions.VCORES, clusterSpecification.getSlotsPerTaskManager());
 		// don't configure more than the maximum configured number of vcores
 		if (configuredVcores > numYarnVcores) {
@@ -991,7 +992,7 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 		for (File shipFile : shipFiles) {
 			LocalResource shipResources = Records.newRecord(LocalResource.class);
 
-			Path shipLocalPath = new Path("file://" + shipFile.getAbsolutePath());
+			Path shipLocalPath = new Path("file:///" + shipFile.getAbsolutePath());
 			Path remotePath =
 				Utils.setupLocalResource(fs, appId, shipLocalPath, shipResources, fs.getHomeDirectory());
 
@@ -1351,7 +1352,13 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 		ContainerLaunchContext amContainer = Records.newRecord(ContainerLaunchContext.class);
 
 		final  Map<String, String> startCommandValues = new HashMap<>();
-		startCommandValues.put("java", "$JAVA_HOME/bin/java");
+		if (System.getProperty("os.name").toLowerCase().startsWith("windows")){
+			startCommandValues.put("java", "%JAVA_HOME%/bin/java");
+		}
+		else {
+			startCommandValues.put("java", "$JAVA_HOME/bin/java");
+		}
+
 		startCommandValues.put("jvmmem", "-Xmx" +
 			Utils.calculateHeapSize(jobManagerMemoryMb, flinkConfiguration) +
 			"m");
