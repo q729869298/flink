@@ -28,7 +28,6 @@ import org.apache.flink.util.Preconditions;
 
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.RocksDBException;
-import org.rocksdb.WriteOptions;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -48,22 +47,8 @@ import java.util.List;
  * @param <V> The type of the values in the list state.
  */
 public class RocksDBListState<K, N, V>
-	extends AbstractRocksDBState<K, N, ListState<V>, ListStateDescriptor<V>, List<V>>
+	extends AbstractRocksDBListState<K, N, V>
 	implements InternalListState<N, V> {
-
-	/** Serializer for the values. */
-	private final TypeSerializer<V> valueSerializer;
-
-	/**
-	 * We disable writes to the write-ahead-log here. We can't have these in the base class
-	 * because JNI segfaults for some reason if they are.
-	 */
-	private final WriteOptions writeOptions;
-
-	/**
-	 * Separator of StringAppendTestOperator in RocksDB.
-	 */
-	private static final byte DELIMITER = ',';
 
 	/**
 	 * Creates a new {@code RocksDBListState}.
@@ -78,10 +63,6 @@ public class RocksDBListState<K, N, V>
 			RocksDBKeyedStateBackend<K> backend) {
 
 		super(columnFamily, namespaceSerializer, stateDesc, backend);
-		this.valueSerializer = stateDesc.getElementSerializer();
-
-		writeOptions = new WriteOptions();
-		writeOptions.setDisableWAL(true);
 	}
 
 	@Override
