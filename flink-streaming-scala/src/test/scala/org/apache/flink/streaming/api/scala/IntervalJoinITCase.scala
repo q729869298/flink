@@ -96,6 +96,241 @@ class IntervalJoinITCase extends AbstractTestBase {
       "(key,1):(key,2)"
     )
   }
+
+  @Test
+  @throws[Exception]
+  def testUseLeftTimestamp(): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
+    env.setParallelism(1)
+
+    val streamOne = env.fromElements(("key", 0L), ("key", 1L), ("key", 2L))
+      .assignTimestampsAndWatermarks(new TimestampExtractor())
+      .keyBy(elem => elem._1)
+
+    val streamTwo = env.fromElements(("key", 0L), ("key", 1L), ("key", 2L))
+      .assignTimestampsAndWatermarks(new TimestampExtractor())
+      .keyBy(elem => elem._1)
+
+
+    streamOne.intervalJoin(streamTwo)
+      .between(Time.milliseconds(0L), Time.milliseconds(2L))
+      .assignLeftTimestamp()
+      .process(new ProcessJoinFunction[(String, Long), (String, Long), String]() {
+        @throws[Exception]
+        override def processElement(
+            left: (String, Long),
+            right: (String, Long),
+            ctx: ProcessJoinFunction[(String, Long), (String, Long), String]#Context,
+            out: Collector[String]): Unit = {
+
+          Assert.assertEquals(ctx.getTimestamp, ctx.getLeftTimestamp)
+
+        }
+      })
+
+    env.execute()
+  }
+
+  @Test
+  @throws[Exception]
+  def testUseRightTimestamp(): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
+    env.setParallelism(1)
+
+    val streamOne = env.fromElements(("key", 1L), ("key", 2L), ("key", 3L))
+      .assignTimestampsAndWatermarks(new TimestampExtractor())
+      .keyBy(elem => elem._1)
+
+    val streamTwo = env.fromElements(("key", 2L), ("key", 3L), ("key", 4L))
+      .assignTimestampsAndWatermarks(new TimestampExtractor())
+      .keyBy(elem => elem._1)
+
+    streamOne.intervalJoin(streamTwo)
+      .between(Time.milliseconds(-2L), Time.milliseconds(0L))
+      .assignRightTimestamp()
+      .process(new ProcessJoinFunction[(String, Long), (String, Long), String]() {
+        @throws[Exception]
+        override def processElement(
+            left: (String, Long),
+            right: (String, Long),
+            ctx: ProcessJoinFunction[(String, Long), (String, Long), String]#Context,
+            out: Collector[String]): Unit = {
+
+          Assert.assertEquals(ctx.getTimestamp, ctx.getRightTimestamp)
+
+        }
+      })
+
+    env.execute()
+  }
+
+  @Test
+  @throws[Exception]
+  def testUseMaxTimestamp(): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
+    env.setParallelism(1)
+
+    val streamOne = env.fromElements(("key", 1L), ("key", 2L), ("key", 3L))
+      .assignTimestampsAndWatermarks(new TimestampExtractor())
+      .keyBy(elem => elem._1)
+
+    val streamTwo = env.fromElements(("key", 2L), ("key", 3L), ("key", 4L))
+      .assignTimestampsAndWatermarks(new TimestampExtractor())
+      .keyBy(elem => elem._1)
+
+    streamOne.intervalJoin(streamTwo)
+      .between(Time.milliseconds(-2L), Time.milliseconds(0L))
+      .assignMaxTimestamp()
+      .process(new ProcessJoinFunction[(String, Long), (String, Long), String]() {
+        @throws[Exception]
+        override def processElement(
+            left: (String, Long),
+            right: (String, Long),
+            ctx: ProcessJoinFunction[(String, Long), (String, Long), String]#Context,
+            out: Collector[String]): Unit = {
+
+          val expected = Math.max(ctx.getRightTimestamp, ctx.getLeftTimestamp)
+          Assert.assertEquals(ctx.getTimestamp, expected)
+
+        }
+      })
+
+    env.execute()
+  }
+
+  @Test
+  def testRightOuterJoin(): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
+    env.setParallelism(1)
+
+    val leftKeyedStream = env.fromElements(("key", 0L), ("key", 1L), ("key", 3L))
+      .assignTimestampsAndWatermarks(new TimestampExtractor())
+      .keyBy(elem => elem._1)
+
+    val rightKeyedStream = env.fromElements(("key", 0L), ("key", 1L), ("key", 2L), ("key", 3L))
+      .assignTimestampsAndWatermarks(new TimestampExtractor())
+      .keyBy(elem => elem._1)
+
+    val sink = new ResultSink()
+
+    leftKeyedStream.intervalJoin(rightKeyedStream)
+      .between(Time.milliseconds(0), Time.milliseconds(0))
+      .rightOuter()
+      .process(new CombineToStringJoinFunction())
+      .addSink(sink)
+
+    env.execute()
+
+    sink.expectInAnyOrder(
+      "(key,0):(key,0)",
+      "(key,1):(key,1)",
+      "null:(key,2)",
+      "(key,3):(key,3)"
+    )
+  }
+
+  @Test
+  def testLeftOuterJoin(): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
+    env.setParallelism(1)
+
+    val leftKeyedStream = env.fromElements(("key", 0L), ("key", 1L), ("key", 2L), ("key", 3L))
+      .assignTimestampsAndWatermarks(new TimestampExtractor())
+      .keyBy(elem => elem._1)
+
+    val rightKeyedStream = env.fromElements(("key", 0L), ("key", 1L), ("key", 3L))
+      .assignTimestampsAndWatermarks(new TimestampExtractor())
+      .keyBy(elem => elem._1)
+
+    val sink = new ResultSink()
+
+    leftKeyedStream.intervalJoin(rightKeyedStream)
+      .between(Time.milliseconds(0), Time.milliseconds(0))
+      .leftOuter()
+      .process(new CombineToStringJoinFunction())
+      .addSink(sink)
+
+    env.execute()
+
+    sink.expectInAnyOrder(
+      "(key,0):(key,0)",
+      "(key,1):(key,1)",
+      "(key,2):null",
+      "(key,3):(key,3)"
+    )
+  }
+
+  @Test
+  def testFullOuterJoin(): Unit = {
+
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
+    env.setParallelism(1)
+
+    val leftKeyedStream = env.fromElements(("key", 0L), ("key", 1L), ("key", 3L))
+      .assignTimestampsAndWatermarks(new TimestampExtractor())
+      .keyBy(elem => elem._1)
+
+    val rightKeyedStream = env.fromElements(("key", 0L), ("key", 2L), ("key", 3L))
+      .assignTimestampsAndWatermarks(new TimestampExtractor())
+      .keyBy(elem => elem._1)
+
+    val sink = new ResultSink()
+
+    leftKeyedStream.intervalJoin(rightKeyedStream)
+      .between(Time.milliseconds(0), Time.milliseconds(0))
+      .fullOuter()
+      .process(new CombineToStringJoinFunction())
+      .addSink(sink)
+
+    env.execute()
+
+    sink.expectInAnyOrder(
+      "(key,0):(key,0)",
+      "(key,1):null",
+      "null:(key,2)",
+      "(key,3):(key,3)"
+    )
+  }
+
+  @Test
+  @throws[Exception]
+  def testUseMinTimestamp(): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
+    env.setParallelism(1)
+
+    val streamOne = env.fromElements(("key", 0L), ("key", 1L), ("key", 2L))
+      .assignTimestampsAndWatermarks(new TimestampExtractor())
+      .keyBy(elem => elem._1)
+    val streamTwo = env.fromElements(("key", 0L), ("key", 1L), ("key", 2L))
+      .assignTimestampsAndWatermarks(new TimestampExtractor())
+      .keyBy(elem => elem._1)
+
+    streamOne.intervalJoin(streamTwo)
+      .between(Time.milliseconds(-2L), Time.milliseconds(0L))
+      .assignRightTimestamp()
+      .process(new ProcessJoinFunction[(String, Long), (String, Long), String]() {
+        @throws[Exception]
+        override def processElement(
+            left: (String, Long),
+            right: (String, Long),
+            ctx: ProcessJoinFunction[(String, Long), (String, Long), String]#Context,
+            out: Collector[String]): Unit = {
+
+          val expected = Math.min(ctx.getRightTimestamp, ctx.getLeftTimestamp)
+          Assert.assertEquals(ctx.getTimestamp, expected)
+
+        }
+      })
+
+    env.execute()
+  }
 }
 
 object Companion {
@@ -104,12 +339,22 @@ object Companion {
 
 class ResultSink extends SinkFunction[String] {
 
+  Companion.results.clear()
+
   override def invoke(value: String, context: SinkFunction.Context[_]): Unit = {
     Companion.results.append(value)
   }
 
   def expectInAnyOrder(expected: String*): Unit = {
-    Assert.assertTrue(expected.toSet.equals(Companion.results.toSet))
+    val expectedSet = expected.toSet
+    val actualSet = Companion.results.toSet
+
+    if (!expectedSet.equals(actualSet)) {
+      println(expectedSet)
+      println(actualSet)
+    }
+
+    Assert.assertTrue(expectedSet.equals(actualSet))
   }
 }
 
@@ -125,6 +370,12 @@ class CombineToStringJoinFunction
                         right: (String, Long),
                         ctx: ProcessJoinFunction[(String, Long), (String, Long), String]#Context,
                         out: Collector[String]): Unit = {
-    out.collect(left + ":" + right)
+    if (left == null) {
+      out.collect("null:" + right)
+    } else if (right == null) {
+      out.collect(left + ":null")
+    } else {
+      out.collect(left + ":" + right)
+    }
   }
 }
