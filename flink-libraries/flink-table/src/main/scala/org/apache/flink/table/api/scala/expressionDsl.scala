@@ -303,6 +303,21 @@ trait ImplicitExpressionOperations {
   def mod(other: Expression) = Mod(expr, other)
 
   /**
+    * Returns the remainder of <i>numeric1</i> divided by <i>numeric2</i>.
+    * The remainder value is equal to f1 - f2 × n where <i>n</i> is the
+    * integer closest to the exact value of the quotient f1/f2, and if two
+    * integers are equally close to f1/f2, then <i>n</i> is the integer that
+    * is even.
+    *
+    * e.g. remainder(3, 2) => -1; mod(3, 2) => 1
+    *      3 - 2 * n, n=2 (3/2=1.5, 1.5 is equally close to 1 and 2 so n=2)
+    *
+    *      remainder(5, 2) => 1; mod(5, 2) => 1
+    *      5 - 2 * n, n=2 (5/2=2.5, n=2)
+    */
+  def remainder(other: Expression) = Remainder(expr, other)
+
+  /**
     * Calculates the Euler's number raised to the given power.
     */
   def exp() = Exp(expr)

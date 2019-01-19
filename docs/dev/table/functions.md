@@ -1094,6 +1094,21 @@ MOD(numeric1, numeric2)
         <p>Returns the remainder (modulus) of <i>numeric1</i> divided by <i>numeric2</i>. The result is negative only if <i>numeric1</i> is negative.</p>
       </td>
     </tr>
+    
+    <tr>
+      <td>
+        {% highlight text %}
+REMAINDER(numeric1, numeric2)
+{% endhighlight %}
+      </td>
+      <td>
+        <p>Returns the remainder of <i>numeric1</i> divided by <i>numeric2</i>. The remainder value is equal to f1 - f2 × n where <i>n</i> is the integer closest to the exact value of the quotient f1/f2, and if two integers are equally close to f1/f2, then <i>n</i> is the integer that is even.</p>
+        <p>E.g. <code>REMAINDER(3, 2)</code> returns -1; <code>MOD(3, 2)</code> returns 1<br/>
+        3 - 2 * n, n=2 (3/2=1.5, 1.5 is equally close to 1 and 2 so n=2);<br/><br/>
+        <code>REMAINDER(5, 2)</code> returns 1; <code>MOD(5, 2)</code> returns 1<br/>
+        5 - 2 * n, n=2 (5/2=2.5, n=2)</p>
+      </td>
+    </tr>
 
     <tr>
       <td>
