@@ -25,6 +25,7 @@ import org.apache.flink.core.fs.FSDataInputStream;
 import org.apache.flink.core.fs.FileStatus;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.core.fs.Path;
+import org.apache.flink.core.io.CompressionTypes;
 import org.apache.flink.core.memory.DataOutputView;
 import org.apache.flink.core.memory.DataOutputViewStreamWrapper;
 import org.apache.flink.runtime.checkpoint.CheckpointOptions;
@@ -507,7 +508,7 @@ public class RocksIncrementalSnapshotStrategy<K> extends RocksDBSnapshotStrategy
 					new KeyedBackendSerializationProxy<>(
 						keySerializer,
 						stateMetaInfoSnapshots,
-						false);
+						CompressionTypes.NONE);
 
 				DataOutputView out =
 					new DataOutputViewStreamWrapper(streamWithResultProvider.getCheckpointOutputStream());

@@ -33,6 +33,7 @@ import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.client.program.ClusterClient;
 import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.core.io.CompressionTypes;
 import org.apache.flink.runtime.client.JobExecutionException;
 import org.apache.flink.runtime.client.JobStatusMessage;
 import org.apache.flink.runtime.concurrent.FutureUtils;
@@ -584,7 +585,7 @@ public class RescalingITCase extends TestLogger {
 		}
 		env.enableCheckpointing(checkpointingInterval);
 		env.setRestartStrategy(RestartStrategies.noRestart());
-		env.getConfig().setUseSnapshotCompression(true);
+		env.getConfig().setCompressionType(CompressionTypes.LZ4);
 
 		DataStream<Integer> input = env.addSource(new SubtaskIndexSource(
 				numberKeys,

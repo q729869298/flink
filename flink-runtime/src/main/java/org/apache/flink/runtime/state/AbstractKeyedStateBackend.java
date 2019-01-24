@@ -26,6 +26,8 @@ import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.TypeSerializerSchemaCompatibility;
 import org.apache.flink.api.common.typeutils.TypeSerializerSnapshot;
 import org.apache.flink.core.fs.CloseableRegistry;
+import org.apache.flink.core.io.CompressionType;
+import org.apache.flink.core.io.CompressionTypes;
 import org.apache.flink.runtime.checkpoint.CheckpointOptions;
 import org.apache.flink.runtime.query.TaskKvStateRegistry;
 import org.apache.flink.runtime.state.internal.InternalKvState;
@@ -33,6 +35,8 @@ import org.apache.flink.runtime.state.ttl.TtlStateFactory;
 import org.apache.flink.runtime.state.ttl.TtlTimeProvider;
 import org.apache.flink.util.IOUtils;
 import org.apache.flink.util.Preconditions;
+
+import javax.annotation.Nullable;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -86,12 +90,13 @@ public abstract class AbstractKeyedStateBackend<K> implements
 
 	protected final ClassLoader userCodeClassLoader;
 
+	@Nullable
 	private final ExecutionConfig executionConfig;
 
 	private final TtlTimeProvider ttlTimeProvider;
 
 	/** Decorates the input and output streams to write key-groups compressed. */
-	protected final StreamCompressionDecorator keyGroupCompressionDecorator;
+	protected final CompressionType compressionType;
 
 	public AbstractKeyedStateBackend(
 		TaskKvStateRegistry kvStateRegistry,
@@ -113,16 +118,8 @@ public abstract class AbstractKeyedStateBackend<K> implements
 		this.cancelStreamRegistry = new CloseableRegistry();
 		this.keyValueStatesByName = new HashMap<>();
 		this.executionConfig = executionConfig;
-		this.keyGroupCompressionDecorator = determineStreamCompression(executionConfig);
+		this.compressionType = executionConfig == null ? CompressionTypes.NONE : executionConfig.getCompressionType();
 		this.ttlTimeProvider = Preconditions.checkNotNull(ttlTimeProvider);
-	}
-
-	private StreamCompressionDecorator determineStreamCompression(ExecutionConfig executionConfig) {
-		if (executionConfig != null && executionConfig.isUseSnapshotCompression()) {
-			return SnappyStreamCompressionDecorator.INSTANCE;
-		} else {
-			return UncompressedStreamCompressionDecorator.INSTANCE;
-		}
 	}
 
 	/**
@@ -316,8 +313,8 @@ public abstract class AbstractKeyedStateBackend<K> implements
 	}
 
 	@VisibleForTesting
-	StreamCompressionDecorator getKeyGroupCompressionDecorator() {
-		return keyGroupCompressionDecorator;
+	CompressionType getCompressionType() {
+		return compressionType;
 	}
 
 	/**
