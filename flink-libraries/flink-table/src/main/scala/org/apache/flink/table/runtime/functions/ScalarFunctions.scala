@@ -296,4 +296,9 @@ object ScalarFunctions {
     */
   def repeat(base: String, n: Int): String = EncodingUtils.repeat(base, n)
 
+  /**
+    * Returns the reversed string.
+    */
+  def reverse(str: String): String = StringUtils.reverse(str)
+
 }

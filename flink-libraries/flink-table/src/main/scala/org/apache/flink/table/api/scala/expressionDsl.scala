@@ -494,6 +494,11 @@ trait ImplicitExpressionOperations {
     Replace(expr, search, replacement)
 
   /**
+    * Returns the reversed string.
+    */
+  def reverse() = Reverse(expr)
+
+  /**
     * Returns the length of a string.
     */
   def charLength() = CharLength(expr)
