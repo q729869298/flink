@@ -448,7 +448,7 @@ public class FlinkYarnSessionCli extends AbstractCustomCommandLine<ApplicationId
 
 	@Override
 	public AbstractYarnClusterDescriptor createClusterDescriptor(CommandLine commandLine) throws FlinkException {
-		final Configuration effectiveConfiguration = applyCommandLineOptionsToConfiguration(commandLine);
+		final Configuration effectiveConfiguration = applyCommandLineOptionsToConfiguration(configuration, commandLine);
 
 		return createDescriptor(
 			effectiveConfiguration,
@@ -471,13 +471,13 @@ public class FlinkYarnSessionCli extends AbstractCustomCommandLine<ApplicationId
 
 	@Override
 	public ClusterSpecification getClusterSpecification(CommandLine commandLine) throws FlinkException {
-		final Configuration effectiveConfiguration = applyCommandLineOptionsToConfiguration(commandLine);
+		final Configuration effectiveConfiguration = applyCommandLineOptionsToConfiguration(configuration, commandLine);
 
 		return createClusterSpecification(effectiveConfiguration, commandLine);
 	}
 
 	@Override
-	protected Configuration applyCommandLineOptionsToConfiguration(CommandLine commandLine) throws FlinkException {
+	public Configuration applyCommandLineOptionsToConfiguration(Configuration configuration, CommandLine commandLine) throws FlinkException {
 		// we ignore the addressOption because it can only contain "yarn-cluster"
 		final Configuration effectiveConfiguration = new Configuration(configuration);
 
@@ -517,6 +517,16 @@ public class FlinkYarnSessionCli extends AbstractCustomCommandLine<ApplicationId
 
 		if (commandLine.hasOption(slots.getOpt())) {
 			effectiveConfiguration.setInteger(TaskManagerOptions.NUM_TASK_SLOTS, Integer.parseInt(commandLine.getOptionValue(slots.getOpt())));
+		}
+
+		if (commandLine.hasOption(dynamicproperties.getOpt())) {
+			final Properties properties = commandLine.getOptionProperties(dynamicproperties.getOpt());
+			properties.stringPropertyNames().forEach((String key) -> {
+				String value = properties.getProperty(key);
+				if (value != null) {
+					effectiveConfiguration.setString(key, value);
+				}
+			});
 		}
 
 		if (isYarnPropertiesFileMode(commandLine)) {
@@ -576,12 +586,7 @@ public class FlinkYarnSessionCli extends AbstractCustomCommandLine<ApplicationId
 		return effectiveConfiguration;
 	}
 
-	public int run(String[] args) throws CliArgsException, FlinkException {
-		//
-		//	Command Line Options
-		//
-		final CommandLine cmd = parseCommandLineOptions(args, true);
-
+	public int run(CommandLine cmd) throws FlinkException {
 		if (cmd.hasOption(help.getOpt())) {
 			printUsage();
 			return 0;
@@ -832,9 +837,15 @@ public class FlinkYarnSessionCli extends AbstractCustomCommandLine<ApplicationId
 				"",
 				""); // no prefix for the YARN session
 
-			SecurityUtils.install(new SecurityConfiguration(flinkConfiguration));
+			//
+			//	Command Line Options
+			//
+			final CommandLine commandLine = cli.parseCommandLineOptions(args, true);
+			Configuration effectiveConfiguraion = cli.applyCommandLineOptionsToConfiguration(flinkConfiguration, commandLine);
 
-			retCode = SecurityUtils.getInstalledContext().runSecured(() -> cli.run(args));
+			SecurityUtils.install(new SecurityConfiguration(effectiveConfiguraion));
+
+			retCode = SecurityUtils.getInstalledContext().runSecured(() -> cli.run(commandLine));
 		} catch (CliArgsException e) {
 			retCode = handleCliArgsException(e);
 		} catch (Throwable t) {
