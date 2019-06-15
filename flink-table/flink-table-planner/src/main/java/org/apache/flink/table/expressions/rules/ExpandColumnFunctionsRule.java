@@ -19,7 +19,6 @@
 package org.apache.flink.table.expressions.rules;
 
 import org.apache.flink.annotation.Internal;
-import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.expressions.ApiExpressionDefaultVisitor;
 import org.apache.flink.table.expressions.CallExpression;
@@ -27,7 +26,6 @@ import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.expressions.ExpressionUtils;
 import org.apache.flink.table.expressions.UnresolvedReferenceExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
-import org.apache.flink.util.Preconditions;
 
 import java.util.Collections;
 import java.util.LinkedList;
@@ -92,9 +90,7 @@ final class ExpandColumnFunctionsRule implements ResolverRule {
 				if (definitionName.equals(AS.getName())) {
 					for (int i = 1; i < args.size(); ++i) {
 						if (!(args.get(i) instanceof ValueLiteralExpression)) {
-							String errorMessage = String.join(
-								", ",
-								args.stream().map(e -> e.toString()).collect(Collectors.toList()));
+							String errorMessage = args.stream().map(Object::toString).collect(Collectors.joining(", "));
 							throw new ValidationException(String.format("Invalid AS, parameters are: [%s].", errorMessage));
 						}
 					}
@@ -116,12 +112,12 @@ final class ExpandColumnFunctionsRule implements ResolverRule {
 
 			List<Expression> finalResult = new LinkedList<>();
 			List<UnresolvedReferenceExpression> result = args.stream()
-				.flatMap(e -> e.accept(this.columnsExpressionExpander).stream())
+				.flatMap(e -> e.accept(columnsExpressionExpander).stream())
 				.collect(Collectors.toList());
 
 			if (isReverseProjection) {
 				for (UnresolvedReferenceExpression field: inputFieldReferences) {
-					if (indexOfName(result, field.getName()) == -1) {
+					if (-1 == indexOfName(result, field.getName())) {
 						finalResult.add(field);
 					}
 				}
@@ -153,7 +149,7 @@ final class ExpandColumnFunctionsRule implements ResolverRule {
 		@Override
 		public List<UnresolvedReferenceExpression> visitUnresolvedReference(
 			UnresolvedReferenceExpression unresolvedReference) {
-			if (unresolvedReference.getName().equals("*")) {
+			if ("*".equals(unresolvedReference.getName())) {
 				return inputFieldReferences;
 			} else {
 				return Collections.singletonList(unresolvedReference);
@@ -167,10 +163,11 @@ final class ExpandColumnFunctionsRule implements ResolverRule {
 					.orElseThrow(() -> new ValidationException("Constant integer value expected."));
 				int end = ExpressionUtils.extractValue(call.getChildren().get(1), Integer.class)
 					.orElseThrow(() -> new ValidationException("Constant integer value expected."));
-				Preconditions.checkArgument(
-					start <= end,
-					String.format("The start:%s of %s() or %s() should not bigger than end:%s.",
-						start, WITH_COLUMNS.getName(), WITHOUT_COLUMNS.getName(), end));
+				if (start > end) {
+					throw new ValidationException(
+						String.format("The start:%s of %s() or %s() should not bigger than end:%s.",
+							start, WITH_COLUMNS.getName(), WITHOUT_COLUMNS.getName(), end));
+				}
 
 				return inputFieldReferences.subList(start - 1, end);
 
@@ -180,10 +177,11 @@ final class ExpandColumnFunctionsRule implements ResolverRule {
 
 				int start = indexOfName(inputFieldReferences, startName);
 				int end = indexOfName(inputFieldReferences, endName);
-				Preconditions.checkArgument(
-					start <= end,
-					String.format("The start name:%s of %s() or %s() should not behind the end:%s.",
-						startName, WITH_COLUMNS.getName(), WITHOUT_COLUMNS.getName(), endName));
+				if (start > end) {
+					throw new ValidationException(
+						String.format("The start name:%s of %s() or %s() should not behind the end:%s.",
+							startName, WITH_COLUMNS.getName(), WITHOUT_COLUMNS.getName(), endName));
+				}
 
 				return inputFieldReferences.subList(start, end + 1);
 			} else {
@@ -193,7 +191,7 @@ final class ExpandColumnFunctionsRule implements ResolverRule {
 
 		@Override
 		protected List<UnresolvedReferenceExpression> defaultMethod(Expression expression) {
-			throw new TableException(
+			throw new ValidationException(
 				String.format("The parameters of %s() or %s() only accept column name or column " +
 					"index, but receive %s.",
 					WITH_COLUMNS.getName(),
@@ -206,8 +204,8 @@ final class ExpandColumnFunctionsRule implements ResolverRule {
 		 */
 		private boolean isIndexRangeCall(CallExpression expression) {
 			return expression.getFunctionDefinition().getName().equals(RANGE_TO.getName()) &&
-				expression.getChildren().get(0) instanceof ValueLiteralExpression &&
-				expression.getChildren().get(1) instanceof ValueLiteralExpression;
+				(expression.getChildren().get(0) instanceof ValueLiteralExpression) &&
+				(expression.getChildren().get(1) instanceof ValueLiteralExpression);
 		}
 
 		/**
@@ -215,8 +213,8 @@ final class ExpandColumnFunctionsRule implements ResolverRule {
 		 */
 		private boolean isNameRangeCall(CallExpression expression) {
 			return expression.getFunctionDefinition().getName().equals(RANGE_TO.getName()) &&
-				expression.getChildren().get(0) instanceof UnresolvedReferenceExpression &&
-				expression.getChildren().get(1) instanceof UnresolvedReferenceExpression;
+				(expression.getChildren().get(0) instanceof UnresolvedReferenceExpression) &&
+				(expression.getChildren().get(1) instanceof UnresolvedReferenceExpression);
 		}
 	}
 
@@ -230,6 +228,6 @@ final class ExpandColumnFunctionsRule implements ResolverRule {
 				break;
 			}
 		}
-		return i == inputFieldReferences.size() ? -1 : i;
+		return (i == inputFieldReferences.size()) ? -1 : i;
 	}
 }

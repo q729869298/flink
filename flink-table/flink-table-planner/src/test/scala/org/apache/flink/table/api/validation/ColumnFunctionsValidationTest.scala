@@ -18,7 +18,7 @@
 package org.apache.flink.table.api.validation
 
 import org.apache.flink.api.scala._
-import org.apache.flink.table.api.{Slide, TableException, ValidationException}
+import org.apache.flink.table.api.{Slide, ValidationException}
 import org.apache.flink.table.api.scala._
 import org.apache.flink.table.expressions.BuiltInFunctionDefinitions
 import org.apache.flink.table.utils.{StreamTableTestUtil, TableTestBase}
@@ -36,7 +36,7 @@ class ColumnFunctionsValidationTest extends TableTestBase {
 
   @Test
   def testIndexRangeInvalid(): Unit = {
-    expectedException.expect(classOf[IllegalArgumentException])
+    expectedException.expect(classOf[ValidationException])
     expectedException.expectMessage(
       s"The start:2 of $withCol() or $withoutCol() should not bigger than end:1")
 
@@ -47,7 +47,7 @@ class ColumnFunctionsValidationTest extends TableTestBase {
 
   @Test
   def testNameRangeInvalid(): Unit = {
-    expectedException.expect(classOf[IllegalArgumentException])
+    expectedException.expect(classOf[ValidationException])
     expectedException.expectMessage(
       s"The start name:b of $withCol() or $withoutCol() should not behind the end:a.")
 
@@ -58,7 +58,7 @@ class ColumnFunctionsValidationTest extends TableTestBase {
 
   @Test
   def testInvalidParameters(): Unit = {
-    expectedException.expect(classOf[TableException])
+    expectedException.expect(classOf[ValidationException])
     expectedException.expectMessage(
       s"The parameters of $withCol() or $withoutCol() only accept column name or " +
         "column index, but receive CallExpression.")
