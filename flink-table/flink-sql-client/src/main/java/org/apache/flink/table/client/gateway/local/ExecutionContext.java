@@ -104,6 +104,7 @@ public class ExecutionContext<T> {
 	private final RunOptions runOptions;
 	private final T clusterId;
 	private final ClusterSpecification clusterSpec;
+	private final EnvironmentInstance environmentInstance;
 
 	public ExecutionContext(Environment defaultEnvironment, SessionContext sessionContext, List<URL> dependencies,
 			Configuration flinkConfig, Options commandLineOptions, List<CustomCommandLine<?>> availableCommandLines) {
@@ -148,6 +149,9 @@ public class ExecutionContext<T> {
 		runOptions = createRunOptions(commandLine);
 		clusterId = activeCommandLine.getClusterId(commandLine);
 		clusterSpec = createClusterSpecification(activeCommandLine, commandLine);
+
+		// reuse environment instance
+		environmentInstance = createEnvironmentInstance();
 	}
 
 	public SessionContext getSessionContext() {
@@ -175,6 +179,10 @@ public class ExecutionContext<T> {
 	}
 
 	public EnvironmentInstance createEnvironmentInstance() {
+		if (environmentInstance != null) {
+			return environmentInstance;
+		}
+
 		try {
 			return wrapClassLoader(EnvironmentInstance::new);
 		} catch (Throwable t) {
