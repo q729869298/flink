@@ -639,12 +639,13 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 	}
 
 	@Override
-	public CompletableFuture<String> stopWithSavepoint(
+	public CompletableFuture<String> stopWithCheckpoint(
+			final boolean isCheckpoint,
 			@Nullable final String targetDirectory,
 			final boolean advanceToEndOfEventTime,
 			final Time timeout) {
 
-		return schedulerNG.stopWithSavepoint(targetDirectory, advanceToEndOfEventTime);
+		return schedulerNG.stopWithCheckpoint(isCheckpoint, targetDirectory, advanceToEndOfEventTime);
 	}
 
 	@Override

@@ -373,7 +373,7 @@ public class CheckpointCoordinator {
 			@Nullable final String targetLocation) {
 
 		final CheckpointProperties properties = CheckpointProperties.forSavepoint();
-		return triggerSavepointInternal(timestamp, properties, false, targetLocation);
+		return triggerSyncCheckpointInternal(timestamp, properties, false, targetLocation);
 	}
 
 	/**
@@ -382,6 +382,7 @@ public class CheckpointCoordinator {
 	 * @param timestamp The timestamp for the savepoint.
 	 * @param advanceToEndOfEventTime Flag indicating if the source should inject a {@code MAX_WATERMARK} in the pipeline
 	 *                              to fire any registered event-time timers.
+	 * @param isCheckpoint Is this a checkpoint or savepoint.
 	 * @param targetLocation Target location for the savepoint, optional. If null, the
 	 *                       state backend's configured default will be used.
 	 * @return A future to the completed checkpoint
@@ -389,16 +390,22 @@ public class CheckpointCoordinator {
 	 *                               specified and no default savepoint directory has been
 	 *                               configured
 	 */
-	public CompletableFuture<CompletedCheckpoint> triggerSynchronousSavepoint(
+	public CompletableFuture<CompletedCheckpoint> triggerSynchronousCheckpoint(
 			final long timestamp,
 			final boolean advanceToEndOfEventTime,
+			final boolean isCheckpoint,
 			@Nullable final String targetLocation) {
 
-		final CheckpointProperties properties = CheckpointProperties.forSyncSavepoint();
-		return triggerSavepointInternal(timestamp, properties, advanceToEndOfEventTime, targetLocation);
+		if (isCheckpoint) {
+			final CheckpointProperties properties = CheckpointProperties.forSyncCheckpoint();
+			return triggerSyncCheckpointInternal(timestamp, properties, advanceToEndOfEventTime, null);
+		} else {
+			final CheckpointProperties properties = CheckpointProperties.forSyncSavepoint();
+			return triggerSyncCheckpointInternal(timestamp, properties, advanceToEndOfEventTime, targetLocation);
+		}
 	}
 
-	private CompletableFuture<CompletedCheckpoint> triggerSavepointInternal(
+	private CompletableFuture<CompletedCheckpoint> triggerSyncCheckpointInternal(
 			final long timestamp,
 			final CheckpointProperties checkpointProperties,
 			final boolean advanceToEndOfEventTime,
@@ -452,8 +459,8 @@ public class CheckpointCoordinator {
 			boolean isPeriodic,
 			boolean advanceToEndOfTime) throws CheckpointException {
 
-		if (advanceToEndOfTime && !(props.isSynchronous() && props.isSavepoint())) {
-			throw new IllegalArgumentException("Only synchronous savepoints are allowed to advance the watermark to MAX.");
+		if (advanceToEndOfTime && !props.isSynchronous()) {
+			throw new IllegalArgumentException("Only synchronous checkpoints/savepoints are allowed to advance the watermark to MAX.");
 		}
 
 		// make some eager pre-checks
@@ -680,7 +687,8 @@ public class CheckpointCoordinator {
 				// send the messages to the tasks that trigger their checkpoint
 				for (Execution execution: executions) {
 					if (props.isSynchronous()) {
-						execution.triggerSynchronousSavepoint(checkpointID, timestamp, checkpointOptions, advanceToEndOfTime);
+						// trigger sync checkpoint/savepoint.
+						execution.triggerSynchronousChecpoint(checkpointID, timestamp, checkpointOptions, advanceToEndOfTime);
 					} else {
 						execution.triggerCheckpoint(checkpointID, timestamp, checkpointOptions);
 					}
