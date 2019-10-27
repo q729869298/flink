@@ -139,7 +139,8 @@ public class CheckpointCoordinator {
 	private final long checkpointTimeout;
 
 	/** The min time(in ns) to delay after a checkpoint could be triggered. Allows to
-	 * enforce minimum processing time between checkpoint attempts */
+	 * enforce minimum processing time between successful checkpoint attempts. Once a checkpoint
+	 * fails or expires, another checkpoint will be triggered at baseInterval without any pause. */
 	private final long minPauseBetweenCheckpointsNanos;
 
 	/** The maximum number of checkpoints that may be in progress at the same time. */

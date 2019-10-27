@@ -47,7 +47,7 @@ public class CheckpointConfig implements java.io.Serializable {
 	/** The default timeout of a checkpoint attempt: 10 minutes. */
 	public static final long DEFAULT_TIMEOUT = 10 * 60 * 1000;
 
-	/** The default minimum pause to be made between checkpoints: none. */
+	/** The default minimum pause to be made between successful checkpoints: none. */
 	public static final long DEFAULT_MIN_PAUSE_BETWEEN_CHECKPOINTS = 0;
 
 	/** The default limit of concurrently happening checkpoints: one. */
@@ -66,7 +66,7 @@ public class CheckpointConfig implements java.io.Serializable {
 	/** Maximum time checkpoint may take before being discarded. */
 	private long checkpointTimeout = DEFAULT_TIMEOUT;
 
-	/** Minimal pause between checkpointing attempts. */
+	/** Minimal pause between successful checkpointing attempts. */
 	private long minPauseBetweenCheckpoints = DEFAULT_MIN_PAUSE_BETWEEN_CHECKPOINTS;
 
 	/** Maximum number of checkpoint attempts in progress at the same time. */
@@ -175,7 +175,7 @@ public class CheckpointConfig implements java.io.Serializable {
 	}
 
 	/**
-	 * Gets the minimal pause between checkpointing attempts. This setting defines how soon the
+	 * Gets the minimal pause between successful checkpointing attempts. This setting defines how soon the
 	 * checkpoint coordinator may trigger another checkpoint after it becomes possible to trigger
 	 * another checkpoint with respect to the maximum number of concurrent checkpoints
 	 * (see {@link #getMaxConcurrentCheckpoints()}).
