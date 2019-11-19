@@ -17,17 +17,33 @@
 ################################################################################
 from __future__ import print_function
 
+import getpass
 import io
 import os
 import sys
 from shutil import copytree, copy, rmtree
 
 from setuptools import setup
+from setuptools.command.install import install
 
 if sys.version_info < (3, 5):
     print("Python versions prior to 3.5 are not supported for PyFlink.",
           file=sys.stderr)
     sys.exit(-1)
+
+
+class SetLogPermissionAfterInstall(install):
+
+    def run(self):
+        install.run(self)
+        if getpass.getuser() == "root":
+            # the log dir should be writable for normal users.
+            for file_path in self.get_outputs():
+                if file_path.endswith(os.path.join("pyflink", "log", "empty.txt")):
+                    log_dir_path = os.path.dirname(file_path)
+                    os.chmod(log_dir_path, 0o777)
+                    print("changing mode of %s to 777" % log_dir_path)
+
 
 this_directory = os.path.abspath(os.path.dirname(__file__))
 version_file = os.path.join(this_directory, 'pyflink/version.py')
@@ -218,7 +234,8 @@ run sdist.
             'License :: OSI Approved :: Apache Software License',
             'Programming Language :: Python :: 3.5',
             'Programming Language :: Python :: 3.6',
-            'Programming Language :: Python :: 3.7']
+            'Programming Language :: Python :: 3.7'],
+        cmdclass={'install': SetLogPermissionAfterInstall}
     )
 finally:
     if in_flink_source:
