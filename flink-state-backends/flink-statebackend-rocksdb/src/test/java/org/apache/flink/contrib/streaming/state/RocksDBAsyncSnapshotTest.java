@@ -279,7 +279,7 @@ public class RocksDBAsyncSnapshotTest extends TestLogger {
 			int count = skipStreams;
 
 			@Override
-			public CheckpointStateOutputStream createCheckpointStateOutputStream(CheckpointedStateScope scope) throws IOException {
+			public CheckpointStateOutputStream createCheckpointStateOutputStream(long checkpointId, CheckpointedStateScope scope) throws IOException {
 				if (count > 0) {
 					--count;
 					return new BlockingCheckpointOutputStream(
@@ -288,7 +288,7 @@ public class RocksDBAsyncSnapshotTest extends TestLogger {
 						null,
 						Integer.MAX_VALUE);
 				} else {
-					return super.createCheckpointStateOutputStream(scope);
+					return super.createCheckpointStateOutputStream(checkpointId, scope);
 				}
 			}
 		};
@@ -484,7 +484,7 @@ public class RocksDBAsyncSnapshotTest extends TestLogger {
 
 		@Override
 		public CheckpointStateOutputStream get() throws IOException {
-			return factory.createCheckpointStateOutputStream(CheckpointedStateScope.EXCLUSIVE);
+			return factory.createCheckpointStateOutputStream(1, CheckpointedStateScope.EXCLUSIVE);
 		}
 	}
 

@@ -88,6 +88,7 @@ public class StreamConfig implements Serializable {
 
 	private static final String CHECKPOINTING_ENABLED = "checkpointing";
 	private static final String CHECKPOINT_MODE = "checkpointMode";
+	private static final String MAX_CONCURRENT_CHECKPOINTS = "maxConcurrentCheckpoints";
 
 	private static final String STATE_BACKEND = "statebackend";
 	private static final String STATE_PARTITIONER = "statePartitioner";
@@ -105,6 +106,7 @@ public class StreamConfig implements Serializable {
 
 	private static final long DEFAULT_TIMEOUT = 100;
 	private static final CheckpointingMode DEFAULT_CHECKPOINTING_MODE = CheckpointingMode.EXACTLY_ONCE;
+	private static final int DEFAULT_MAX_CONCURRENT_CHECKPOINTS = 1;
 
 	private static final double DEFAULT_MANAGED_MEMORY_FRACTION = 0.0;
 
@@ -423,6 +425,14 @@ public class StreamConfig implements Serializable {
 		} else {
 			return DEFAULT_CHECKPOINTING_MODE;
 		}
+	}
+
+	public void setMaxConcurrentCheckpoints(int maxConcurrentCheckpoints) {
+		config.setInteger(MAX_CONCURRENT_CHECKPOINTS, maxConcurrentCheckpoints);
+	}
+
+	public int getMaxConcurrentCheckpoints() {
+		return config.getInteger(MAX_CONCURRENT_CHECKPOINTS, DEFAULT_MAX_CONCURRENT_CHECKPOINTS);
 	}
 
 	public void setOutEdgesInOrder(List<StreamEdge> outEdgeList) {

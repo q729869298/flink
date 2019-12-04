@@ -965,6 +965,7 @@ public abstract class StreamTask<OUT, OP extends StreamOperator<OUT>>
 				fromApplication,
 				getEnvironment().getTaskManagerInfo().getConfiguration(),
 				getUserCodeClassLoader(),
+				configuration.getMaxConcurrentCheckpoints(),
 				LOG);
 	}
 
