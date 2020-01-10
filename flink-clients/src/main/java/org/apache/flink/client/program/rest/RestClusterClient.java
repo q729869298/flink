@@ -288,8 +288,8 @@ public class RestClusterClient<T> implements ClusterClient<T> {
 			}
 
 			for (Map.Entry<String, DistributedCache.DistributedCacheEntry> artifacts : jobGraph.getUserArtifacts().entrySet()) {
-				artifactFileNames.add(new JobSubmitRequestBody.DistributedCacheFile(artifacts.getKey(), new Path(artifacts.getValue().filePath).getName()));
-				filesToUpload.add(new FileUpload(Paths.get(artifacts.getValue().filePath), RestConstants.CONTENT_TYPE_BINARY));
+				artifactFileNames.add(new JobSubmitRequestBody.DistributedCacheFile(artifacts.getKey(), new Path(artifacts.getValue().filePath.toString()).getName()));
+				filesToUpload.add(new FileUpload(Paths.get(artifacts.getValue().filePath.toString()), RestConstants.CONTENT_TYPE_BINARY));
 			}
 
 			final JobSubmitRequestBody requestBody = new JobSubmitRequestBody(
