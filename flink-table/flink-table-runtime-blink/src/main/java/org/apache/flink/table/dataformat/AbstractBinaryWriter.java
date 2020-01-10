@@ -79,7 +79,7 @@ public abstract class AbstractBinaryWriter implements BinaryWriter {
 			writeBytes(pos, javaObject.getBytes(StandardCharsets.UTF_8));
 		} else {
 			int len = input.getSizeInBytes();
-			if (len <= 7) {
+			if (len <= MAX_FIX_PART_DATA_SIZE) {
 				byte[] bytes = SegmentsUtil.allocateReuseBytes(len);
 				SegmentsUtil.copyToBytes(input.getSegments(), input.getOffset(), bytes, 0, len);
 				writeBytesToFixLenPart(segment, getFieldOffset(pos), bytes, len);
@@ -293,12 +293,7 @@ public abstract class AbstractBinaryWriter implements BinaryWriter {
 	}
 
 	protected static int roundNumberOfBytesToNearestWord(int numBytes) {
-		int remainder = numBytes & 0x07;
-		if (remainder == 0) {
-			return numBytes;
-		} else {
-			return numBytes + (8 - remainder);
-		}
+		return (numBytes + 7) & 0xFFFFFFF8;
 	}
 
 	private static void writeBytesToFixLenPart(
