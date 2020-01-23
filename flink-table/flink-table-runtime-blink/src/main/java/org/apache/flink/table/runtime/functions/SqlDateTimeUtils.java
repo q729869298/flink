@@ -33,6 +33,7 @@ import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.sql.Time;
 import java.sql.Timestamp;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -110,6 +111,19 @@ public class SqlDateTimeUtils {
 		"yyyy-MM-dd HH:mm:ss.SSSSSSS",
 		"yyyy-MM-dd HH:mm:ss.SSSSSSSS",
 		"yyyy-MM-dd HH:mm:ss.SSSSSSSSS"
+	};
+
+	private static final String[] DEFAULT_TIME_FORMATS = new String[]{
+		"HH:mm:ss",
+		"HH:mm:ss.S",
+		"HH:mm:ss.SS",
+		"HH:mm:ss.SSS",
+		"HH:mm:ss.SSSS",
+		"HH:mm:ss.SSSSS",
+		"HH:mm:ss.SSSSSS",
+		"HH:mm:ss.SSSSSSS",
+		"HH:mm:ss.SSSSSSSS",
+		"HH:mm:ss.SSSSSSSSS"
 	};
 
 	/**
@@ -1172,6 +1186,22 @@ public class SqlDateTimeUtils {
 		return SqlTimestamp.fromLocalDateTime(LocalDateTime.ofInstant(ts.toInstant(), tz.toZoneId()));
 	}
 
+	public static long timestampWithLocalZoneToTime(SqlTimestamp ts, TimeZone tz) {
+		return SqlTimestamp
+			.fromLocalDateTime(LocalDateTime.ofInstant(ts.toInstant(), tz.toZoneId()))
+			.toLocalDateTime()
+			.toLocalTime()
+			.toNanoOfDay();
+	}
+
+	public static SqlTimestamp timeToTimestampWithLocalZone(long time, TimeZone tz) {
+		return SqlTimestamp.fromInstant(
+			LocalDateTime.of(
+				LocalDate.of(1970, 1, 1), LocalTime.ofNanoOfDay(time))
+			.atZone(tz.toZoneId())
+			.toInstant());
+	}
+
 	public static int timestampWithLocalZoneToDate(long ts, TimeZone tz) {
 		return localDateToUnixDate(LocalDateTime.ofInstant(
 				Instant.ofEpochMilli(ts), tz.toZoneId()).toLocalDate());
@@ -1415,6 +1445,55 @@ public class SqlDateTimeUtils {
 		return timestampToString(timestampWithLocalZoneToTimestamp(ts, tz));
 	}
 
+	public static Long timeStringToTime(String timeString) {
+		int length = timeString.length();
+		String format;
+		if (length >= 10 && length <= 18) {
+			format = DEFAULT_TIME_FORMATS[length - 9];
+		} else {
+			// otherwise fall back to second's precision
+			format = DEFAULT_TIME_FORMATS[0];
+		}
+		return timeStringToTime(timeString, format);
+	}
+
+	public static Long timeStringToTime(String timeString, String format) {
+		DateTimeFormatter formatter = DATETIME_FORMATTER_CACHE.get(format);
+		try {
+			LocalTime time = LocalTime.parse(timeString, formatter);
+			return time.toNanoOfDay();
+		} catch (DateTimeParseException e) {
+			try {
+				// fall back to support corner cases like: 9:10:11 or 9:10:61
+				Time time = Time.valueOf(timeString);
+				return time.toLocalTime().toNanoOfDay();
+			} catch (IllegalArgumentException ie) {
+				return null;
+			}
+		}
+	}
+
+	public static String timeToString(long nanosecond) {
+		LocalTime lt = LocalTime.ofNanoOfDay(nanosecond);
+
+		String fraction = pad(9, (long) lt.getNano());
+		while (fraction.endsWith("0")) {
+			fraction = fraction.substring(0, fraction.length() - 1);
+		}
+
+		StringBuilder hms = hms(
+			new StringBuilder(),
+			lt.getHour(),
+			lt.getMinute(),
+			lt.getSecond());
+
+		if (fraction.length() > 0) {
+			hms.append(".").append(fraction);
+		}
+
+		return hms.toString();
+	}
+
 	private static String pad(int length, long v) {
 		StringBuilder s = new StringBuilder(Long.toString(v));
 		while (s.length() < length) {
@@ -1478,6 +1557,21 @@ public class SqlDateTimeUtils {
 				return SqlTimestamp.fromEpochMillis(
 					ts.getMillisecond(), (int) zeroLastDigits(ts.getNanoOfMillisecond(), 9 - precision));
 			}
+		}
+	}
+
+	public static long truncateTime(long time, int precision) {
+		final LocalTime localTime = LocalTime.ofNanoOfDay(time);
+		String fraction = Integer.toString(localTime.getNano());
+		if (fraction.length() <= precision) {
+			return time;
+		} else {
+			// need to truncate
+			int nano = (int) zeroLastDigits(localTime.getNano(), 9 - precision);
+			return LocalTime.of(
+				localTime.getHour(),
+				localTime.getMinute(),
+				localTime.getSecond(), nano).toNanoOfDay();
 		}
 	}
 

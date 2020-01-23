@@ -26,16 +26,15 @@ import org.apache.flink.table.expressions.TimeIntervalUnit
 import org.apache.flink.table.planner.expressions.utils.ExpressionTestBase
 import org.apache.flink.table.planner.utils.DateTimeTestUtil
 import org.apache.flink.table.planner.utils.DateTimeTestUtil._
+import org.apache.flink.table.runtime.typeutils.{LegacyInstantTypeInfo, LegacyLocalDateTimeTypeInfo, LegacyLocalTimeTypeInfo}
 import org.apache.flink.table.typeutils.TimeIntervalTypeInfo
 import org.apache.flink.types.Row
-
 import org.junit.Test
-
 import java.sql.Timestamp
 import java.text.SimpleDateFormat
 import java.time.{Instant, ZoneId, ZoneOffset}
 import java.util.{Locale, TimeZone}
-import org.apache.flink.table.runtime.typeutils.{LegacyInstantTypeInfo, LegacyLocalDateTimeTypeInfo}
+
 
 class TemporalTypesTest extends ExpressionTestBase {
 
@@ -121,6 +120,31 @@ class TemporalTypesTest extends ExpressionTestBase {
       "CAST('1999-9-10 05:20:10.123456' AS TIMESTAMP)",
       "1999-09-10 05:20:10.123456"
     )
+
+    testSqlApi(
+      "TIME '14:15:16.123456789'",
+      "14:15:16.123456789")
+
+    testSqlApi(
+      "TIME '14:15:16.1234567'",
+      "14:15:16.1234567")
+
+    testSqlApi(
+      "TIME '14:15:16.123456'",
+      "14:15:16.123456")
+
+    testSqlApi(
+      "TIME '14:15:16.1234'",
+      "14:15:16.1234")
+
+    testSqlApi(
+      "CAST('14:15:16.123456789' AS TIME(9))",
+      "14:15:16.123456789")
+
+    // by default, it's TIME(0)
+    testSqlApi(
+      "CAST('14:15:16.123456789' AS TIME)",
+      "14:15:16")
   }
 
   @Test
@@ -223,12 +247,6 @@ class TemporalTypesTest extends ExpressionTestBase {
       "f2.cast(SQL_DATE)",
       "CAST(f2 AS DATE)",
       "1990-10-14")
-
-    testAllApis(
-      'f2.cast(DataTypes.TIME),
-      "f2.cast(SQL_TIME)",
-      "CAST(f2 AS TIME)",
-      "10:20:45")
 
     testAllApis(
       'f2.cast(DataTypes.TIME),
@@ -755,7 +773,7 @@ class TemporalTypesTest extends ExpressionTestBase {
       "2018-03-14")
     testSqlApi(
       "TIME '19:01:02.123'",
-      "19:01:02")
+      "19:01:02.123")
 
     // DATE & TIME
     testSqlApi("CAST('12:44:31' AS TIME)", "12:44:31")
@@ -1050,7 +1068,7 @@ class TemporalTypesTest extends ExpressionTestBase {
   }
 
   @Test
-  def testHighPrecisionTimestamp(): Unit = {
+  def testHighPrecisionDateTime(): Unit = {
     // EXTRACT should support millisecond/microsecond/nanosecond
     testSqlApi(
       "EXTRACT(MILLISECOND FROM TIMESTAMP '1970-01-01 00:00:00.123456789')",
@@ -1074,6 +1092,17 @@ class TemporalTypesTest extends ExpressionTestBase {
       s"EXTRACT(NANOSECOND FROM ${timestampTz("1970-01-01 00:00:00.123456789", 9)})",
       "123456789")
 
+    testSqlApi(
+      "EXTRACT(MILLISECOND FROM TIME '00:00:00.123456789')",
+      "123")
+
+    testSqlApi(
+      "EXTRACT(MICROSECOND FROM TIME '00:00:00.123456789')",
+      "123456")
+
+    testSqlApi(
+      "EXTRACT(NANOSECOND FROM TIME '00:00:00.123456789')",
+      "123456789")
 
     // TIMESTAMPADD should support microsecond/nanosecond
     // TODO: https://issues.apache.org/jira/browse/CALCITE-3530
@@ -1154,7 +1183,6 @@ class TemporalTypesTest extends ExpressionTestBase {
       "1970-01-01 00:00:00.123456"
     )
 
-
     // DATETIME +/- INTERVAL should support nanosecond
     testSqlApi(
       "TIMESTAMP '1970-02-01 00:00:00.123456789' - INTERVAL '1' MONTH",
@@ -1171,6 +1199,10 @@ class TemporalTypesTest extends ExpressionTestBase {
     testSqlApi(
       "TIMESTAMP '1970-02-01 00:00:00.123456789' + INTERVAL '1' SECOND",
       "1970-02-01 00:00:01.123456789")
+
+    testSqlApi(
+      "TIME '12:13:14.123456789' - INTERVAL '1' SECOND",
+      "12:13:13.123456789")
 
     // TIMESTAMP compare should support nanosecond
     testSqlApi(
@@ -1203,12 +1235,24 @@ class TemporalTypesTest extends ExpressionTestBase {
         "'yyyy-MM-dd HH:mm:ss.SSSSSSSSS')",
       "2018-03-14 01:02:03.123456789")
 
+    // CAST between two Times
+    testSqlApi("CAST(f26 AS TIME(7))", "12:13:14.1234567")
+    testSqlApi("CAST(f26 AS TIME)", "12:13:14")
+    testSqlApi("CAST(TIME '12:13:14.1234567' AS TIME(9))", "12:13:14.1234567")
+
+    // CAST between TIME and TIMESTAMP
+    testSqlApi("CAST(f24 AS TIME(7))", "00:00:00.1234567")
+    testSqlApi("CAST(f26 AS TIMESTAMP(7))", "1970-01-01 12:13:14.1234567")
+
+    // CAST between TIME and TIMESTAMP WITH LOCAL TIME ZONE
+    testSqlApi("CAST(f23 AS TIME(7))", "00:00:00.1234567")
+    testSqlApi("CAST(f26 AS TIMESTAMP(7) WITH LOCAL TIME ZONE)", "1970-01-01 12:13:14.1234567")
   }
 
   // ----------------------------------------------------------------------------------------------
 
   override def testData: Row = {
-    val testData = new Row(26)
+    val testData = new Row(27)
     testData.setField(0, localDate("1990-10-14"))
     testData.setField(1, DateTimeTestUtil.localTime("10:20:45"))
     testData.setField(2, localDateTime("1990-10-14 10:20:45.123"))
@@ -1240,6 +1284,7 @@ class TemporalTypesTest extends ExpressionTestBase {
       .atZone(config.getLocalTimeZone).toInstant)
     testData.setField(24, localDateTime("1970-01-01 00:00:00.123456789"))
     testData.setField(25, localDateTime("1970-01-01 00:00:00.123456789").toInstant(ZoneOffset.UTC))
+    testData.setField(26, DateTimeTestUtil.localTime("12:13:14.123456789"))
     testData
   }
 
@@ -1270,7 +1315,8 @@ class TemporalTypesTest extends ExpressionTestBase {
       /* 22 */ Types.INT,
       /* 23 */ new LegacyInstantTypeInfo(9),
       /* 24 */ new LegacyLocalDateTimeTypeInfo(9),
-      /* 25 */ Types.INSTANT
+      /* 25 */ Types.INSTANT,
+      /* 26 */ new LegacyLocalTimeTypeInfo(9)
     )
   }
 }

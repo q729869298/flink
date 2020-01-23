@@ -210,10 +210,10 @@ object BuiltInMethods {
 
   // SQL DATE TIME FUNCTIONS
 
-  val UNIX_TIME_TO_STRING = Types.lookupMethod(
+  val TIME_TO_STRING = Types.lookupMethod(
     classOf[SqlDateTimeUtils],
-    "unixTimeToString",
-    classOf[Int])
+    "timeToString",
+    classOf[Long])
 
   val TIMESTAMP_TO_STRING = Types.lookupMethod(
     classOf[SqlDateTimeUtils],
@@ -376,7 +376,7 @@ object BuiltInMethods {
   val TIMESTAMP_WITH_LOCAL_TIME_ZONE_TO_TIME = Types.lookupMethod(
     classOf[SqlDateTimeUtils],
     "timestampWithLocalZoneToTime",
-    classOf[Long], classOf[TimeZone])
+    classOf[SqlTimestamp], classOf[TimeZone])
 
   val DATE_TO_TIMESTAMP_WITH_LOCAL_TIME_ZONE = Types.lookupMethod(
     classOf[SqlDateTimeUtils],
@@ -386,7 +386,7 @@ object BuiltInMethods {
   val TIME_TO_TIMESTAMP_WITH_LOCAL_TIME_ZONE = Types.lookupMethod(
     classOf[SqlDateTimeUtils],
     "timeToTimestampWithLocalZone",
-    classOf[Int], classOf[TimeZone])
+    classOf[Long], classOf[TimeZone])
 
   val TIMESTAMP_TO_BIGINT = Types.lookupMethod(
     classOf[SqlDateTimeUtils],
@@ -432,7 +432,7 @@ object BuiltInMethods {
     classOf[SqlDateTimeUtils], "dateStringToUnixDate", classOf[String])
 
   val STRING_TO_TIME = Types.lookupMethod(
-    classOf[SqlDateTimeUtils], "timeStringToUnixDate", classOf[String])
+    classOf[SqlDateTimeUtils], "timeStringToTime", classOf[String])
 
   val TRUNCATE_DOUBLE_ONE = Types.lookupMethod(classOf[SqlFunctions], "struncate",
     classOf[Double])
@@ -463,4 +463,7 @@ object BuiltInMethods {
 
   val TRUNCATE_SQL_TIMESTAMP = Types.lookupMethod(classOf[SqlDateTimeUtils], "truncate",
     classOf[SqlTimestamp], classOf[Int])
+
+  val TRUNCATE_SQL_TIME = Types.lookupMethod(classOf[SqlDateTimeUtils], "truncateTime",
+    classOf[Long], classOf[Int])
 }

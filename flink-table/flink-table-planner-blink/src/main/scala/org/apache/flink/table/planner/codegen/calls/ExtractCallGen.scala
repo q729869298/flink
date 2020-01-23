@@ -73,6 +73,7 @@ class ExtractCallGen(method: Method)
         val factor = getFactor(unit)
         val longTerm = tpe.getTypeRoot match {
           case LogicalTypeRoot.TIMESTAMP_WITHOUT_TIME_ZONE => s"${terms(1)}.getMillisecond()"
+          case LogicalTypeRoot.TIME_WITHOUT_TIME_ZONE => s"${terms(1)} / 1000000"
           case _ => s"${terms(1)}"
         }
         unit match {
@@ -87,6 +88,11 @@ class ExtractCallGen(method: Method)
                 s"""
                    |($longTerm % $factor) * 1000 + $nanoOfMilliTerm / 1000
                  """.stripMargin
+              case LogicalTypeRoot.TIME_WITHOUT_TIME_ZONE =>
+                val nanoOfMilliTerm = s"${terms(1)} % 1000000"
+                s"""
+                   |($longTerm % $factor) * 1000 + $nanoOfMilliTerm / 1000
+                 """.stripMargin
               case _ =>
                 throw new ValidationException(
                   "unit " + unit + " can not be applied to " + tpe.toString + " variable")
@@ -95,6 +101,11 @@ class ExtractCallGen(method: Method)
             tpe.getTypeRoot match {
               case LogicalTypeRoot.TIMESTAMP_WITHOUT_TIME_ZONE =>
                 val nanoOfMilliTerm = s"${terms(1)}.getNanoOfMillisecond()"
+                s"""
+                   |($longTerm % $factor) * 1000000 + $nanoOfMilliTerm
+                 """.stripMargin
+              case LogicalTypeRoot.TIME_WITHOUT_TIME_ZONE =>
+                val nanoOfMilliTerm = s"${terms(1)} % 1000000"
                 s"""
                    |($longTerm % $factor) * 1000000 + $nanoOfMilliTerm
                  """.stripMargin

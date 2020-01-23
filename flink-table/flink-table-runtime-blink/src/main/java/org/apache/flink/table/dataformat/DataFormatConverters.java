@@ -37,6 +37,7 @@ import org.apache.flink.table.runtime.typeutils.BinaryStringTypeInfo;
 import org.apache.flink.table.runtime.typeutils.DecimalTypeInfo;
 import org.apache.flink.table.runtime.typeutils.LegacyInstantTypeInfo;
 import org.apache.flink.table.runtime.typeutils.LegacyLocalDateTimeTypeInfo;
+import org.apache.flink.table.runtime.typeutils.LegacyLocalTimeTypeInfo;
 import org.apache.flink.table.runtime.typeutils.LegacyTimestampTypeInfo;
 import org.apache.flink.table.runtime.typeutils.SqlTimestampTypeInfo;
 import org.apache.flink.table.types.CollectionDataType;
@@ -117,11 +118,6 @@ public class DataFormatConverters {
 		t2C.put(DataTypes.DATE().bridgedTo(Integer.class), IntConverter.INSTANCE);
 		t2C.put(DataTypes.DATE().bridgedTo(int.class), IntConverter.INSTANCE);
 
-		t2C.put(DataTypes.TIME().bridgedTo(Time.class), TimeConverter.INSTANCE);
-		t2C.put(DataTypes.TIME().bridgedTo(LocalTime.class), LocalTimeConverter.INSTANCE);
-		t2C.put(DataTypes.TIME().bridgedTo(Integer.class), IntConverter.INSTANCE);
-		t2C.put(DataTypes.TIME().bridgedTo(int.class), IntConverter.INSTANCE);
-
 		t2C.put(DataTypes.INTERVAL(DataTypes.MONTH()).bridgedTo(Integer.class), IntConverter.INSTANCE);
 		t2C.put(DataTypes.INTERVAL(DataTypes.MONTH()).bridgedTo(int.class), IntConverter.INSTANCE);
 
@@ -190,6 +186,16 @@ public class DataFormatConverters {
 					return new SqlTimestampConverter(precisionOfLZTS);
 				} else {
 					throw new RuntimeException("Not support conversion class for TIMESTAMP WITH LOCAL TIME ZONE: " + clazz);
+				}
+			case TIME_WITHOUT_TIME_ZONE:
+				if (clazz == LocalTime.class) {
+					return new LocalTimeConverter();
+				} else if (clazz == Time.class) {
+					return new TimeConverter();
+				} else if (clazz == Integer.class || clazz == int.class) {
+					return new IntTimeConverter();
+				} else {
+					return new LongConverter();
 				}
 			case ARRAY:
 				if (clazz == BinaryArray.class) {
@@ -274,6 +280,8 @@ public class DataFormatConverters {
 				} else if (typeInfo instanceof LegacyInstantTypeInfo) {
 					LegacyInstantTypeInfo instantTypeInfo = (LegacyInstantTypeInfo) typeInfo;
 					return new InstantConverter(instantTypeInfo.getPrecision());
+				} else if (typeInfo instanceof LegacyLocalTimeTypeInfo) {
+					return new LocalTimeConverter();
 				}
 
 				if (clazz == BinaryGeneric.class) {
@@ -718,27 +726,25 @@ public class DataFormatConverters {
 	/**
 	 * Converter for LocalTime.
 	 */
-	public static final class LocalTimeConverter extends DataFormatConverter<Integer, LocalTime> {
+	public static final class LocalTimeConverter extends DataFormatConverter<Long, LocalTime> {
 
 		private static final long serialVersionUID = 1L;
 
-		public static final LocalTimeConverter INSTANCE = new LocalTimeConverter();
-
-		private LocalTimeConverter() {}
+		public LocalTimeConverter() {}
 
 		@Override
-		Integer toInternalImpl(LocalTime value) {
-			return SqlDateTimeUtils.localTimeToUnixDate(value);
+		Long toInternalImpl(LocalTime value) {
+			return value.toNanoOfDay();
 		}
 
 		@Override
-		LocalTime toExternalImpl(Integer value) {
-			return SqlDateTimeUtils.unixTimeToLocalTime(value);
+		LocalTime toExternalImpl(Long value) {
+			return LocalTime.ofNanoOfDay(value);
 		}
 
 		@Override
 		LocalTime toExternalImpl(BaseRow row, int column) {
-			return toExternalImpl(row.getInt(column));
+			return toExternalImpl(row.getLong(column));
 		}
 	}
 
@@ -830,27 +836,25 @@ public class DataFormatConverters {
 	/**
 	 * Converter for time.
 	 */
-	public static final class TimeConverter extends DataFormatConverter<Integer, Time> {
+	public static final class TimeConverter extends DataFormatConverter<Long, Time> {
 
 		private static final long serialVersionUID = -8061475784916442483L;
 
-		public static final TimeConverter INSTANCE = new TimeConverter();
-
-		private TimeConverter() {}
+		public TimeConverter() {}
 
 		@Override
-		Integer toInternalImpl(Time value) {
-			return SqlDateTimeUtils.timeToInternal(value);
+		Long toInternalImpl(Time value) {
+			return value.toLocalTime().toNanoOfDay();
 		}
 
 		@Override
-		Time toExternalImpl(Integer value) {
-			return SqlDateTimeUtils.internalToTime(value);
+		Time toExternalImpl(Long value) {
+			return Time.valueOf(LocalTime.ofNanoOfDay(value));
 		}
 
 		@Override
 		Time toExternalImpl(BaseRow row, int column) {
-			return toExternalImpl(row.getInt(column));
+			return toExternalImpl(row.getLong(column));
 		}
 	}
 
@@ -1507,6 +1511,33 @@ public class DataFormatConverters {
 		@Override
 		SqlTimestamp toExternalImpl(BaseRow row, int column) {
 			return row.getTimestamp(column, precision);
+		}
+	}
+
+	/**
+	 * Converter for Int and Time.
+	 */
+	public static final class IntTimeConverter extends DataFormatConverter<Long, Integer> {
+
+		private static final long serialVersionUID = 1L;
+
+		public IntTimeConverter() {}
+
+		@Override
+		Long toInternalImpl(Integer value) {
+			// milliseconds -> nanoseconds
+			return value * 1000000L;
+		}
+
+		@Override
+		Integer toExternalImpl(Long value) {
+			// nanoseconds -> milliseconds
+			return (int) (value / 1000000);
+		}
+
+		@Override
+		Integer toExternalImpl(BaseRow row, int column) {
+			return toExternalImpl(row.getLong(column));
 		}
 	}
 }
