@@ -112,6 +112,8 @@ public class StreamingJobGraphGenerator {
 	private final JobGraph jobGraph;
 	private final Collection<Integer> builtVertices;
 
+	private final Map<Integer, String> chainedCoLocationGroups;
+
 	private final List<StreamEdge> physicalEdgesInOrder;
 
 	private final Map<Integer, Map<Integer, StreamConfig>> chainedConfigs;
@@ -134,6 +136,7 @@ public class StreamingJobGraphGenerator {
 
 		this.jobVertices = new HashMap<>();
 		this.builtVertices = new HashSet<>();
+		this.chainedCoLocationGroups = new HashMap<>();
 		this.chainedConfigs = new HashMap<>();
 		this.vertexConfigs = new HashMap<>();
 		this.chainedNames = new HashMap<>();
@@ -270,9 +273,24 @@ public class StreamingJobGraphGenerator {
 
 			StreamNode currentNode = streamGraph.getStreamNode(currentNodeId);
 
+			if (currentNodeId.equals(startNodeId)) {
+				chainedCoLocationGroups.put(startNodeId, currentNode.getCoLocationGroup());
+			}
+
+			String chainedCoLocationGroup = chainedCoLocationGroups.get(startNodeId);
+
 			for (StreamEdge outEdge : currentNode.getOutEdges()) {
-				if (isChainable(outEdge, streamGraph)) {
+				if (isChainable(outEdge, streamGraph, chainedCoLocationGroup)) {
 					chainableOutputs.add(outEdge);
+
+					if (chainedCoLocationGroup == null) {
+						String downstreamNodeCoLocationGroup = streamGraph.getStreamNode(outEdge.getTargetId()).getCoLocationGroup();
+						if (downstreamNodeCoLocationGroup != null) {
+							chainedCoLocationGroup = downstreamNodeCoLocationGroup;
+							chainedCoLocationGroups.put(startNodeId, chainedCoLocationGroup);
+						}
+					}
+
 				} else {
 					nonChainableOutputs.add(outEdge);
 				}
@@ -590,7 +608,7 @@ public class StreamingJobGraphGenerator {
 		}
 	}
 
-	public static boolean isChainable(StreamEdge edge, StreamGraph streamGraph) {
+	public static boolean isChainable(StreamEdge edge, StreamGraph streamGraph, String chainedCoLocationGroup) {
 		StreamNode upStreamVertex = streamGraph.getSourceVertex(edge);
 		StreamNode downStreamVertex = streamGraph.getTargetVertex(edge);
 
@@ -601,6 +619,9 @@ public class StreamingJobGraphGenerator {
 				&& outOperator != null
 				&& headOperator != null
 				&& upStreamVertex.isSameSlotSharingGroup(downStreamVertex)
+				&& (chainedCoLocationGroup == null ||
+					downStreamVertex.getCoLocationGroup() == null ||
+					chainedCoLocationGroup.equals(downStreamVertex.getCoLocationGroup()))
 				&& outOperator.getChainingStrategy() == ChainingStrategy.ALWAYS
 				&& (headOperator.getChainingStrategy() == ChainingStrategy.HEAD ||
 					headOperator.getChainingStrategy() == ChainingStrategy.ALWAYS)
@@ -677,7 +698,7 @@ public class StreamingJobGraphGenerator {
 			final SlotSharingGroup sharingGroup = vertex.getSlotSharingGroup();
 
 			// configure co-location constraint
-			final String coLocationGroupKey = node.getCoLocationGroup();
+			final String coLocationGroupKey = chainedCoLocationGroups.get(node.getId());
 			if (coLocationGroupKey != null) {
 				if (sharingGroup == null) {
 					throw new IllegalStateException("Cannot use a co-location constraint without a slot sharing group");
