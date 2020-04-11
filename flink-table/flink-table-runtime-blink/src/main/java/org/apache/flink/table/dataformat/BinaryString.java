@@ -509,6 +509,8 @@ public final class BinaryString extends LazyBinaryFormat<String> implements Comp
 			if (s > e) {
 				// empty string
 				return EMPTY_UTF8;
+			} else if (s == 0 && e == this.sizeInBytes - 1) {
+				return this;
 			} else {
 				return copyBinaryStringInOneSeg(s, e - s + 1);
 			}
@@ -536,6 +538,8 @@ public final class BinaryString extends LazyBinaryFormat<String> implements Comp
 		if (s > e) {
 			// empty string
 			return EMPTY_UTF8;
+		} else if (s == 0 && e == this.sizeInBytes - 1) {
+			return this;
 		} else {
 			return copyBinaryString(s, e);
 		}

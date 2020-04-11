@@ -881,6 +881,8 @@ public class BinaryStringUtil {
 			if (s == str.getSizeInBytes()) {
 				// empty string
 				return EMPTY_UTF8;
+			} else if (s == 0) {
+				return str;
 			} else {
 				return str.copyBinaryStringInOneSeg(s, str.getSizeInBytes() - s);
 			}
@@ -901,6 +903,8 @@ public class BinaryStringUtil {
 		if (s == str.getSizeInBytes()) {
 			// empty string
 			return EMPTY_UTF8;
+		} else if (s == 0) {
+			return str;
 		} else {
 			return str.copyBinaryString(s, str.getSizeInBytes() - 1);
 		}
@@ -947,6 +951,8 @@ public class BinaryStringUtil {
 			// empty string
 			if (searchIdx >= str.getSizeInBytes()) {
 				return EMPTY_UTF8;
+			} else if (searchIdx == 0) {
+				return str;
 			} else {
 				return str.copyBinaryStringInOneSeg(searchIdx, str.getSizeInBytes() - searchIdx);
 			}
@@ -972,6 +978,8 @@ public class BinaryStringUtil {
 		if (searchIdx == str.getSizeInBytes()) {
 			// empty string
 			return EMPTY_UTF8;
+		} else if (searchIdx == 0) {
+			return str;
 		} else {
 			return str.copyBinaryString(searchIdx, str.getSizeInBytes() - 1);
 		}
@@ -989,6 +997,8 @@ public class BinaryStringUtil {
 			if (e < 0) {
 				// empty string
 				return EMPTY_UTF8;
+			} else if (e == str.sizeInBytes - 1) {
+				return str;
 			} else {
 				return str.copyBinaryStringInOneSeg(0, e + 1);
 			}
@@ -1010,6 +1020,8 @@ public class BinaryStringUtil {
 		if (e < 0) {
 			// empty string
 			return EMPTY_UTF8;
+		} else if (e == str.sizeInBytes - 1) {
+			return str;
 		} else {
 			return str.copyBinaryString(0, e);
 		}
@@ -1063,6 +1075,8 @@ public class BinaryStringUtil {
 			if (searchIdx < 0) {
 				// empty string
 				return EMPTY_UTF8;
+			} else if (searchIdx == str.sizeInBytes - 1) {
+				return str;
 			} else {
 				return str.copyBinaryStringInOneSeg(0, searchIdx + 1);
 			}
@@ -1106,6 +1120,8 @@ public class BinaryStringUtil {
 		if (searchIdx < 0) {
 			// empty string
 			return EMPTY_UTF8;
+		} else if (searchIdx == str.sizeInBytes - 1) {
+			return str;
 		} else {
 			return str.copyBinaryString(0, searchIdx);
 		}
