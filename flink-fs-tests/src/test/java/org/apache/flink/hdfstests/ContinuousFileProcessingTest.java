@@ -46,7 +46,9 @@ import org.apache.flink.streaming.runtime.tasks.StreamTaskActionExecutor;
 import org.apache.flink.streaming.runtime.tasks.mailbox.MailboxDefaultAction;
 import org.apache.flink.streaming.runtime.tasks.mailbox.SteppingMailboxProcessor;
 import org.apache.flink.streaming.util.AbstractStreamOperatorTestHarness;
+import org.apache.flink.streaming.util.AbstractStreamOperatorTestHarnessBuilder;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
+import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarnessBuilder;
 import org.apache.flink.util.OperatingSystem;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.function.RunnableWithException;
@@ -329,9 +331,10 @@ public class ContinuousFileProcessingTest {
 
 	private <T> OneInputStreamOperatorTestHarness<TimestampedFileInputSplit, T> createHarness(FileInputFormat<T> format) throws Exception {
 		ExecutionConfig config = new ExecutionConfig();
-		return new OneInputStreamOperatorTestHarness<>(
-			new ContinuousFileReaderOperatorFactory<>(format, TypeExtractor.getInputFormatTypes(format), config),
-			TypeExtractor.getForClass(TimestampedFileInputSplit.class).createSerializer(config));
+		return new OneInputStreamOperatorTestHarnessBuilder<TimestampedFileInputSplit, T>()
+			.setStreamOperatorFactory(new ContinuousFileReaderOperatorFactory<>(format, TypeExtractor.getInputFormatTypes(format), config))
+			.setTypeSerializerIn(TypeExtractor.getForClass(TimestampedFileInputSplit.class).createSerializer(config))
+			.build();
 	}
 
 	private SteppingMailboxProcessor createLocalMailbox(OneInputStreamOperatorTestHarness<TimestampedFileInputSplit, String> harness) {
@@ -796,7 +799,12 @@ public class ContinuousFileProcessingTest {
 			new StreamSource<>(monitoringFunction);
 
 		final AbstractStreamOperatorTestHarness<TimestampedFileInputSplit> testHarness =
-			new AbstractStreamOperatorTestHarness<>(src, 1, 1, 0);
+			new AbstractStreamOperatorTestHarnessBuilder<TimestampedFileInputSplit>()
+				.setStreamOperator(src)
+				.setMaxParallelism(1)
+				.setParallelism(1)
+				.setSubtaskIndex(0)
+				.build();
 		testHarness.open();
 
 		final Throwable[] error = new Throwable[1];
@@ -847,7 +855,12 @@ public class ContinuousFileProcessingTest {
 			new StreamSource<>(monitoringFunctionCopy);
 
 		AbstractStreamOperatorTestHarness<TimestampedFileInputSplit> testHarnessCopy =
-			new AbstractStreamOperatorTestHarness<>(srcCopy, 1, 1, 0);
+			new AbstractStreamOperatorTestHarnessBuilder<TimestampedFileInputSplit>()
+				.setStreamOperator(srcCopy)
+				.setMaxParallelism(1)
+				.setParallelism(1)
+				.setSubtaskIndex(0)
+				.build();
 		testHarnessCopy.initializeState(snapshot);
 		testHarnessCopy.open();
 

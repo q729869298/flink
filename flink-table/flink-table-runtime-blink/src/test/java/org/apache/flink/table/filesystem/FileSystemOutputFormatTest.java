@@ -24,6 +24,7 @@ import org.apache.flink.streaming.api.functions.sink.OutputFormatSinkFunction;
 import org.apache.flink.streaming.api.operators.StreamSink;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
+import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarnessBuilder;
 import org.apache.flink.types.Row;
 
 import org.apache.commons.io.FileUtils;
@@ -225,9 +226,11 @@ public class FileSystemOutputFormatTest {
 
 		sinkRef.set(sink);
 
-		return new OneInputStreamOperatorTestHarness<>(
-				new StreamSink<>(new OutputFormatSinkFunction<>(sink)),
-				// test parallelism
-				3, 3, 0);
+		return new OneInputStreamOperatorTestHarnessBuilder<Row, Object>()
+			.setMaxParallelism(3)
+			.setParallelism(3)
+			.setSubtaskIndex(0)
+			.setStreamOperator(new StreamSink<>(new OutputFormatSinkFunction<>(sink)))
+			.build();
 	}
 }

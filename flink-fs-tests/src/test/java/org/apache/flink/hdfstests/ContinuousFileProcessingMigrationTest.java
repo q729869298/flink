@@ -38,7 +38,9 @@ import org.apache.flink.streaming.api.operators.StreamSource;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.AbstractStreamOperatorTestHarness;
+import org.apache.flink.streaming.util.AbstractStreamOperatorTestHarnessBuilder;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
+import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarnessBuilder;
 import org.apache.flink.streaming.util.OperatorSnapshotUtil;
 import org.apache.flink.testutils.migration.MigrationVersion;
 import org.apache.flink.util.OperatingSystem;
@@ -226,7 +228,12 @@ public class ContinuousFileProcessingMigrationTest {
 			new StreamSource<>(monitoringFunction);
 
 		final AbstractStreamOperatorTestHarness<TimestampedFileInputSplit> testHarness =
-				new AbstractStreamOperatorTestHarness<>(src, 1, 1, 0);
+			new AbstractStreamOperatorTestHarnessBuilder<TimestampedFileInputSplit>()
+				.setStreamOperator(src)
+				.setMaxParallelism(1)
+				.setParallelism(1)
+				.setSubtaskIndex(0)
+				.build();
 
 		testHarness.open();
 
@@ -292,7 +299,12 @@ public class ContinuousFileProcessingMigrationTest {
 			new StreamSource<>(monitoringFunction);
 
 		final AbstractStreamOperatorTestHarness<TimestampedFileInputSplit> testHarness =
-			new AbstractStreamOperatorTestHarness<>(src, 1, 1, 0);
+			new AbstractStreamOperatorTestHarnessBuilder<TimestampedFileInputSplit>()
+				.setStreamOperator(src)
+				.setMaxParallelism(1)
+				.setParallelism(1)
+				.setSubtaskIndex(0)
+				.build();
 
 		testHarness.setup();
 
@@ -415,9 +427,10 @@ public class ContinuousFileProcessingMigrationTest {
 
 	private OneInputStreamOperatorTestHarness<TimestampedFileInputSplit, FileInputSplit> createHarness(BlockingFileInputFormat format) throws Exception {
 		ExecutionConfig config = new ExecutionConfig();
-		return new OneInputStreamOperatorTestHarness<>(
-			new ContinuousFileReaderOperatorFactory<>(format, TypeExtractor.getInputFormatTypes(format), config),
-			TypeExtractor.getForClass(TimestampedFileInputSplit.class).createSerializer(config));
+		return new OneInputStreamOperatorTestHarnessBuilder<TimestampedFileInputSplit, FileInputSplit>()
+			.setStreamOperatorFactory(new ContinuousFileReaderOperatorFactory<>(format, TypeExtractor.getInputFormatTypes(format), config))
+			.setTypeSerializerIn(TypeExtractor.getForClass(TimestampedFileInputSplit.class).createSerializer(config))
+			.build();
 	}
 
 }
