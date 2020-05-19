@@ -454,6 +454,33 @@ public class HiveTableSourceTest {
 			.getInput().getParallelism());
 	}
 
+	@Test(expected = RuntimeException.class)
+	public void testPartitionLimit() {
+		final String catalogName = "hive";
+		final String dbName = "source_db";
+		final String tblName = "test_partition_limit";
+		hiveShell.execute("CREATE TABLE source_db.test_partition_limit " +
+					"(year STRING, value INT) partitioned by (pt int);");
+		HiveTestUtils.createTextTableInserter(hiveShell, dbName, tblName)
+					.addRow(new Object[]{"2014", 3})
+					.addRow(new Object[]{"2014", 4})
+					.commit("pt=0");
+		HiveTestUtils.createTextTableInserter(hiveShell, dbName, tblName)
+					.addRow(new Object[]{"2015", 2})
+					.addRow(new Object[]{"2015", 5})
+					.commit("pt=2");
+		TableEnvironment tEnv = HiveTestUtils.createTableEnvWithBlinkPlannerBatchMode();
+		tEnv.getConfig().getConfiguration().setInteger(
+			HiveOptions.TABLE_EXEC_HIVE_PARTITION_LIMIT_REQUEST, 1);
+		tEnv.registerCatalog(catalogName, hiveCatalog);
+		Table table = tEnv.sqlQuery("select * from hive.source_db.test_partition_limit");
+		PlannerBase planner = (PlannerBase) ((TableEnvironmentImpl) tEnv).getPlanner();
+		RelNode relNode = planner.optimize(TableTestUtil.toRelNode(table));
+		ExecNode execNode = planner.translateToExecNodePlan(toScala(Collections.singletonList(relNode))).get(0);
+		@SuppressWarnings("unchecked")
+		Transformation transformation = execNode.translateToPlan(planner);
+	}
+
 	@Test
 	public void testSourceConfig() throws Exception {
 		// vector reader not available for 1.x and we're not testing orc for 2.0.x
