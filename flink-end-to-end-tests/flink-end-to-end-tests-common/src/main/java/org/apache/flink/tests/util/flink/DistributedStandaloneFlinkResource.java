@@ -27,6 +27,7 @@ import org.apache.flink.runtime.rest.messages.EmptyRequestBody;
 import org.apache.flink.runtime.rest.messages.taskmanager.TaskManagersHeaders;
 import org.apache.flink.runtime.rest.messages.taskmanager.TaskManagersInfo;
 import org.apache.flink.tests.util.TestUtils;
+import org.apache.flink.tests.util.ssh.SshTool;
 import org.apache.flink.util.ConfigurationException;
 
 import org.junit.rules.TemporaryFolder;
@@ -37,6 +38,8 @@ import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -46,28 +49,35 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 /**
- * Flink resource that start local standalone clusters.
+ * Flink resource that start distributed standalone clusters.
  */
-public class LocalStandaloneFlinkResource implements FlinkResource {
+public class DistributedStandaloneFlinkResource implements FlinkResource {
 
-	private static final Logger LOG = LoggerFactory.getLogger(LocalStandaloneFlinkResource.class);
+	private static final Logger LOG = LoggerFactory.getLogger(DistributedStandaloneFlinkResource.class);
 
 	private final TemporaryFolder temporaryFolder = new TemporaryFolder();
 	private final Path distributionDirectory;
 	@Nullable
 	private final Path logBackupDirectory;
+	private final List<String> jmHosts;
+	private final List<String> tmHosts;
+	private final SshTool sshTool;
 	private final FlinkResourceSetup setup;
 
 	private FlinkDistribution distribution;
+	private Collection<RemoteFlinkDistribution> remoteDistributions;
 
-	LocalStandaloneFlinkResource(Path distributionDirectory, Optional<Path> logBackupDirectory, FlinkResourceSetup setup) {
+	public DistributedStandaloneFlinkResource(Path distributionDirectory, Optional<Path> logBackupDirectory,
+	                                          List<String> jmHosts, List<String> tmHosts, SshTool sshTool,
+	                                          FlinkResourceSetup setup) {
 		this.distributionDirectory = distributionDirectory;
 		this.logBackupDirectory = logBackupDirectory.orElse(null);
+		this.jmHosts = jmHosts;
+		this.tmHosts = tmHosts;
+		this.sshTool = sshTool;
 		this.setup = setup;
 	}
 
@@ -79,11 +89,19 @@ public class LocalStandaloneFlinkResource implements FlinkResource {
 		TestUtils.copyDirectory(distributionDirectory, tmp);
 
 		distribution = new FlinkDistribution(tmp);
-		for (JarOperation jarOperation : setup.getJarOperations()) {
-			distribution.performJarOperation(jarOperation);
+		for (JarMove jarMove : setup.getJarMoveOperations()) {
+			distribution.moveJar(jarMove);
 		}
 		if (setup.getConfig().isPresent()) {
 			distribution.appendConfiguration(setup.getConfig().get());
+		}
+
+		remoteDistributions = new ArrayList<>();
+		for (String taskExecutorHost : tmHosts) {
+			// TODO: decide on remote path
+			Path remoteDistributionDir = null;
+			sshTool.copyDirectoryTo(tmp, remoteDistributionDir, taskExecutorHost);
+			remoteDistributions.add(new RemoteFlinkDistribution(taskExecutorHost, remoteDistributionDir, sshTool));
 		}
 	}
 
@@ -105,6 +123,15 @@ public class LocalStandaloneFlinkResource implements FlinkResource {
 				} catch (IOException e) {
 					LOG.warn("An error has occurred while backing up logs to {}.", targetDirectory, e);
 				}
+				for (RemoteFlinkDistribution remoteDistribution : remoteDistributions) {
+					try {
+						remoteDistribution.copyLogsTo(targetDirectory);
+						LOG.info("Backed up logs from host {} to {}.", remoteDistribution.getHost(), targetDirectory);
+					} catch (IOException e) {
+						LOG.warn("An error has occurred while backing up logs from host {} to {}.",
+							remoteDistribution.getHost(), targetDirectory, e);
+					}
+				}
 			}
 		}
 		temporaryFolder.delete();
@@ -116,16 +143,32 @@ public class LocalStandaloneFlinkResource implements FlinkResource {
 		} catch (IOException e) {
 			LOG.warn("Error while shutting down Flink cluster.", e);
 		}
+		for (RemoteFlinkDistribution remoteDistribution : remoteDistributions) {
+			try {
+				remoteDistribution.stopFlinkCluster();
+			} catch (IOException e) {
+				LOG.warn("Error while shutting down Flink cluster on host {}.", remoteDistribution.getHost(), e);
+			}
+		}
 	}
 
 	@Override
+	// TODO: modify this method also also accept number of job masters
 	public ClusterController startCluster(int numTaskManagers) throws IOException {
-		distribution.setTaskExecutorHosts(IntStream.range(0, numTaskManagers).mapToObj(i -> "localhost").collect(Collectors.toList()));
+		// TODO: set TM hosts according to required number of task executors and configured hosts
+		// TODO: may imply duplicating some entries (if numHosts < numTaskManagers> or ignoring others (if numHosts >
+		//  numTaskManagers>
+		//distribution.setTaskExecutorHosts(IntStream.range(0, numTaskManagers).mapToObj(i -> "localhost").collect
+		// (Collectors.toList()));
 		distribution.startFlinkCluster();
 
-		try (final RestClient restClient = new RestClient(RestClientConfiguration.fromConfiguration(new Configuration()), Executors.directExecutor())) {
+		// TODO: deduplicate with LocalStandaloneResource#startCluster
+		try (final RestClient restClient = new RestClient(
+			RestClientConfiguration.fromConfiguration(new Configuration()), Executors.directExecutor())) {
 			for (int retryAttempt = 0; retryAttempt < 30; retryAttempt++) {
 				final CompletableFuture<TaskManagersInfo> localhost = restClient.sendRequest(
+					// TODO: either ensure that at least one JM runs on the local machine, or use one of the
+					//  configured JM hosts
 					"localhost",
 					8081,
 					TaskManagersHeaders.getInstance(),
@@ -139,7 +182,8 @@ public class LocalStandaloneFlinkResource implements FlinkResource {
 					if (numRunningTaskManagers == numTaskManagers) {
 						return new StandaloneClusterController(distribution);
 					} else {
-						LOG.info("Waiting for task managers to come up. {}/{} are currently running.", numRunningTaskManagers, numTaskManagers);
+						LOG.info("Waiting for task managers to come up. {}/{} are currently running.",
+							numRunningTaskManagers, numTaskManagers);
 					}
 				} catch (InterruptedException e) {
 					LOG.info("Waiting for dispatcher REST endpoint to come up...");
@@ -166,6 +210,14 @@ public class LocalStandaloneFlinkResource implements FlinkResource {
 
 	@Override
 	public Stream<String> searchAllLogs(Pattern pattern, Function<Matcher, String> matchProcessor) throws IOException {
-		return distribution.searchAllLogs(pattern, matchProcessor);
+		Stream<String> logStream = distribution.searchAllLogs(pattern, matchProcessor);
+		for (RemoteFlinkDistribution remoteDistribution : remoteDistributions) {
+			try {
+				logStream = Stream.concat(logStream, remoteDistribution.searchAllLogs(pattern, matchProcessor));
+			} catch (IOException e) {
+				LOG.warn("Error while shutting down Flink cluster on host {}.", remoteDistribution.getHost(), e);
+			}
+		}
+		return logStream;
 	}
 }
