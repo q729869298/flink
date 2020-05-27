@@ -18,6 +18,7 @@
 
 package org.apache.flink.runtime.state.filesystem;
 
+import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.core.fs.FSDataInputStream;
 import org.apache.flink.core.fs.FSDataOutputStream;
 import org.apache.flink.core.fs.FileStatus;
@@ -58,11 +59,13 @@ public abstract class AbstractFileCheckpointStorageTestBase {
 	@Rule
 	public final TemporaryFolder tmp = new TemporaryFolder();
 
+	private final boolean defaultCleanUpRecursiveStrategy = CheckpointingOptions.CHECKPOINTS_CLEANUP_RECURSIVE.defaultValue();
+
 	// ------------------------------------------------------------------------
 	//  factories for the actual state storage to be tested
 	// ------------------------------------------------------------------------
 
-	protected abstract CheckpointStorage createCheckpointStorage(Path checkpointDir) throws Exception;
+	protected abstract CheckpointStorage createCheckpointStorage(Path checkpointDir, boolean cleanUpRecursively) throws Exception;
 
 	protected abstract CheckpointStorage createCheckpointStorageWithSavepointDir(
 			Path checkpointDir,
@@ -84,7 +87,7 @@ public abstract class AbstractFileCheckpointStorageTestBase {
 		final String pointer3 = metadataFile.getParent().toString() + '/';
 
 		// create the storage for some random checkpoint directory
-		final CheckpointStorage storage = createCheckpointStorage(randomTempPath());
+		final CheckpointStorage storage = createCheckpointStorage(randomTempPath(), defaultCleanUpRecursiveStrategy);
 
 		final byte[] data = new byte[23686];
 		new Random().nextBytes(data);
@@ -116,7 +119,7 @@ public abstract class AbstractFileCheckpointStorageTestBase {
 	@Test
 	public void testFailingPointerPathResolution() throws Exception {
 		// create the storage for some random checkpoint directory
-		final CheckpointStorage storage = createCheckpointStorage(randomTempPath());
+		final CheckpointStorage storage = createCheckpointStorage(randomTempPath(), defaultCleanUpRecursiveStrategy);
 
 		// null value
 		try {
@@ -158,9 +161,9 @@ public abstract class AbstractFileCheckpointStorageTestBase {
 
 		final long checkpointId = 177;
 
-		final CheckpointStorage storage1 = createCheckpointStorage(checkpointDir);
+		final CheckpointStorage storage1 = createCheckpointStorage(checkpointDir, defaultCleanUpRecursiveStrategy);
 		storage1.initializeBaseLocations();
-		final CheckpointStorage storage2 = createCheckpointStorage(checkpointDir);
+		final CheckpointStorage storage2 = createCheckpointStorage(checkpointDir, defaultCleanUpRecursiveStrategy);
 		storage2.initializeBaseLocations();
 
 		final CheckpointStorageLocation loc1 = storage1.initializeLocationForCheckpoint(checkpointId);
@@ -210,7 +213,7 @@ public abstract class AbstractFileCheckpointStorageTestBase {
 		final byte[] data = {8, 8, 4, 5, 2, 6, 3};
 		final long checkpointId = 177;
 
-		final CheckpointStorage storage = createCheckpointStorage(randomTempPath());
+		final CheckpointStorage storage = createCheckpointStorage(randomTempPath(), defaultCleanUpRecursiveStrategy);
 		storage.initializeBaseLocations();
 		final CheckpointStorageLocation loc = storage.initializeLocationForCheckpoint(checkpointId);
 
@@ -228,6 +231,33 @@ public abstract class AbstractFileCheckpointStorageTestBase {
 		}
 		catch (IOException ignored) {}
 	}
+
+	@Test
+	public void testCleanUpOnShutDown() throws Exception {
+		verifyStorageShutDownAsExpected(true, false);
+
+		verifyStorageShutDownAsExpected(true, true);
+	}
+
+	@Test
+	public void testNotCleanUpOnShutDown() throws Exception {
+		verifyStorageShutDownAsExpected(false, false);
+	}
+
+	private void verifyStorageShutDownAsExpected(boolean cleanUpOnShutDown, boolean cleanUpRecursively) throws Exception {
+		CheckpointStorage checkpointStorage = createCheckpointStorage(randomTempPath(), cleanUpRecursively);
+		checkpointStorage.initializeBaseLocations();
+		CheckpointStorageLocation checkpointStorageLocation = checkpointStorage.initializeLocationForCheckpoint(177L);
+		if (!cleanUpRecursively) {
+			// discard pending checkpoint before shutdown storage if not clean up recursively.
+			checkpointStorageLocation.disposeOnFailure();
+		}
+		checkpointStorage.shutDown(cleanUpOnShutDown);
+
+		verifyDirectoriesCleanUpAsExpected(checkpointStorage, !cleanUpOnShutDown);
+	}
+
+	protected abstract void verifyDirectoriesCleanUpAsExpected(CheckpointStorage checkpointStorage, boolean expectedDirectoriesExistence);
 
 	// ------------------------------------------------------------------------
 	//  savepoints
@@ -254,7 +284,7 @@ public abstract class AbstractFileCheckpointStorageTestBase {
 
 	@Test
 	public void testNoSavepointPathConfiguredNoTarget() throws Exception {
-		final CheckpointStorage storage = createCheckpointStorage(randomTempPath());
+		final CheckpointStorage storage = createCheckpointStorage(randomTempPath(), defaultCleanUpRecursiveStrategy);
 
 		try {
 			storage.initializeLocationForSavepoint(1337, null);
@@ -269,7 +299,7 @@ public abstract class AbstractFileCheckpointStorageTestBase {
 			Path expectedParent) throws Exception {
 
 		final CheckpointStorage storage = savepointDir == null ?
-				createCheckpointStorage(randomTempPath()) :
+				createCheckpointStorage(randomTempPath(), defaultCleanUpRecursiveStrategy) :
 				createCheckpointStorageWithSavepointDir(randomTempPath(), savepointDir);
 
 		final String customLocation = customDir == null ? null : customDir.toString();

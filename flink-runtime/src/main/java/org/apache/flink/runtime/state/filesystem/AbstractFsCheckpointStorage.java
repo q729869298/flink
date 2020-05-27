@@ -73,6 +73,9 @@ public abstract class AbstractFsCheckpointStorage implements CheckpointStorage {
 	@Nullable
 	private final Path defaultSavepointDirectory;
 
+	/** The flag */
+	private final boolean cleanUpRecursivelyOnShutDown;
+
 	/**
 	 * Creates a new checkpoint storage.
 	 *
@@ -81,10 +84,12 @@ public abstract class AbstractFsCheckpointStorage implements CheckpointStorage {
 	 */
 	protected AbstractFsCheckpointStorage(
 			JobID jobId,
-			@Nullable Path defaultSavepointDirectory) {
+			@Nullable Path defaultSavepointDirectory,
+			boolean cleanUpRecursivelyOnShutDown) {
 
 		this.jobId = checkNotNull(jobId);
 		this.defaultSavepointDirectory = defaultSavepointDirectory;
+		this.cleanUpRecursivelyOnShutDown = cleanUpRecursivelyOnShutDown;
 	}
 
 	/**
@@ -168,6 +173,15 @@ public abstract class AbstractFsCheckpointStorage implements CheckpointStorage {
 	}
 
 	protected abstract CheckpointStorageLocation createSavepointLocation(FileSystem fs, Path location) throws IOException;
+
+	@Override
+	public void shutDown(boolean cleanUpOnShutDown) throws IOException {
+		if (cleanUpOnShutDown) {
+			discardCheckpointDirectories(cleanUpRecursivelyOnShutDown);
+		}
+	}
+
+	protected abstract void discardCheckpointDirectories(boolean cleanUpDirectoryRecursively) throws IOException;
 
 	// ------------------------------------------------------------------------
 	//  Creating and resolving paths

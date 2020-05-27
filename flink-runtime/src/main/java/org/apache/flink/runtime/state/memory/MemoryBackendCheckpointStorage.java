@@ -70,9 +70,10 @@ public class MemoryBackendCheckpointStorage extends AbstractFsCheckpointStorage 
 			JobID jobId,
 			@Nullable Path checkpointsBaseDirectory,
 			@Nullable Path defaultSavepointLocation,
-			int maxStateSize) throws IOException {
+			int maxStateSize,
+			boolean cleanUpRecursivelyOnShutDown) throws IOException {
 
-		super(jobId, defaultSavepointLocation);
+		super(jobId, defaultSavepointLocation, cleanUpRecursivelyOnShutDown);
 
 		checkArgument(maxStateSize > 0);
 		this.maxStateSize = maxStateSize;
@@ -158,6 +159,13 @@ public class MemoryBackendCheckpointStorage extends AbstractFsCheckpointStorage 
 	@Override
 	protected CheckpointStorageLocation createSavepointLocation(FileSystem fs, Path location) {
 		return new PersistentMetadataCheckpointStorageLocation(fs, location, maxStateSize);
+	}
+
+	@Override
+	protected void discardCheckpointDirectories(boolean cleanUpDirectoryRecursively) throws IOException {
+		if (fileSystem != null) {
+			fileSystem.delete(checkpointsDirectory, cleanUpDirectoryRecursively);
+		}
 	}
 
 	// ------------------------------------------------------------------------
