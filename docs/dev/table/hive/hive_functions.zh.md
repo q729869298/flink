@@ -94,8 +94,7 @@ modules:
 
 ## 使用 Hive UDF
 
-假设我们在 Hive Metastore 中已经注册了下面的 UDF 函数：
-
+假设我们在 Hive Metastore 中注册了以下 Hive 函数：
 
 {% highlight java %}
 /**
