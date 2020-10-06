@@ -82,6 +82,7 @@ import org.apache.flink.streaming.api.functions.source.SocketTextStreamFunction;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.streaming.api.functions.source.StatefulSequenceSource;
 import org.apache.flink.streaming.api.functions.source.TimestampedFileInputSplit;
+import org.apache.flink.streaming.api.graph.GlobalDataExchangeMode;
 import org.apache.flink.streaming.api.graph.StreamGraph;
 import org.apache.flink.streaming.api.graph.StreamGraphGenerator;
 import org.apache.flink.streaming.api.graph.StreamingJobGraphGenerator;
@@ -154,6 +155,8 @@ public class StreamExecutionEnvironment {
 	protected final List<Transformation<?>> transformations = new ArrayList<>();
 
 	private long bufferTimeout = StreamingJobGraphGenerator.UNDEFINED_NETWORK_BUFFER_TIMEOUT;
+
+	private GlobalDataExchangeMode globalDataExchangeMode = GlobalDataExchangeMode.ALL_EDGES_PIPELINED;
 
 	protected boolean isChainingEnabled = true;
 
@@ -359,6 +362,12 @@ public class StreamExecutionEnvironment {
 	 */
 	public long getBufferTimeout() {
 		return this.bufferTimeout;
+	}
+
+
+	public StreamExecutionEnvironment setGlobalDataExchangeMode(GlobalDataExchangeMode globalDataExchangeMode) {
+		this.globalDataExchangeMode = globalDataExchangeMode;
+		return this;
 	}
 
 	/**
@@ -1920,7 +1929,8 @@ public class StreamExecutionEnvironment {
 			.setChaining(isChainingEnabled)
 			.setUserArtifacts(cacheFile)
 			.setTimeCharacteristic(timeCharacteristic)
-			.setDefaultBufferTimeout(bufferTimeout);
+			.setDefaultBufferTimeout(bufferTimeout)
+			.setGlobalDataExchangeMode(globalDataExchangeMode);
 	}
 
 	/**

@@ -25,6 +25,9 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.Closeable;
 
+import static org.apache.flink.runtime.io.network.buffer.Buffer.DataType.DATA_BUFFER;
+import static org.apache.flink.runtime.io.network.buffer.BufferBuilder.BUFFER_BUILDER_HEADER_SIZE;
+import static org.apache.flink.runtime.io.network.buffer.BufferBuilder.Header;
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 import static org.apache.flink.util.Preconditions.checkState;
@@ -96,16 +99,100 @@ public class BufferConsumer implements Closeable {
 		return writerPosition.isFinished();
 	}
 
+	public boolean startOfDataBuffer() {
+		return buffer.getDataType() == DATA_BUFFER && currentReaderPosition == 0;
+	}
+
 	/**
+	 * BufferConsumer skips the buffer header before building buffer.
 	 * @return sliced {@link Buffer} containing the not yet consumed data. Returned {@link Buffer} shares the reference
 	 * counter with the parent {@link BufferConsumer} - in order to recycle memory both of them must be recycled/closed.
 	 */
 	public Buffer build() {
 		writerPosition.update();
 		int cachedWriterPosition = writerPosition.getCached();
-		Buffer slice = buffer.readOnlySlice(currentReaderPosition, cachedWriterPosition - currentReaderPosition);
+
+		Buffer slice = null;
+
+		// data buffer && starting from the beginning of the buffer
+		if (startOfDataBuffer()) {
+			// either do not have any data, or at least have 4 bytes (header + data)
+			checkState(
+				(cachedWriterPosition - currentReaderPosition > BUFFER_BUILDER_HEADER_SIZE)
+					|| (currentReaderPosition == cachedWriterPosition)
+			);
+
+			// remove the header
+			if (cachedWriterPosition - currentReaderPosition > BUFFER_BUILDER_HEADER_SIZE) {
+				slice = buffer.readOnlySlice(
+					currentReaderPosition + BUFFER_BUILDER_HEADER_SIZE,
+					cachedWriterPosition - currentReaderPosition - BUFFER_BUILDER_HEADER_SIZE);
+			}
+		}
+
+		if (slice == null) {
+			slice = buffer.readOnlySlice(currentReaderPosition, cachedWriterPosition - currentReaderPosition);
+		}
+
 		currentReaderPosition = cachedWriterPosition;
+
 		return slice.retainBuffer();
+	}
+
+	public PartialRecordCleanupResult skipPartialRecord() {
+		writerPosition.update();
+		int cachedWriterPosition = writerPosition.getCached();
+
+		Buffer slice;
+		boolean cleanedUp;
+
+		// partial record can happen only at the beginning of a buffer
+		// because buffer slicer can end with either a full record or full buffer (partial record)
+		if (startOfDataBuffer()) {
+			// either do not have any data, or at least have 4 bytes (header + data)
+			checkState(
+				(cachedWriterPosition - currentReaderPosition > BUFFER_BUILDER_HEADER_SIZE)
+					|| (currentReaderPosition == cachedWriterPosition)
+			);
+
+			if (cachedWriterPosition - currentReaderPosition > BUFFER_BUILDER_HEADER_SIZE) {
+				int head = buffer.getMemorySegment().getIntBigEndian(0);
+				boolean partial = Header.isPartial(head);
+				int length = Header.length(head);
+
+				if (partial) {
+					// case 1: long record spanning multiple buffers, haven't yet cleaned up, skip the whole buffer
+					if (length == buffer.getMaxCapacity() - BUFFER_BUILDER_HEADER_SIZE) {
+						slice = buffer.readOnlySlice(currentReaderPosition, 0);
+						cleanedUp = false;
+					} else {
+						// case 2: partial record ends within the buffer, cleaned up successfully, skip the partial record
+						slice = buffer.readOnlySlice(
+							currentReaderPosition + BUFFER_BUILDER_HEADER_SIZE + length,
+							cachedWriterPosition - currentReaderPosition - BUFFER_BUILDER_HEADER_SIZE - length);
+						cleanedUp = true;
+					}
+				} else {
+					// case 3: the record is not a partial record, cleaned up successfully, skip the head
+					slice = buffer.readOnlySlice(
+						currentReaderPosition + BUFFER_BUILDER_HEADER_SIZE ,
+						cachedWriterPosition - currentReaderPosition - BUFFER_BUILDER_HEADER_SIZE);
+					cleanedUp = true;
+				}
+			} else {
+				// case 4: written data is not visible yet, haven't yet cleaned up, return an empty slicer
+				slice = buffer.readOnlySlice(currentReaderPosition, cachedWriterPosition - currentReaderPosition);
+				cleanedUp = false;
+			}
+		} else {
+			// case 5: read from the middle of the buffer or event buffer; no clean up needed,
+			// because buffer slicer can end with either a full record or full buffer (partial record)
+			slice = buffer.readOnlySlice(currentReaderPosition, cachedWriterPosition - currentReaderPosition);
+			cleanedUp = true;
+		}
+
+		currentReaderPosition = cachedWriterPosition;
+		return new PartialRecordCleanupResult(slice.retainBuffer(), cleanedUp);
 	}
 
 	/**
@@ -155,10 +242,6 @@ public class BufferConsumer implements Closeable {
 		return writerPosition.getCached();
 	}
 
-	int getCurrentReaderPosition() {
-		return currentReaderPosition;
-	}
-
 	/**
 	 * Returns true if there is new data available for reading.
 	 */
@@ -199,6 +282,24 @@ public class BufferConsumer implements Closeable {
 
 		private void update() {
 			this.cachedPosition = positionMarker.get();
+		}
+	}
+
+	public static class PartialRecordCleanupResult {
+		private final Buffer buffer;
+		private final boolean cleaned;
+
+		PartialRecordCleanupResult(Buffer buffer, boolean cleaned) {
+			this.buffer = checkNotNull(buffer);
+			this.cleaned = cleaned;
+		}
+
+		public Buffer getBuffer() {
+			return buffer;
+		}
+
+		public boolean getCleaned() {
+			return cleaned;
 		}
 	}
 }
