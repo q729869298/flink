@@ -22,6 +22,7 @@ import org.apache.flink.api.connector.source.Boundedness;
 import org.apache.flink.api.connector.source.SourceEvent;
 import org.apache.flink.api.connector.source.SourceReader;
 import org.apache.flink.api.connector.source.SourceReaderContext;
+import org.apache.flink.api.connector.source.metrics.SourceMetricGroup;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.KafkaSourceBuilder;
@@ -30,8 +31,7 @@ import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsIni
 import org.apache.flink.connector.kafka.source.reader.deserializer.KafkaRecordDeserializer;
 import org.apache.flink.connector.kafka.source.split.KafkaPartitionSplit;
 import org.apache.flink.connector.testutils.source.reader.SourceReaderTestBase;
-import org.apache.flink.metrics.MetricGroup;
-import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
+import org.apache.flink.connector.testutils.source.reader.TestingSourceMetricGroup;
 
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -152,8 +152,8 @@ public class KafkaSourceReaderTest extends SourceReaderTestBase<KafkaPartitionSp
 
 		return builder.build().createReader(new SourceReaderContext() {
 			@Override
-			public MetricGroup metricGroup() {
-				return new UnregisteredMetricsGroup();
+			public SourceMetricGroup metricGroup() {
+				return new TestingSourceMetricGroup();
 			}
 
 			@Override
