@@ -29,6 +29,7 @@ import org.apache.flink.connector.base.source.reader.fetcher.SplitFetcherManager
 import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
 import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
 import org.apache.flink.core.io.InputStatus;
+import org.apache.flink.metrics.Counter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,7 +79,10 @@ public abstract class SourceReaderBase<E, T, SplitT extends SourceSplit, SplitSt
 	protected final Configuration config;
 
 	/** The context of this source reader. */
-	protected SourceReaderContext context;
+	protected final SourceReaderContext context;
+
+	/** A counter that records the number of records consumed by this source reader. */
+	private final Counter numRecordsInCounter;
 
 	/** The latest fetched batch of records-by-split from the split reader. */
 	@Nullable private RecordsWithSplitIds<E> currentFetch;
@@ -101,6 +105,7 @@ public abstract class SourceReaderBase<E, T, SplitT extends SourceSplit, SplitSt
 		this.options = new SourceReaderOptions(config);
 		this.config = config;
 		this.context = context;
+		this.numRecordsInCounter = context.metricGroup().getNumRecordsInCounter();
 		this.noMoreSplitsAssignment = false;
 	}
 
@@ -124,6 +129,7 @@ public abstract class SourceReaderBase<E, T, SplitT extends SourceSplit, SplitSt
 			final E record = recordsWithSplitId.nextRecordFromSplit();
 			if (record != null) {
 				// emit the record.
+				numRecordsInCounter.inc();
 				recordEmitter.emitRecord(record, currentSplitOutput, currentSplitContext.state);
 				LOG.trace("Emitted record: {}", record);
 
