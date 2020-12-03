@@ -68,11 +68,8 @@ class JoinITCase(state: StateBackendMode) extends StreamingWithStateTestBase(sta
     tEnv.registerTable("B", tableB)
   }
 
-
-
   // Tests for inner join.
   override def after(): Unit = {}
-
 
   /** test non-window inner join **/
   @Test
