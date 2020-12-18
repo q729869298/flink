@@ -51,6 +51,7 @@ import org.apache.flink.runtime.state.StateSnapshotTransformers;
 import org.apache.flink.runtime.state.StreamCompressionDecorator;
 import org.apache.flink.runtime.state.ttl.TtlTimeProvider;
 import org.apache.flink.util.FlinkRuntimeException;
+import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.StateMigrationException;
 
 import org.slf4j.Logger;
@@ -238,6 +239,19 @@ public class HeapKeyedStateBackend<K> extends AbstractKeyedStateBackend<K> {
 				throw new StateMigrationException("For heap backends, the new state serializer (" + newStateSerializer + ") must not be incompatible with the old state serializer (" + previousStateSerializer + ").");
 			}
 
+			if (stateCompatibility.isUnknown()) {
+				if (stateDesc.isForceMigrationIfSchemaCompatibilityUnknown()) {
+					TypeSerializer<V> prevSerializer = restoredKvMetaInfo.getPreviousStateSerializer();
+					Preconditions.checkNotNull(prevSerializer);
+					String prevSerializerClassName = prevSerializer.getClass().getName();
+					String newSerializerClassName = restoredKvMetaInfo.getStateSerializer().getClass().getName();
+					LOG.warn("Unknown compatibility but choose to do force migration. Old serializer type: {"
+						+ prevSerializerClassName + "}, new serializer type: {" + newSerializerClassName + "}");
+				} else {
+					throw new StateMigrationException("The compatibility of new state serializer is unknown.");
+				}
+			}
+
 			stateTable.setMetaInfo(restoredKvMetaInfo);
 		} else {
 			RegisteredKeyValueStateBackendMetaInfo<N, V> newMetaInfo = new RegisteredKeyValueStateBackendMetaInfo<>(
@@ -378,6 +392,12 @@ public class HeapKeyedStateBackend<K> extends AbstractKeyedStateBackend<K> {
 			sum += ((StateTable<?, ?, ?>) state).size();
 		}
 		return sum;
+	}
+
+	@Override
+	public RegisteredKeyValueStateBackendMetaInfo getRegisteredStateMetaInfo(String stateName) {
+		StateTable<K, ?, ?> stateTable = registeredKVStates.get(stateName);
+		return stateTable == null ? null : stateTable.getMetaInfo();
 	}
 
 	/**

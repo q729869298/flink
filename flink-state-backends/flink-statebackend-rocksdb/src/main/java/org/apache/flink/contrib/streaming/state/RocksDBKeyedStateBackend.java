@@ -589,6 +589,18 @@ public class RocksDBKeyedStateBackend<K> extends AbstractKeyedStateBackend<K> {
 			restoredKvStateMetaInfo.updateStateSerializer(stateSerializer);
 		if (newStateSerializerCompatibility.isCompatibleAfterMigration()) {
 			migrateStateValues(stateDesc, oldStateInfo);
+		} else if (newStateSerializerCompatibility.isUnknown()) {
+			if (stateDesc.isForceMigrationIfSchemaCompatibilityUnknown()) {
+				TypeSerializer<SV> prevSerializer = restoredKvStateMetaInfo.getPreviousStateSerializer();
+				Preconditions.checkNotNull(prevSerializer);
+				String prevSerializerClassName = prevSerializer.getClass().getName();
+				String newSerializerClassName = restoredKvStateMetaInfo.getStateSerializer().getClass().getName();
+				LOG.warn("Unknown compatibility but choose to do force migration. Old serializer type: {"
+					+ prevSerializerClassName + "}, new serializer type: {" + newSerializerClassName + "}");
+				migrateStateValues(stateDesc, oldStateInfo);
+			} else {
+				throw new StateMigrationException("The compatibility of new state serializer is unknown.");
+			}
 		} else if (newStateSerializerCompatibility.isIncompatible()) {
 			throw new StateMigrationException("The new state serializer (" + stateSerializer + ") must not be incompatible with the old state serializer (" + previousStateSerializer + ").");
 		}
@@ -740,6 +752,12 @@ public class RocksDBKeyedStateBackend<K> extends AbstractKeyedStateBackend<K> {
 	@Override
 	public boolean requiresLegacySynchronousTimerSnapshots() {
 		return priorityQueueFactory instanceof HeapPriorityQueueSetFactory;
+	}
+
+	@Override
+	public RegisteredKeyValueStateBackendMetaInfo getRegisteredStateMetaInfo(String stateName) {
+		RocksDbKvStateInfo stateInfo = kvStateInformation.get(stateName);
+		return stateInfo == null ? null : (RegisteredKeyValueStateBackendMetaInfo) stateInfo.metaInfo;
 	}
 
 	/** Rocks DB specific information about the k/v states. */

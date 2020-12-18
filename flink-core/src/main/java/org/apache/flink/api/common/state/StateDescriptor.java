@@ -103,6 +103,9 @@ public abstract class StateDescriptor<S extends State, T> implements Serializabl
 	@Nonnull
 	private StateTtlConfig ttlConfig = StateTtlConfig.DISABLED;
 
+	/** Whether do force migration when state serializer compatibility is unknown. */
+	private boolean forceMigrationIfSchemaCompatibilityUnknown = false;
+
 	/** The default value returned by the state when no other value is bound to a key. */
 	@Nullable
 	protected transient T defaultValue;
@@ -307,6 +310,14 @@ public abstract class StateDescriptor<S extends State, T> implements Serializabl
 				LOG.debug("Someone else beat us at initializing the serializer.");
 			}
 		}
+	}
+
+	public void setForceMigrationIfSchemaCompatibilityUnknown(boolean forceMigrationIfSchemaCompatibilityUnknown) {
+		this.forceMigrationIfSchemaCompatibilityUnknown = forceMigrationIfSchemaCompatibilityUnknown;
+	}
+
+	public boolean isForceMigrationIfSchemaCompatibilityUnknown() {
+		return forceMigrationIfSchemaCompatibilityUnknown;
 	}
 
 	// ------------------------------------------------------------------------
