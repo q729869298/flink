@@ -73,7 +73,7 @@ public class FsCheckpointStorageLocation extends FsCheckpointStreamFactory imple
 		this.reference = checkNotNull(reference);
 
 		// the metadata file should not have entropy in its path
-		Path metadataDir = EntropyInjector.removeEntropyMarkerIfPresent(fileSystem, checkpointDir);
+		Path metadataDir = EntropyInjector.replaceEntropyMarkerIfPresent(fileSystem, checkpointDir);
 
 		this.metadataFilePath = new Path(metadataDir, AbstractFsCheckpointStorageAccess.METADATA_FILE_NAME);
 		this.fileStateSizeThreshold = fileStateSizeThreshold;
