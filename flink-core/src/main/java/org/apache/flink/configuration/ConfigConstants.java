@@ -382,6 +382,12 @@ public final class ConfigConstants {
 	public static final String FS_STREAM_OPENING_TIMEOUT_KEY = "taskmanager.runtime.fs_timeout";
 
 	/**
+	 * Config parameter defining whether Hadoop Snappy codec should be used for .snappy
+	 * files decompression
+	 */
+	public static final String FS_USE_HADOOP_SNAPPY_KEY = "taskmanager.runtime.fs-hadoop-snappy";
+
+	/**
 	 * Whether to use the LargeRecordHandler when spilling.
 	 * @deprecated use {@link AlgorithmOptions#USE_LARGE_RECORDS_HANDLER}
 	 */
@@ -1516,6 +1522,11 @@ public final class ConfigConstants {
 	 * The default timeout for filesystem stream opening: infinite (means max long milliseconds).
 	 */
 	public static final int DEFAULT_FS_STREAM_OPENING_TIMEOUT = 0;
+
+	/**
+	 * Whether Hadoop Snappy codec should be used for .snappy files decompression
+	 */
+	public static final boolean DEFAULT_FS_USE_HADOOP_SNAPPY = true;
 
 	/**
 	 * Whether to use the LargeRecordHandler when spilling.
