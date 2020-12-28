@@ -39,7 +39,7 @@ import static org.junit.Assert.assertEquals;
 /**
  * Tests for {@link Pattern#notFollowedBy(String)} and {@link Pattern#notNext(String)}.
  */
-@SuppressWarnings("unchecked")
+@SuppressWarnings({"unchecked", "serial"})
 public class NotPatternITCase extends TestLogger {
 
 	@Test
@@ -978,6 +978,47 @@ public class NotPatternITCase extends TestLogger {
 			Lists.newArrayList(NotFollowByData.A_1, NotFollowByData.B_1, NotFollowByData.B_5, NotFollowByData.D_1),
 			Lists.newArrayList(NotFollowByData.A_1, NotFollowByData.B_1, NotFollowByData.B_6, NotFollowByData.D_1)
 		));
+	}
+
+	@Test
+	public void testNotFollowedByInTheEndOfGroupPattern() throws Exception {
+
+		List<StreamRecord<Event>> inputEvents = new ArrayList<>();
+
+		int i = 0;
+		inputEvents.add(new StreamRecord<>(NotFollowByData.A_1, i++));
+		inputEvents.add(new StreamRecord<>(NotFollowByData.C_1, i++));
+		inputEvents.add(new StreamRecord<>(NotFollowByData.B_1, i++));
+		inputEvents.add(new StreamRecord<>(NotFollowByData.A_1, i++));
+		inputEvents.add(new StreamRecord<>(NotFollowByData.B_2, i++));
+
+		Pattern<Event, ?> startPattern = Pattern
+				.<Event>begin("a").where(new SimpleCondition<Event>() {
+					@Override
+					public boolean filter(Event value) throws Exception {
+						return value.getName().equals("a");
+					}
+				})
+				.notFollowedBy("not c").where(new SimpleCondition<Event>() {
+					@Override
+					public boolean filter(Event value) throws Exception {
+						return value.getName().equals("c");
+					}
+				});
+
+		Pattern<Event, ?> pattern = Pattern.begin(startPattern).followedBy("b")
+				.where(new SimpleCondition<Event>() {
+					@Override
+					public boolean filter(Event value) throws Exception {
+						return value.getName().equals("b");
+					}
+				});
+
+		NFA<Event> nfa = compile(pattern, false);
+
+		final List<List<Event>> matches = feedNFA(inputEvents, nfa);
+
+		comparePatterns(matches, Lists.<List<Event>>newArrayList(Lists.newArrayList(NotFollowByData.A_1, NotFollowByData.B_2)));
 	}
 
 	private List<List<Event>> testNotFollowedByBeforeZeroOrMore(boolean eager, boolean allMatches) throws Exception {
