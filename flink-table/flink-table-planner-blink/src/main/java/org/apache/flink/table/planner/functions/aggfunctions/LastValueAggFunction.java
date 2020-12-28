@@ -45,6 +45,27 @@ public final class LastValueAggFunction<T> extends InternalAggregateFunction<T, 
 	// Planning
 	// --------------------------------------------------------------------------------------------
 
+	public void merge(GenericRowData acc, Iterable<GenericRowData> its) {
+		Long thisOrder = null;
+		if (acc != null) {
+			thisOrder = (Long) acc.getField(1);
+		}
+		for (GenericRowData other : its) {
+			if (other == null) {
+				continue;
+			}
+			Long otherOrder = (Long) other.getField(1);
+			if (acc == null) {
+				acc = other;
+				thisOrder = otherOrder;
+			} else if (otherOrder > thisOrder) {
+				acc.setField(0, other.getField(0));
+				acc.setField(1, otherOrder);
+				thisOrder = otherOrder;
+			}
+		}
+	}
+
 	@Override
 	public DataType[] getInputDataTypes() {
 		return new DataType[]{valueDataType};
