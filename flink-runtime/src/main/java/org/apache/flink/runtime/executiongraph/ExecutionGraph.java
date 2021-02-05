@@ -34,6 +34,7 @@ import org.apache.flink.runtime.accumulators.AccumulatorSnapshot;
 import org.apache.flink.runtime.accumulators.StringifiedAccumulatorResult;
 import org.apache.flink.runtime.blob.BlobWriter;
 import org.apache.flink.runtime.blob.PermanentBlobKey;
+import org.apache.flink.runtime.checkpoint.CheckpointBriefCalculator;
 import org.apache.flink.runtime.checkpoint.CheckpointCoordinator;
 import org.apache.flink.runtime.checkpoint.CheckpointFailureManager;
 import org.apache.flink.runtime.checkpoint.CheckpointIDCounter;
@@ -41,6 +42,7 @@ import org.apache.flink.runtime.checkpoint.CheckpointStatsSnapshot;
 import org.apache.flink.runtime.checkpoint.CheckpointStatsTracker;
 import org.apache.flink.runtime.checkpoint.CheckpointsCleaner;
 import org.apache.flink.runtime.checkpoint.CompletedCheckpointStore;
+import org.apache.flink.runtime.checkpoint.ExecutionAttemptMappingProvider;
 import org.apache.flink.runtime.checkpoint.MasterTriggerRestoreHook;
 import org.apache.flink.runtime.checkpoint.OperatorCoordinatorCheckpointContext;
 import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
@@ -87,7 +89,6 @@ import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -398,9 +399,6 @@ public class ExecutionGraph implements AccessExecutionGraph {
 
     public void enableCheckpointing(
             CheckpointCoordinatorConfiguration chkConfig,
-            List<ExecutionJobVertex> verticesToTrigger,
-            List<ExecutionJobVertex> verticesToWaitFor,
-            List<ExecutionJobVertex> verticesToCommitTo,
             List<MasterTriggerRestoreHook<?>> masterHooks,
             CheckpointIDCounter checkpointIDCounter,
             CompletedCheckpointStore checkpointStore,
@@ -411,10 +409,6 @@ public class ExecutionGraph implements AccessExecutionGraph {
 
         checkState(state == JobStatus.CREATED, "Job must be in CREATED state");
         checkState(checkpointCoordinator == null, "checkpointing already enabled");
-
-        ExecutionVertex[] tasksToTrigger = collectExecutionVertices(verticesToTrigger);
-        ExecutionVertex[] tasksToWaitFor = collectExecutionVertices(verticesToWaitFor);
-        ExecutionVertex[] tasksToCommitTo = collectExecutionVertices(verticesToCommitTo);
 
         final Collection<OperatorCoordinatorCheckpointContext> operatorCoordinators =
                 buildOpCoordinatorCheckpointContexts();
@@ -453,9 +447,6 @@ public class ExecutionGraph implements AccessExecutionGraph {
                 new CheckpointCoordinator(
                         jobInformation.getJobId(),
                         chkConfig,
-                        tasksToTrigger,
-                        tasksToWaitFor,
-                        tasksToCommitTo,
                         operatorCoordinators,
                         checkpointIDCounter,
                         checkpointStore,
@@ -464,7 +455,10 @@ public class ExecutionGraph implements AccessExecutionGraph {
                         checkpointsCleaner,
                         new ScheduledExecutorServiceAdapter(checkpointCoordinatorTimer),
                         SharedStateRegistry.DEFAULT_FACTORY,
-                        failureManager);
+                        failureManager,
+                        createCheckpointBriefCalculator(),
+                        new ExecutionAttemptMappingProvider(getAllExecutionVertices()));
+        checkpointCoordinator.setDisableCheckpointsAfterTasksFinished(true);
 
         // register the master hooks on the checkpoint coordinator
         for (MasterTriggerRestoreHook<?> hook : masterHooks) {
@@ -488,6 +482,13 @@ public class ExecutionGraph implements AccessExecutionGraph {
 
         this.stateBackendName = checkpointStateBackend.getClass().getSimpleName();
         this.checkpointStorageName = checkpointStorage.getClass().getSimpleName();
+    }
+
+    private CheckpointBriefCalculator createCheckpointBriefCalculator() {
+        return new CheckpointBriefCalculator(
+                getJobID(),
+                new ExecutionGraphCheckpointBriefCalculatorContext(this),
+                getVerticesTopologically());
     }
 
     @Nullable
@@ -514,27 +515,6 @@ public class ExecutionGraph implements AccessExecutionGraph {
             return checkpointStatsTracker.createSnapshot();
         } else {
             return null;
-        }
-    }
-
-    private ExecutionVertex[] collectExecutionVertices(List<ExecutionJobVertex> jobVertices) {
-        if (jobVertices.size() == 1) {
-            ExecutionJobVertex jv = jobVertices.get(0);
-            if (jv.getGraph() != this) {
-                throw new IllegalArgumentException(
-                        "Can only use ExecutionJobVertices of this ExecutionGraph");
-            }
-            return jv.getTaskVertices();
-        } else {
-            ArrayList<ExecutionVertex> all = new ArrayList<>();
-            for (ExecutionJobVertex jv : jobVertices) {
-                if (jv.getGraph() != this) {
-                    throw new IllegalArgumentException(
-                            "Can only use ExecutionJobVertices of this ExecutionGraph");
-                }
-                all.addAll(Arrays.asList(jv.getTaskVertices()));
-            }
-            return all.toArray(new ExecutionVertex[all.size()]);
         }
     }
 
@@ -609,6 +589,10 @@ public class ExecutionGraph implements AccessExecutionGraph {
      */
     public long getNumberOfRestarts() {
         return numberOfRestartsCounter.getCount();
+    }
+
+    public int getVerticesFinished() {
+        return verticesFinished;
     }
 
     @Override
@@ -1099,9 +1083,14 @@ public class ExecutionGraph implements AccessExecutionGraph {
      * Called whenever a vertex reaches state FINISHED (completed successfully). Once all vertices
      * are in the FINISHED state, the program is successfully done.
      */
-    void vertexFinished() {
+    void vertexFinished(Execution execution) {
         assertRunningInJobMasterMainThread();
         final int numFinished = ++verticesFinished;
+
+        if (checkpointCoordinator != null) {
+            checkpointCoordinator.onTaskFinished(execution.getAttemptId());
+        }
+
         if (numFinished == numVerticesTotal) {
             // done :-)
 

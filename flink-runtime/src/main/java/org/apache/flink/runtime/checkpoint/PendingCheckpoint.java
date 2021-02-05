@@ -22,6 +22,7 @@ import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.OperatorIDPair;
 import org.apache.flink.runtime.checkpoint.metadata.CheckpointMetadata;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
+import org.apache.flink.runtime.executiongraph.ExecutionJobVertex;
 import org.apache.flink.runtime.executiongraph.ExecutionVertex;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.OperatorInfo;
@@ -50,6 +51,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
@@ -90,6 +92,10 @@ public class PendingCheckpoint implements Checkpoint {
 
     private final Map<ExecutionAttemptID, ExecutionVertex> notYetAcknowledgedTasks;
 
+    private final boolean advanceToEndOfTime;
+
+    private final AtomicReference<CheckpointBrief> checkpointBrief = new AtomicReference<>(null);
+
     private final Set<OperatorID> notYetAcknowledgedOperatorCoordinators;
 
     private final List<MasterState> masterStates;
@@ -127,7 +133,8 @@ public class PendingCheckpoint implements Checkpoint {
             JobID jobId,
             long checkpointId,
             long checkpointTimestamp,
-            Map<ExecutionAttemptID, ExecutionVertex> verticesToConfirm,
+            boolean advanceToEndOfTime,
+            CheckpointBrief checkpointBrief,
             Collection<OperatorID> operatorCoordinatorsToConfirm,
             Collection<String> masterStateIdentifiers,
             CheckpointProperties props,
@@ -135,13 +142,15 @@ public class PendingCheckpoint implements Checkpoint {
             CompletableFuture<CompletedCheckpoint> onCompletionPromise) {
 
         checkArgument(
-                verticesToConfirm.size() > 0,
+                checkpointBrief.getTasksToWait().size() > 0,
                 "Checkpoint needs at least one vertex that commits the checkpoint");
 
         this.jobId = checkNotNull(jobId);
         this.checkpointId = checkpointId;
         this.checkpointTimestamp = checkpointTimestamp;
-        this.notYetAcknowledgedTasks = checkNotNull(verticesToConfirm);
+        this.notYetAcknowledgedTasks = checkNotNull(checkpointBrief.getTasksToWait());
+        this.advanceToEndOfTime = advanceToEndOfTime;
+        this.checkpointBrief.set(checkNotNull(checkpointBrief));
         this.props = checkNotNull(props);
         this.targetLocation = checkNotNull(targetLocation);
 
@@ -155,7 +164,7 @@ public class PendingCheckpoint implements Checkpoint {
                 operatorCoordinatorsToConfirm.isEmpty()
                         ? Collections.emptySet()
                         : new HashSet<>(operatorCoordinatorsToConfirm);
-        this.acknowledgedTasks = new HashSet<>(verticesToConfirm.size());
+        this.acknowledgedTasks = new HashSet<>(checkpointBrief.getTasksToWait().size());
         this.onCompletionPromise = checkNotNull(onCompletionPromise);
     }
 
@@ -198,6 +207,18 @@ public class PendingCheckpoint implements Checkpoint {
 
     public int getNumberOfAcknowledgedTasks() {
         return numAcknowledgedTasks;
+    }
+
+    public void setCheckpointBrief(CheckpointBrief checkpointBrief) {
+        this.checkpointBrief.set(checkpointBrief);
+    }
+
+    public CheckpointBrief getCheckpointBrief() {
+        return checkpointBrief.get();
+    }
+
+    public boolean isAdvanceToEndOfTime() {
+        return advanceToEndOfTime;
     }
 
     public Map<OperatorID, OperatorState> getOperatorStates() {
@@ -308,6 +329,26 @@ public class PendingCheckpoint implements Checkpoint {
 
             // make sure we fulfill the promise with an exception if something fails
             try {
+                // Completes the operator state for the fully finished operators
+                for (ExecutionJobVertex jobVertex :
+                        getCheckpointBrief().getFullyFinishedJobVertex()) {
+                    for (OperatorIDPair operatorID : jobVertex.getOperatorIDs()) {
+                        OperatorState operatorState =
+                                operatorStates.get(operatorID.getGeneratedOperatorID());
+
+                        if (operatorState == null) {
+                            operatorState =
+                                    new OperatorState(
+                                            operatorID.getGeneratedOperatorID(),
+                                            jobVertex.getParallelism(),
+                                            jobVertex.getMaxParallelism());
+                            operatorStates.put(operatorID.getGeneratedOperatorID(), operatorState);
+                        }
+
+                        operatorState.markedFullyFinished();
+                    }
+                }
+
                 // write out the metadata
                 final CheckpointMetadata savepoint =
                         new CheckpointMetadata(checkpointId, operatorStates.values(), masterStates);
@@ -447,6 +488,30 @@ public class PendingCheckpoint implements Checkpoint {
 
             return TaskAcknowledgeResult.SUCCESS;
         }
+    }
+
+    public TaskAcknowledgeResult acknowledgeTasksFinished(ExecutionAttemptID executionAttemptId) {
+        final ExecutionVertex vertex = notYetAcknowledgedTasks.remove(executionAttemptId);
+
+        if (vertex == null) {
+            if (acknowledgedTasks.contains(executionAttemptId)) {
+                return TaskAcknowledgeResult.DUPLICATE;
+            } else {
+                return TaskAcknowledgeResult.UNKNOWN;
+            }
+        } else {
+            acknowledgedTasks.add(executionAttemptId);
+        }
+
+        long ackTimestamp = System.currentTimeMillis();
+        SubtaskStateStats subtaskStateStats =
+                new SubtaskStateStats(vertex.getParallelSubtaskIndex(), ackTimestamp);
+
+        if (statsCallback != null) {
+            statsCallback.reportSubtaskStats(vertex.getJobvertexId(), subtaskStateStats);
+        }
+
+        return TaskAcknowledgeResult.SUCCESS;
     }
 
     public TaskAcknowledgeResult acknowledgeCoordinatorState(
