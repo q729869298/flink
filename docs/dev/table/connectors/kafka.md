@@ -371,6 +371,8 @@ Connector Options
     </tbody>
 </table>
 
+\*Note that you may set any Kafka config property by adding it as “properties.{config property} = {config value}” in the WITH clause.
+
 Features
 ----------------
 
