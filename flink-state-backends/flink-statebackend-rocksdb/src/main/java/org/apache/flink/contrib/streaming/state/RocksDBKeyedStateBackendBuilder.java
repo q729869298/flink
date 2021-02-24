@@ -30,6 +30,8 @@ import org.apache.flink.contrib.streaming.state.snapshot.RocksDBSnapshotStrategy
 import org.apache.flink.contrib.streaming.state.snapshot.RocksFullSnapshotStrategy;
 import org.apache.flink.contrib.streaming.state.snapshot.RocksIncrementalSnapshotStrategy;
 import org.apache.flink.contrib.streaming.state.ttl.RocksDbTtlCompactFiltersManager;
+import org.apache.flink.contrib.streaming.state.writer.RocksDBWriteBatchWrapper;
+import org.apache.flink.contrib.streaming.state.writer.RocksDBWriterFactory;
 import org.apache.flink.core.fs.CloseableRegistry;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.runtime.query.TaskKvStateRegistry;
@@ -111,8 +113,7 @@ public class RocksDBKeyedStateBackendBuilder<K> extends AbstractKeyedStateBacken
 
     private RocksDBNativeMetricOptions nativeMetricOptions;
     private int numberOfTransferingThreads;
-    private long writeBatchSize =
-            RocksDBConfigurableOptions.WRITE_BATCH_SIZE.defaultValue().getBytes();
+    private final RocksDBWriterFactory writeFactory;
 
     private RocksDB injectedTestDB; // for testing
     private ColumnFamilyHandle injectedDefaultColumnFamilyHandle; // for testing
@@ -134,7 +135,8 @@ public class RocksDBKeyedStateBackendBuilder<K> extends AbstractKeyedStateBacken
             MetricGroup metricGroup,
             @Nonnull Collection<KeyedStateHandle> stateHandles,
             StreamCompressionDecorator keyGroupCompressionDecorator,
-            CloseableRegistry cancelStreamRegistry) {
+            CloseableRegistry cancelStreamRegistry,
+            @Nonnull RocksDBWriterFactory writerFactory) {
 
         super(
                 kvStateRegistry,
@@ -148,6 +150,7 @@ public class RocksDBKeyedStateBackendBuilder<K> extends AbstractKeyedStateBacken
                 keyGroupCompressionDecorator,
                 cancelStreamRegistry);
 
+        this.writeFactory = writerFactory;
         this.operatorIdentifier = operatorIdentifier;
         this.priorityQueueStateType = priorityQueueStateType;
         this.localRecoveryConfig = localRecoveryConfig;
@@ -183,7 +186,8 @@ public class RocksDBKeyedStateBackendBuilder<K> extends AbstractKeyedStateBacken
             StreamCompressionDecorator keyGroupCompressionDecorator,
             RocksDB injectedTestDB,
             ColumnFamilyHandle injectedDefaultColumnFamilyHandle,
-            CloseableRegistry cancelStreamRegistry) {
+            CloseableRegistry cancelStreamRegistry,
+            @Nonnull RocksDBWriterFactory writeFactory) {
         this(
                 operatorIdentifier,
                 userCodeClassLoader,
@@ -201,7 +205,8 @@ public class RocksDBKeyedStateBackendBuilder<K> extends AbstractKeyedStateBacken
                 metricGroup,
                 stateHandles,
                 keyGroupCompressionDecorator,
-                cancelStreamRegistry);
+                cancelStreamRegistry,
+                writeFactory);
         this.injectedTestDB = injectedTestDB;
         this.injectedDefaultColumnFamilyHandle = injectedDefaultColumnFamilyHandle;
     }
@@ -226,8 +231,12 @@ public class RocksDBKeyedStateBackendBuilder<K> extends AbstractKeyedStateBacken
 
     RocksDBKeyedStateBackendBuilder<K> setWriteBatchSize(long writeBatchSize) {
         checkArgument(writeBatchSize >= 0, "Write batch size should be non negative.");
-        this.writeBatchSize = writeBatchSize;
+        this.writeFactory.setWriteBatchSize(writeBatchSize);
         return this;
+    }
+
+    private RocksDBWriterFactory getWriterFactory() {
+        return this.writeFactory;
     }
 
     private static void checkAndCreateDirectory(File directory) throws IOException {
@@ -243,7 +252,7 @@ public class RocksDBKeyedStateBackendBuilder<K> extends AbstractKeyedStateBacken
 
     @Override
     public RocksDBKeyedStateBackend<K> build() throws BackendBuildingException {
-        RocksDBWriteBatchWrapper writeBatchWrapper = null;
+        RocksDBWriteBatchWrapper writeBatchWriter = null;
         ColumnFamilyHandle defaultColumnFamilyHandle = null;
         RocksDBNativeMetricMonitor nativeMetricMonitor = null;
         CloseableRegistry cancelStreamRegistryForBackend = new CloseableRegistry();
@@ -294,9 +303,8 @@ public class RocksDBKeyedStateBackendBuilder<K> extends AbstractKeyedStateBacken
                 }
             }
 
-            writeBatchWrapper =
-                    new RocksDBWriteBatchWrapper(
-                            db, optionsContainer.getWriteOptions(), writeBatchSize);
+            writeBatchWriter =
+                    getWriterFactory().writeBatchWriter(db, optionsContainer.getWriteOptions());
             // it is important that we only create the key builder after the restore, and not
             // before;
             // restore operations may reconfigure the key serializer, so accessing the key
@@ -324,14 +332,14 @@ public class RocksDBKeyedStateBackendBuilder<K> extends AbstractKeyedStateBacken
                             keyGroupPrefixBytes,
                             kvStateInformation,
                             db,
-                            writeBatchWrapper,
+                            writeBatchWriter,
                             nativeMetricMonitor);
         } catch (Throwable e) {
             // Do clean up
             List<ColumnFamilyOptions> columnFamilyOptions =
                     new ArrayList<>(kvStateInformation.values().size());
             IOUtils.closeQuietly(cancelStreamRegistryForBackend);
-            IOUtils.closeQuietly(writeBatchWrapper);
+            IOUtils.closeQuietly(writeBatchWriter);
             RocksDBOperationUtils.addColumnFamilyOptionsToCloseLater(
                     columnFamilyOptions, defaultColumnFamilyHandle);
             IOUtils.closeQuietly(defaultColumnFamilyHandle);
@@ -383,14 +391,13 @@ public class RocksDBKeyedStateBackendBuilder<K> extends AbstractKeyedStateBacken
                 rocksDBResourceGuard,
                 snapshotStrategy.checkpointSnapshotStrategy,
                 snapshotStrategy.savepointSnapshotStrategy,
-                writeBatchWrapper,
                 defaultColumnFamilyHandle,
                 nativeMetricMonitor,
                 sharedRocksKeyBuilder,
                 priorityQueueFactory,
                 ttlCompactFiltersManager,
                 keyContext,
-                writeBatchSize);
+                getWriterFactory());
     }
 
     private AbstractRocksDBRestoreOperation<K> getRocksDBRestoreOperation(
@@ -416,7 +423,8 @@ public class RocksDBKeyedStateBackendBuilder<K> extends AbstractKeyedStateBacken
                     metricGroup,
                     restoreStateHandles,
                     ttlCompactFiltersManager,
-                    optionsContainer.getWriteBufferManagerCapacity());
+                    optionsContainer.getWriteBufferManagerCapacity(),
+                    getWriterFactory());
         }
         KeyedStateHandle firstStateHandle = restoreStateHandles.iterator().next();
         if (firstStateHandle instanceof IncrementalKeyedStateHandle) {
@@ -437,8 +445,8 @@ public class RocksDBKeyedStateBackendBuilder<K> extends AbstractKeyedStateBacken
                     metricGroup,
                     restoreStateHandles,
                     ttlCompactFiltersManager,
-                    writeBatchSize,
-                    optionsContainer.getWriteBufferManagerCapacity());
+                    optionsContainer.getWriteBufferManagerCapacity(),
+                    getWriterFactory());
         } else {
             return new RocksDBFullRestoreOperation<>(
                     keyGroupRange,
@@ -456,8 +464,8 @@ public class RocksDBKeyedStateBackendBuilder<K> extends AbstractKeyedStateBacken
                     metricGroup,
                     restoreStateHandles,
                     ttlCompactFiltersManager,
-                    writeBatchSize,
-                    optionsContainer.getWriteBufferManagerCapacity());
+                    optionsContainer.getWriteBufferManagerCapacity(),
+                    getWriterFactory());
         }
     }
 

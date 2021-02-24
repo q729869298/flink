@@ -18,6 +18,8 @@
 
 package org.apache.flink.contrib.streaming.state;
 
+import org.apache.flink.contrib.streaming.state.writer.RocksDBWriteBatchWrapper;
+import org.apache.flink.contrib.streaming.state.writer.RocksDBWriterFactory;
 import org.apache.flink.util.FlinkRuntimeException;
 import org.apache.flink.util.IOUtils;
 
@@ -72,6 +74,9 @@ public class RocksDBResource extends ExternalResource {
 
     /** Wrapper for batched writes to the RocksDB instance. */
     private RocksDBWriteBatchWrapper batchWrapper;
+
+    /** Factory for RocksDB writers. */
+    private RocksDBWriterFactory writeFactory;
 
     /** Resources to close. */
     private ArrayList<AutoCloseable> handlesToClose = new ArrayList<>();

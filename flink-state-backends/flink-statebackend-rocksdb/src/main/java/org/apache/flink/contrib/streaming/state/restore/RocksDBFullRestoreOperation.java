@@ -20,8 +20,9 @@ package org.apache.flink.contrib.streaming.state.restore;
 
 import org.apache.flink.contrib.streaming.state.RocksDBKeyedStateBackend.RocksDbKvStateInfo;
 import org.apache.flink.contrib.streaming.state.RocksDBNativeMetricOptions;
-import org.apache.flink.contrib.streaming.state.RocksDBWriteBatchWrapper;
 import org.apache.flink.contrib.streaming.state.ttl.RocksDbTtlCompactFiltersManager;
+import org.apache.flink.contrib.streaming.state.writer.RocksDBWriter;
+import org.apache.flink.contrib.streaming.state.writer.RocksDBWriterFactory;
 import org.apache.flink.core.fs.CloseableRegistry;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.runtime.state.KeyGroupRange;
@@ -38,9 +39,9 @@ import org.apache.flink.util.StateMigrationException;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ColumnFamilyOptions;
 import org.rocksdb.DBOptions;
+import org.rocksdb.Options;
 import org.rocksdb.RocksDBException;
 
-import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
 
 import java.io.File;
@@ -51,13 +52,9 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.flink.util.Preconditions.checkArgument;
-
 /** Encapsulates the process of restoring a RocksDB instance from a full snapshot. */
 public class RocksDBFullRestoreOperation<K> extends AbstractRocksDBRestoreOperation<K> {
     private final FullSnapshotRestoreOperation<K> savepointRestoreOperation;
-    /** Write batch size used in {@link RocksDBWriteBatchWrapper}. */
-    private final long writeBatchSize;
 
     public RocksDBFullRestoreOperation(
             KeyGroupRange keyGroupRange,
@@ -75,8 +72,8 @@ public class RocksDBFullRestoreOperation<K> extends AbstractRocksDBRestoreOperat
             MetricGroup metricGroup,
             @Nonnull Collection<KeyedStateHandle> restoreStateHandles,
             @Nonnull RocksDbTtlCompactFiltersManager ttlCompactFiltersManager,
-            @Nonnegative long writeBatchSize,
-            Long writeBufferManagerCapacity) {
+            Long writeBufferManagerCapacity,
+            @Nonnull RocksDBWriterFactory writerFactory) {
         super(
                 keyGroupRange,
                 keyGroupPrefixBytes,
@@ -93,9 +90,8 @@ public class RocksDBFullRestoreOperation<K> extends AbstractRocksDBRestoreOperat
                 metricGroup,
                 restoreStateHandles,
                 ttlCompactFiltersManager,
-                writeBufferManagerCapacity);
-        checkArgument(writeBatchSize >= 0, "Write batch size have to be no negative.");
-        this.writeBatchSize = writeBatchSize;
+                writeBufferManagerCapacity,
+                writerFactory);
         this.savepointRestoreOperation =
                 new FullSnapshotRestoreOperation<>(
                         keyGroupRange,
@@ -146,15 +142,17 @@ public class RocksDBFullRestoreOperation<K> extends AbstractRocksDBRestoreOperat
             ThrowingIterator<KeyGroup> keyGroups, List<ColumnFamilyHandle> columnFamilies)
             throws IOException, RocksDBException, StateMigrationException {
         // for all key-groups in the current state handle...
-        try (RocksDBWriteBatchWrapper writeBatchWrapper =
-                new RocksDBWriteBatchWrapper(db, writeBatchSize)) {
+        try (ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();
+                Options options = new Options(dbOptions, columnFamilyOptions);
+                // @lgo: fixme plumb through the optionsContainer for writeOptions.
+                RocksDBWriter writer = writerFactory.defaultPutWriter(db, options, null, null)) {
             while (keyGroups.hasNext()) {
                 KeyGroup keyGroup = keyGroups.next();
                 try (ThrowingIterator<KeyGroupEntry> groupEntries = keyGroup.getKeyGroupEntries()) {
                     while (groupEntries.hasNext()) {
                         KeyGroupEntry groupEntry = groupEntries.next();
                         ColumnFamilyHandle handle = columnFamilies.get(groupEntry.getKvStateId());
-                        writeBatchWrapper.put(handle, groupEntry.getKey(), groupEntry.getValue());
+                        writer.put(handle, groupEntry.getKey(), groupEntry.getValue());
                     }
                 }
             }

@@ -18,6 +18,7 @@
 
 package org.apache.flink.contrib.streaming.state;
 
+import org.apache.flink.contrib.streaming.state.writer.RocksDBWriterFactory;
 import org.apache.flink.core.memory.DataInputDeserializer;
 import org.apache.flink.core.memory.DataOutputSerializer;
 import org.apache.flink.runtime.state.CompositeKeySerializationUtils;
@@ -26,6 +27,8 @@ import org.apache.flink.runtime.state.InternalPriorityQueueTestBase;
 import org.apache.flink.runtime.state.heap.KeyGroupPartitionedPriorityQueue;
 
 import org.junit.Rule;
+
+import static org.apache.flink.contrib.streaming.state.RocksDBConfigurableOptions.WRITE_BATCH_MECHANISM;
 
 /**
  * Test of {@link KeyGroupPartitionedPriorityQueue} powered by a {@link
@@ -62,6 +65,8 @@ public class KeyGroupPartitionedPriorityQueueWithRocksDBStoreTest
                     CompositeKeySerializationUtils.computeRequiredBytesInKeyGroupPrefix(
                             numKeyGroups);
             TreeOrderedSetCache orderedSetCache = new TreeOrderedSetCache(32);
+            RocksDBWriterFactory writeFactory =
+                    new RocksDBWriterFactory(WRITE_BATCH_MECHANISM.defaultValue());
             return new RocksDBCachingPriorityQueueSet<>(
                     keyGroupId,
                     keyGroupPrefixBytes,
@@ -71,7 +76,7 @@ public class KeyGroupPartitionedPriorityQueueWithRocksDBStoreTest
                     TestElementSerializer.INSTANCE,
                     outputStreamWithPos,
                     inputStreamWithPos,
-                    rocksDBResource.getBatchWrapper(),
+                    writeFactory.writeBatchWriter(rocksDBResource.getRocksDB()),
                     orderedSetCache);
         };
     }
