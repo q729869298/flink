@@ -28,34 +28,27 @@ under the License.
 
 # 基于 Table API 实现实时报表
 
-Apache Flink offers a Table API as a unified, relational API for batch and stream processing, i.e., queries are executed with the same semantics on unbounded, real-time streams or bounded, batch data sets and produce the same results.
-The Table API in Flink is commonly used to ease the definition of data analytics, data pipelining, and ETL applications.
+Apache Flink 提供了 Table API 作为统一的相关 API，用于批处理和流处理，即：对无边界的实时流或有约束的批处理数据集以相同的语义执行查询，并产生相同的结果。Flink 中的 Table API 通常用于简化数据分析，数据管道和 ETL 应用程序的定义。
 
-## What Will You Be Building? 
+## 你要搭建一个什么系统
 
-In this tutorial, you will learn how to build a real-time dashboard to track financial transactions by account.
-The pipeline will read data from Kafka and write the results to MySQL visualized via Grafana.
+在本教程中，你将学习如何构建实时仪表板以按帐户跟踪财务交易。流程从 Kafka 读取数据，将结果写入 MySQL 并通过 Grafana 提供可视化展示。
 
-## Prerequisites
+## 准备条件
 
-This walkthrough assumes that you have some familiarity with Java or Scala, but you should be able to follow along even if you come from a different programming language.
-It also assumes that you are familiar with basic relational concepts such as `SELECT` and `GROUP BY` clauses.
+这个代码练习假定你对 Java 或 Scala 有一定的了解，当然，如果你之前使用的是其他开发语言，你也应该能够跟随本教程进行学习。同时假定你熟悉基本的关系概念，例如 SELECT 和 GROUP BY 语法。
 
-## Help, I’m Stuck! 
+## 困难求助
 
-If you get stuck, check out the [community support resources](https://flink.apache.org/community.html).
-In particular, Apache Flink's [user mailing list](https://flink.apache.org/community.html#mailing-lists) consistently ranks as one of the most active of any Apache project and a great way to get help quickly. 
+如果遇到困难，可以参考[社区支持资源](https://flink.apache.org/community.html)。当然也可以在邮件列表提问，Flink 的[用户邮件列表](https://flink.apache.org/community.html#mailing-lists)一直被评为所有Apache项目中最活跃的一个，这也是快速获得帮助的好方法。
 
 {{< hint info >}}
-If running docker on windows and your data generator container is failing to start, then please ensure that you're using the right shell.
-For example **docker-entrypoint.sh** for **table-walkthrough_data-generator_1** container requires bash.
-If unavailable, it will throw an error **standard_init_linux.go:211: exec user process caused "no such file or directory"**.
-A workaround is to switch the shell to **sh** on the first line of **docker-entrypoint.sh**.
+如果在 Windows 上运行 docker 并且你的数据生成器容器无法启动，那么请确保你使用的 shell 正确。例如，**table-walkthrough_data-generator_1** 容器的 **docker-entrypoint.sh** 需要使 bash shell。如果不可用，它将导致 **standard_init_linux.go:211: exec user process caused "no such file or directory"** 错误。一种解决方法是将 **docker-entrypoint.sh** 文件的的第一行切换为 **sh** shell。
 {{< /hint >}}
 
-## How To Follow Along
+## 如何跟着教程练习
 
-If you want to follow along, you will require a computer with: 
+首先，你需要在你的电脑上准备以下环境：
 
 * Java 8 or 11
 * Maven 
@@ -63,16 +56,13 @@ If you want to follow along, you will require a computer with:
 
 {{< unstable >}}
 {{< hint warning >}}
-**Attention:** The Apache Flink Docker images used for this playground are only available for released versions of Apache Flink.
+**注意：** 此练习使用的Apache Flink Docker 镜像仅适用于Apache Flink发行版本。
 
-Since you are currently looking at the latest SNAPSHOT
-version of the documentation, all version references below will not work.
-Please switch the documentation to the latest released version via the release picker which you find on the left side below the menu.
+由于你当前正在查看文档的最新 SNAPSHOT 版本，因此以下所有版本参考均不起作用，请通过菜单下方左侧的版本选择器将文档切换到最新发行的版本。
 {{< /hint >}}
 {{< /unstable >}}
 
-The required configuration files are available in the [flink-playgrounds](https://github.com/apache/flink-playgrounds) repository.
-Once downloaded, open the project `flink-playground/table-walkthrough` in your IDE and navigate to the file `SpendReport`. 
+所需的配置文件位于 [flink-playgrounds](https://github.com/apache/flink-playgrounds) 仓库中。下载后，在你的 IDE 中打开 flink-playground/table-walkthrough 项目并导航至 SpendReport 文件。
 
 ```java
 EnvironmentSettings settings = EnvironmentSettings.newInstance().build();
@@ -109,25 +99,20 @@ report(transactions).executeInsert("spend_report");
 
 ```
 
-## Breaking Down The Code
+## 代码分析
 
-#### The Execution Environment
+#### 执行环境
 
-The first two lines set up your `TableEnvironment`.
-The table environment is how you can set properties for your Job, specify whether you are writing a batch or a streaming application, and create your sources.
-This walkthrough creates a standard table environment that uses the streaming execution.
+前两行设置你的 TableEnvironment。table environment 可以用来为 Job 设置属性，指定是编写批应用程序还是流应用程序以及创建源。本练习将创建一个使用流执行的标准表环境。
 
 ```java
 EnvironmentSettings settings = EnvironmentSettings.newInstance().build();
 TableEnvironment tEnv = TableEnvironment.create(settings);
 ```
 
-#### Registering Tables
+#### 注册表
 
-Next, tables are registered in the current [catalog]({{< ref "docs/dev/table/catalogs" >}}) that you can use to connect to external systems for reading and writing both batch and streaming data.
-A table source provides access to data stored in external systems, such as a database, a key-value store, a message queue, or a file system.
-A table sink emits a table to an external storage system.
-Depending on the type of source and sink, they support different formats such as CSV, JSON, Avro, or Parquet.
+接下来，将表注册到当前的 [catalog]（{{< ref "docs/dev/table/catalogs" >}}）中，你可以使用该表连接到外部系统以读取和写入批处理数据和流数据。源表提供对存储在外部系统（例如数据库、键值存储、消息队列或文件系统）中的数据的访问，目的表将表发送到外部存储系统。根据源和目的的类型，支持不同的数据类型，例如 CSV、JSON、Avro 或 Parquet。
 
 ```java
 tEnv.executeSql("CREATE TABLE transactions (\n" +
@@ -143,9 +128,7 @@ tEnv.executeSql("CREATE TABLE transactions (\n" +
      ")");
 ```
 
-Two tables are registered; a transaction input table, and a spend report output table.
-The transactions (`transactions`) table lets us read credit card transactions, which contain account ID's (`account_id`), timestamps (`transaction_time`), and US$ amounts (`amount`).
-The table is a logical view over a Kafka topic called `transactions` containing CSV data.
+两张表被注册：交易输入表和支出报告输出表。交易（`transactions`）表让我们读取信用卡交易，其中包含帐户ID（`account_id`）、时间戳（`transaction_time`）和美元金额（`amount`）。该表是有关 Kafka 主题（`transactions`）包含 CSV 数据的逻辑视图。
 
 ```java
 tEnv.executeSql("CREATE TABLE spend_report (\n" +
@@ -163,44 +146,33 @@ tEnv.executeSql("CREATE TABLE spend_report (\n" +
     ")");
 ```
 
-The second table, `spend_report`, stores the final results of the aggregation.
-Its underlying storage is a table in a MySql database.
+第二张表`spend_report`存储了聚合的最终结果，它的底层存储是 MySQL 数据库中的表。
 
-#### The Query
+#### 查询
 
-With the environment configured and tables registered, you are ready to build your first application.
-From the `TableEnvironment` you can read `from` an input table to read its rows and then write those results into an output table using `executeInsert`.
-The `report` function is where you will implement your business logic.
-It is currently unimplemented.
+配置好环境并注册表之后，就可以构建第一个应用程序了。从 `TableEnvironment` 你可以利用 `from` 从输入表读取其行，然后利用 `executeInsert` 将结果写入输出表。该 `report` 函数是实现业务逻辑的地方，目前尚未实现。
 
 ```java
 Table transactions = tEnv.from("transactions");
 report(transactions).executeInsert("spend_report");
 ```
 
-## Testing 
+## 测试
 
-The project contains a secondary testing class `SpendReportTest` that validates the logic of the report.
-It creates a table environment in batch mode. 
+该项目包含一个辅助测试类 `SpendReportTest`，用于验证 report 函数的逻辑。它以批处理方式创建表环境。
 
 ```java
 EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
 TableEnvironment tEnv = TableEnvironment.create(settings); 
 ```
 
-One of Flink's unique properties is that it provides consistent semantics across batch and streaming.
-This means you can develop and test applications in batch mode on static datasets, and deploy to production as streaming applications.
+Flink 的特色之一是，它在批处理和流处理之间提供一致性的语义。这意味着你可以在静态数据集上以批处理模式开发和测试应用程序，并作为流应用程序部署到生产中。
 
-## Attempt One
+## 尝试
+ 
+现在，有了 Job 设置的框架，你就可以添加一些业务逻辑。目的是建立一个报告，显示每个帐户在一天中每个小时的总支出。这意味着时间戳列需要从毫秒舍入到小时粒度。
 
-Now with the skeleton of a Job set-up, you are ready to add some business logic.
-The goal is to build a report that shows the total spend for each account across each hour of the day.
-This means the timestamp column needs be be rounded down from millisecond to hour granularity. 
-
-Flink supports developing relational applications in pure [SQL]({{< ref "docs/dev/table/sql/overview" >}}) or using the [Table API]({{< ref "docs/dev/table/tableApi" >}}).
-The Table API is a fluent DSL inspired by SQL, that can be written in Python, Java, or Scala and supports strong IDE integration.
-Just like a SQL query, Table programs can select the required fields and group by your keys.
-These features, allong with [built-in functions]({{< ref "docs/dev/table/functions/systemFunctions" >}}) like `floor` and `sum`, you can write this report.
+Flink 支持使用纯 [SQL]（{{< ref "docs/dev/table/sql/overview" >}}）或使用 [Table API]（{{< ref "docs/dev/table/tableApi" >}}）来开发纯关系型应用。Table API 是受 SQL 启发的流畅 DSL，可以用 Python、Java或 Scala 编写，并支持强大的 IDE 集成。就像 SQL 查询一样，Table 程序可以选择必填字段并按键进行分组。利用这些特性，并结合[内置函数] （{{< ref "docs/dev/table/functions/systemFunctions" >}})），如 floor 和 sum，就可以编写 report 函数了。
 
 ```java
 public static Table report(Table transactions) {
@@ -216,10 +188,9 @@ public static Table report(Table transactions) {
 }
 ```
 
-## User Defined Functions
+## 用户自定义函数
 
-Flink contains a limited number of built-in functions, and sometimes you need to extend it with a [user-defined function]({{< ref "docs/dev/table/functions/udfs" >}}).
-If `floor` wasn't predefined, you could implement it yourself. 
+Flink 包含有限的内置函数，有时你需要使用[用户定义的函数]（{{< ref "docs/dev/table/functions/udfs" >}}）对其进行扩展。比如 `floor` 函数未预定义，则可以自己实现。
 
 ```java
 import java.time.LocalDateTime;
@@ -238,7 +209,7 @@ public class MyFloor extends ScalarFunction {
 }
 ```
 
-And then quickly integrate it in your application.
+然后将其快速集成到你的应用程序中。
 
 ```java
 public static Table report(Table transactions) {
@@ -254,14 +225,11 @@ public static Table report(Table transactions) {
 }
 ```
 
-This query consumes all records from the `transactions` table, calculates the report, and outputs the results in an efficient, scalable manner.
-Running the test with this implementation will pass. 
+该查询使用 `transactions` 表中的所有记录，计算报告，并以有效、可扩展的方式输出结果。使用此实现运行测试用例将通过。
 
-## Adding Windows
+## 新增窗口函数
 
-Grouping data based on time is a typical operation in data processing, especially when working with infinite streams.
-A grouping based on time is called a [window]({{< ref "docs/dev/datastream/operators/windows" >}}) and Flink offers flexible windowing semantics.
-The most basic type of window is called a `Tumble` window, which has a fixed size and whose buckets do not overlap.
+基于时间对数据进行分组是数据处理中的典型操作，尤其是在处理无限流时。基于时间的分组称为[窗口]（{{< ref "docs/dev/datastream/operators/windows" >}}），Flink 提供了灵活的窗口语义。窗口的最基本类型称为 `Tumble` 窗口，它具有固定的大小并且其存储桶不重叠。
 
 ```java
 public static Table report(Table transactions) {
@@ -275,38 +243,30 @@ public static Table report(Table transactions) {
 }
 ```
 
-This defines your application as using one hour tumbling windows based on the timestamp column.
-So a row with timestamp `2019-06-01 01:23:47` is put in the `2019-06-01 01:00:00` window.
+这将你的应用程序定义为使用基于 timestamp 列的一小时滚动窗口。因此，带有时间戳的行 `2019-06-01 01:23:47` 将被放置在 `2019-06-01 01:00:00` 窗口中。
 
+基于时间的聚合是唯一的，因为与其它属性相反，时间通常在连续流应用程序中向前移动。与用户自定义函数 `floor` 不同，窗口函数是[内部函数](https://en.wikipedia.org/wiki/Intrinsic_function)，它允许运行时应用额外的优化。在批处理环境中，窗口函数提供了一种用于按 timestamp 属性对记录进行分组方便的 API。
 
-Aggregations based on time are unique because time, as opposed to other attributes, generally moves forward in a continuous streaming application.
-Unlike `floor` and your UDF, window functions are [intrinsics](https://en.wikipedia.org/wiki/Intrinsic_function), which allows the runtime to apply additional optimizations.
-In a batch context, windows offer a convenient API for grouping records by a timestamp attribute.
+使用此实现运行测试用例将通过。
 
-Running the test with this implementation will also pass. 
+## 再次，流应用程序！
 
-## Once More, With Streaming!
+就这样，一个功能齐全、有状态、分布式的流应用程序构建完成！查询持续消耗来自 Kafka 的交易流数据，计算每小时支出，并在准备好后立即输出结果。由于输入是无界的，因此查询将一直运行，直到手动将其停止为止。并且由于作业使用基于时间窗口的聚合，因此 Flink 可以执行特定的优化，例如当框架知道不再有特定窗口的记录到达时进行状态清除。
 
-And that's it, a fully functional, stateful, distributed streaming application!
-The query continuously consumes the stream of transactions from Kafka, computes the hourly spendings, and emits results as soon as they are ready.
-Since the input is unbounded, the query keeps running until it is manually stopped.
-And because the Job uses time window-based aggregations, Flink can perform specific optimizations such as state clean up when the framework knows that no more records will arrive for a particular window.
+表运行环境已完全实现容器化，可作为流应用程序在本地运行。该环境包含一个 Kafka 主题、一个连续数据生成器、MySQL 和 Grafana。
 
-The table playground is fully dockerized and runnable locally as streaming application.
-The environment contains a Kafka topic, a continuous data generator, MySql, and Grafana. 
-
-From within the `table-walkthrough` folder start the docker-compose script.
+从 `table-walkthrough` 文件夹中启动 docker-compose 脚本。
 
 ```bash
 $ docker-compose build
 $ docker-compose up -d
 ```
 
-You can see information on the running job via the [Flink console](http://localhost:8082/).
+你可以通过 [Flink 控制台](http://localhost:8082/) 查看有关正在运行的作业的信息。
 
-![Flink Console]({% link /fig/spend-report-console.png %}){:height="400px" width="800px"}
+![Flink 控制台]({% link /fig/spend-report-console.png %}){:height="400px" width="800px"}
 
-Explore the results from inside MySQL.
+从 MySQL 内部查询结果。
 
 ```bash
 $ docker-compose exec mysql mysql -Dsql-demo -usql-demo -pdemo-sql
@@ -322,6 +282,6 @@ mysql> select count(*) from spend_report;
 +----------+
 ```
 
-Finally, go to [Grafana](http://localhost:3000/d/FOe0PbmGk/walkthrough?viewPanel=2&orgId=1&refresh=5s) to see the fully visualized result!
+最后，跳转到 [Grafana](http://localhost:3000/d/FOe0PbmGk/walkthrough?viewPanel=2&orgId=1&refresh=5s) 以查看完全可视化的结果！
 
 {{< img src="/fig/spend-report-grafana.png" alt="Grafana" >}}
