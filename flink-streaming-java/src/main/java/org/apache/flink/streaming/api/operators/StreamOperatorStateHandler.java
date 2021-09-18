@@ -231,7 +231,9 @@ public class StreamOperatorStateHandler {
             if (null != keyedStateBackend) {
                 if (checkpointOptions.getCheckpointType().isSavepoint()) {
                     SnapshotStrategyRunner<KeyedStateHandle, ? extends FullSnapshotResources<?>>
-                            snapshotRunner = prepareSavepoint(keyedStateBackend, closeableRegistry);
+                            snapshotRunner =
+                                    prepareSavepoint(
+                                            keyedStateBackend, closeableRegistry, checkpointId);
 
                     snapshotInProgress.setKeyedStateManagedFuture(
                             snapshotRunner.snapshot(
@@ -273,9 +275,10 @@ public class StreamOperatorStateHandler {
     public static SnapshotStrategyRunner<KeyedStateHandle, ? extends FullSnapshotResources<?>>
             prepareSavepoint(
                     CheckpointableKeyedStateBackend<?> keyedStateBackend,
-                    CloseableRegistry closeableRegistry)
+                    CloseableRegistry closeableRegistry,
+                    long checkpointId)
                     throws Exception {
-        SavepointResources<?> savepointResources = keyedStateBackend.savepoint();
+        SavepointResources<?> savepointResources = keyedStateBackend.savepoint(checkpointId);
 
         SavepointSnapshotStrategy<?> savepointSnapshotStrategy =
                 new SavepointSnapshotStrategy<>(savepointResources.getSnapshotResources());

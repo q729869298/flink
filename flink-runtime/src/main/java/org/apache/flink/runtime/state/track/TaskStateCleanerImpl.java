@@ -15,27 +15,35 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.state.changelog.inmemory;
+package org.apache.flink.runtime.state.track;
 
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.runtime.state.changelog.StateChangelogStorage;
-import org.apache.flink.runtime.state.changelog.StateChangelogStorageFactory;
+import org.apache.flink.runtime.state.StateObject;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.Executor;
 
-/** An {@link StateChangelogStorageFactory} for creating {@link InMemoryStateChangelogStorage}. */
-public class InMemoryStateChangelogStorageFactory implements StateChangelogStorageFactory {
+class TaskStateCleanerImpl implements TaskStateCleaner {
+    private static final Logger LOG = LoggerFactory.getLogger(TaskStateCleanerImpl.class);
+    private final Executor executor;
 
-    public static String identifier = "memory";
-
-    @Override
-    public String getIdentifier() {
-        return identifier;
+    public TaskStateCleanerImpl(Executor executor) {
+        this.executor = executor;
     }
 
     @Override
-    public StateChangelogStorage<?> createStorage(
-            Configuration configuration, Executor ioExecutor) {
-        return new InMemoryStateChangelogStorage();
+    public void discardAsync(StateObject state) {
+        executor.execute(
+                () -> {
+                    try {
+                        state.discardState();
+                    } catch (Exception e) {
+                        LOG.error("Unable do discard state: {}", state, e);
+                    }
+                });
     }
+
+    @Override
+    public void close() {}
 }

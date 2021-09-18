@@ -14,28 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.flink.runtime.state.track;
 
-package org.apache.flink.runtime.state.changelog.inmemory;
-
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.runtime.state.changelog.StateChangelogStorage;
-import org.apache.flink.runtime.state.changelog.StateChangelogStorageFactory;
+import org.apache.flink.annotation.Internal;
+import org.apache.flink.runtime.state.StateObject;
 
 import java.util.concurrent.Executor;
 
-/** An {@link StateChangelogStorageFactory} for creating {@link InMemoryStateChangelogStorage}. */
-public class InMemoryStateChangelogStorageFactory implements StateChangelogStorageFactory {
+@Internal
+interface TaskStateCleaner extends AutoCloseable {
+    /**
+     * Recursively and asynchronously discard the given object. May or may not exert back-pressure.
+     */
+    void discardAsync(StateObject state);
 
-    public static String identifier = "memory";
+    TaskStateCleaner NO_OP =
+            new TaskStateCleaner() {
+                @Override
+                public void discardAsync(StateObject state) {}
 
-    @Override
-    public String getIdentifier() {
-        return identifier;
-    }
+                @Override
+                public void close() {}
+            };
 
-    @Override
-    public StateChangelogStorage<?> createStorage(
-            Configuration configuration, Executor ioExecutor) {
-        return new InMemoryStateChangelogStorage();
+    static TaskStateCleaner create(Executor executor) {
+        return new TaskStateCleanerImpl(executor);
     }
 }
