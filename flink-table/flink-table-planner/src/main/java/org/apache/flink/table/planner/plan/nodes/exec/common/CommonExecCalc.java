@@ -23,6 +23,7 @@ import org.apache.flink.streaming.api.transformations.OneInputTransformation;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.planner.codegen.CalcCodeGenerator;
 import org.apache.flink.table.planner.codegen.CodeGeneratorContext;
+import org.apache.flink.table.planner.codegen.ProjectCodeGeneratorContext;
 import org.apache.flink.table.planner.delegation.PlannerBase;
 import org.apache.flink.table.planner.plan.nodes.exec.ExecEdge;
 import org.apache.flink.table.planner.plan.nodes.exec.ExecNodeBase;
@@ -51,8 +52,17 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public abstract class CommonExecCalc extends ExecNodeBase<RowData>
         implements SingleTransformationTranslator<RowData> {
+
+    public static final String FIELD_NAME_EXP_LIST = "expList";
+    public static final String FIELD_NAME_LOCAL_REFS = "localRefs";
     public static final String FIELD_NAME_PROJECTION = "projection";
     public static final String FIELD_NAME_CONDITION = "condition";
+
+    @JsonProperty(FIELD_NAME_EXP_LIST)
+    private final List<RexNode> expList;
+
+    @JsonProperty(FIELD_NAME_LOCAL_REFS)
+    private final List<RexNode> localRefs;
 
     @JsonProperty(FIELD_NAME_PROJECTION)
     private final List<RexNode> projection;
@@ -64,6 +74,8 @@ public abstract class CommonExecCalc extends ExecNodeBase<RowData>
     @JsonIgnore private final boolean retainHeader;
 
     protected CommonExecCalc(
+            List<RexNode> expList,
+            List<RexNode> localRefs,
             List<RexNode> projection,
             @Nullable RexNode condition,
             Class<?> operatorBaseClass,
@@ -74,7 +86,9 @@ public abstract class CommonExecCalc extends ExecNodeBase<RowData>
             String description) {
         super(id, inputProperties, outputType, description);
         checkArgument(inputProperties.size() == 1);
-        this.projection = checkNotNull(projection);
+        this.expList = checkNotNull(expList);
+        this.localRefs = localRefs;
+        this.projection = projection;
         this.condition = condition;
         this.operatorBaseClass = checkNotNull(operatorBaseClass);
         this.retainHeader = retainHeader;
@@ -87,7 +101,11 @@ public abstract class CommonExecCalc extends ExecNodeBase<RowData>
         final Transformation<RowData> inputTransform =
                 (Transformation<RowData>) inputEdge.translateToPlan(planner);
         final CodeGeneratorContext ctx =
-                new CodeGeneratorContext(planner.getTableConfig())
+                new ProjectCodeGeneratorContext(
+                                planner.getTableConfig(),
+                                expList,
+                                JavaScalaConversionUtil.toScala(localRefs),
+                                JavaScalaConversionUtil.toScala(projection))
                         .setOperatorBaseClass(operatorBaseClass);
 
         final CodeGenOperatorFactory<RowData> substituteStreamOperator =
@@ -95,7 +113,7 @@ public abstract class CommonExecCalc extends ExecNodeBase<RowData>
                         ctx,
                         inputTransform,
                         (RowType) getOutputType(),
-                        JavaScalaConversionUtil.toScala(projection),
+                        JavaScalaConversionUtil.toScala(expList),
                         JavaScalaConversionUtil.toScala(Optional.ofNullable(this.condition)),
                         retainHeader,
                         getClass().getSimpleName());

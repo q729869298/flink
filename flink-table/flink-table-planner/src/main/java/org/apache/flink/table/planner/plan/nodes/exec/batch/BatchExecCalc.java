@@ -37,12 +37,16 @@ public class BatchExecCalc extends CommonExecCalc implements BatchExecNode<RowDa
 
     public BatchExecCalc(
             List<RexNode> projection,
+            List<RexNode> localRefs,
+            List<RexNode> expandLocalRefs,
             @Nullable RexNode condition,
             InputProperty inputProperty,
             RowType outputType,
             String description) {
         super(
                 projection,
+                localRefs,
+                expandLocalRefs,
                 condition,
                 TableStreamOperator.class,
                 false, // retainHeader
