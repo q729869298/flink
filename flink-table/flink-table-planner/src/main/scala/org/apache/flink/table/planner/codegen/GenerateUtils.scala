@@ -504,6 +504,18 @@ object GenerateUtils {
     GeneratedExpression(resultTerm, NEVER_NULL, resultCode, resultType)
   }
 
+  def generateRowKind(ctx: CodeGeneratorContext): GeneratedExpression = {
+    val resultType = new CharType(2)
+    val resultTypeTerm = primitiveTypeTermForType(resultType)
+    val resultTerm = ctx.addReusableLocalVariable(resultTypeTerm, "rowKind")
+    val resultCode =
+      s"""
+         |$resultTerm = $BINARY_STRING.fromString(
+         |$DEFAULT_INPUT1_TERM.getRowKind().shortString());
+         |""".stripMargin.trim
+    GeneratedExpression(resultTerm, NEVER_NULL, resultCode, resultType)
+  }
+
   def generateCurrentTimestamp(
       ctx: CodeGeneratorContext): GeneratedExpression = {
     new CurrentTimePointCallGen(true, true).generate(ctx, Seq(), new LocalZonedTimestampType(3))
