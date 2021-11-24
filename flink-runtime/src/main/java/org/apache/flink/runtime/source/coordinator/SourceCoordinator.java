@@ -123,7 +123,7 @@ public class SourceCoordinator<SplitT extends SourceSplit, EnumChkT>
         // it here
         if (enumerator == null) {
             final ClassLoader userCodeClassLoader =
-                    context.getCoordinatorContext().getUserCodeClassloader();
+                    context.getCoordinatorContext().getUserCodeClassloader().asClassLoader();
             try (TemporaryClassLoaderContext ignored =
                     TemporaryClassLoaderContext.of(userCodeClassLoader)) {
                 enumerator = source.createEnumerator(context);
@@ -316,7 +316,7 @@ public class SourceCoordinator<SplitT extends SourceSplit, EnumChkT>
         LOG.info("Restoring SplitEnumerator of source {} from checkpoint.", operatorName);
 
         final ClassLoader userCodeClassLoader =
-                context.getCoordinatorContext().getUserCodeClassloader();
+                context.getCoordinatorContext().getUserCodeClassloader().asClassLoader();
         try (TemporaryClassLoaderContext ignored =
                 TemporaryClassLoaderContext.of(userCodeClassLoader)) {
             final EnumChkT enumeratorCheckpoint = deserializeCheckpoint(checkpointData);
