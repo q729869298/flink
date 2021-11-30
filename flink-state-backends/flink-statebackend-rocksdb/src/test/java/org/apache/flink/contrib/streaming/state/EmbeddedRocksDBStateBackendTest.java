@@ -27,7 +27,7 @@ import org.apache.flink.api.common.typeutils.base.StringSerializer;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.testutils.OneShotLatch;
-import org.apache.flink.runtime.checkpoint.CheckpointOptions;
+import org.apache.flink.runtime.checkpoint.CheckpointType;
 import org.apache.flink.runtime.state.CheckpointStorage;
 import org.apache.flink.runtime.state.CheckpointableKeyedStateBackend;
 import org.apache.flink.runtime.state.ConfigurableStateBackend;
@@ -345,10 +345,7 @@ public class EmbeddedRocksDBStateBackendTest
         try {
             RunnableFuture<SnapshotResult<KeyedStateHandle>> snapshot =
                     keyedStateBackend.snapshot(
-                            0L,
-                            0L,
-                            testStreamFactory,
-                            CheckpointOptions.forCheckpointWithDefaultLocation());
+                            0L, 0L, testStreamFactory, CheckpointType.CHECKPOINT);
 
             RocksDB spyDB = keyedStateBackend.db;
 
@@ -387,10 +384,7 @@ public class EmbeddedRocksDBStateBackendTest
         try {
             RunnableFuture<SnapshotResult<KeyedStateHandle>> snapshot =
                     keyedStateBackend.snapshot(
-                            0L,
-                            0L,
-                            testStreamFactory,
-                            CheckpointOptions.forCheckpointWithDefaultLocation());
+                            0L, 0L, testStreamFactory, CheckpointType.CHECKPOINT);
             snapshot.cancel(true);
             verifyRocksObjectsReleased();
         } finally {
@@ -406,10 +400,7 @@ public class EmbeddedRocksDBStateBackendTest
         try {
             RunnableFuture<SnapshotResult<KeyedStateHandle>> snapshot =
                     keyedStateBackend.snapshot(
-                            0L,
-                            0L,
-                            testStreamFactory,
-                            CheckpointOptions.forCheckpointWithDefaultLocation());
+                            0L, 0L, testStreamFactory, CheckpointType.CHECKPOINT);
             snapshot.cancel(true);
             Thread asyncSnapshotThread = new Thread(snapshot);
             asyncSnapshotThread.start();
@@ -434,10 +425,7 @@ public class EmbeddedRocksDBStateBackendTest
         try {
             RunnableFuture<SnapshotResult<KeyedStateHandle>> snapshot =
                     keyedStateBackend.snapshot(
-                            0L,
-                            0L,
-                            testStreamFactory,
-                            CheckpointOptions.forCheckpointWithDefaultLocation());
+                            0L, 0L, testStreamFactory, CheckpointType.CHECKPOINT);
             Thread asyncSnapshotThread = new Thread(snapshot);
             asyncSnapshotThread.start();
             waiter.await(); // wait for snapshot to run
@@ -471,10 +459,7 @@ public class EmbeddedRocksDBStateBackendTest
         try {
             RunnableFuture<SnapshotResult<KeyedStateHandle>> snapshot =
                     keyedStateBackend.snapshot(
-                            0L,
-                            0L,
-                            testStreamFactory,
-                            CheckpointOptions.forCheckpointWithDefaultLocation());
+                            0L, 0L, testStreamFactory, CheckpointType.CHECKPOINT);
             Thread asyncSnapshotThread = new Thread(snapshot);
             asyncSnapshotThread.start();
             waiter.await(); // wait for snapshot to run
@@ -566,7 +551,7 @@ public class EmbeddedRocksDBStateBackendTest
                                     checkpointId,
                                     checkpointId,
                                     createStreamFactory(),
-                                    CheckpointOptions.forCheckpointWithDefaultLocation());
+                                    CheckpointType.CHECKPOINT);
 
                     snapshot.run();
 
