@@ -595,7 +595,8 @@ object ScalarOperatorGens {
       left: GeneratedExpression,
       right: GeneratedExpression)
     : GeneratedExpression = {
-    generateOperatorIfNotNull(ctx, new BooleanType(), left, right) {
+    val isNullable = left.resultType.isNullable || right.resultType.isNullable
+    generateOperatorIfNotNull(ctx, new BooleanType(isNullable), left, right) {
       // either side is decimal
       if (isDecimal(left.resultType) || isDecimal(right.resultType)) {
         (leftTerm, rightTerm) => {
