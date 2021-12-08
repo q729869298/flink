@@ -23,6 +23,7 @@ import org.apache.flink.configuration.ConfigUtils;
 import org.apache.flink.runtime.clusterframework.BootstrapTools;
 import org.apache.flink.runtime.clusterframework.ContaineredTaskManagerParameters;
 import org.apache.flink.runtime.util.HadoopUtils;
+import org.apache.flink.util.ArrayUtils;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.StringUtils;
 import org.apache.flink.util.function.FunctionWithException;
@@ -34,6 +35,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.DataOutputBuffer;
+import org.apache.hadoop.mapreduce.MRJobConfig;
 import org.apache.hadoop.mapreduce.security.TokenCache;
 import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.UserGroupInformation;
@@ -113,13 +115,28 @@ public final class Utils {
 
     private static final int DEFAULT_YARN_RM_INCREMENT_ALLOCATION_VCORES = 1;
 
-    public static void setupYarnClassPath(Configuration conf, Map<String, String> appMasterEnv) {
+    public static void setupYarnClassPath(
+            Configuration conf,
+            org.apache.flink.configuration.Configuration flinkConfig,
+            Map<String, String> appMasterEnv) {
         addToEnvironment(
                 appMasterEnv, Environment.CLASSPATH.name(), appMasterEnv.get(ENV_FLINK_CLASSPATH));
-        String[] applicationClassPathEntries =
+        String[] yarnClassPathEntries =
                 conf.getStrings(
                         YarnConfiguration.YARN_APPLICATION_CLASSPATH,
                         YarnConfiguration.DEFAULT_YARN_APPLICATION_CLASSPATH);
+        boolean includeMR = flinkConfig.getBoolean(YarnConfigOptions.INCLUDE_MAPREDUCE_CLASSPATH);
+        String[] applicationClassPathEntries;
+        if (includeMR) {
+            String[] mapReduceClassPathEntries =
+                    conf.getStrings(
+                            MRJobConfig.MAPREDUCE_APPLICATION_CLASSPATH,
+                            MRJobConfig.DEFAULT_MAPREDUCE_APPLICATION_CLASSPATH.split(","));
+            applicationClassPathEntries =
+                    ArrayUtils.concat(yarnClassPathEntries, mapReduceClassPathEntries);
+        } else {
+            applicationClassPathEntries = yarnClassPathEntries;
+        }
         for (String c : applicationClassPathEntries) {
             addToEnvironment(appMasterEnv, Environment.CLASSPATH.name(), c.trim());
         }
@@ -529,7 +546,7 @@ public final class Utils {
 
         // add YARN classpath, etc to the container environment
         containerEnv.put(ENV_FLINK_CLASSPATH, classPathString);
-        setupYarnClassPath(yarnConfig, containerEnv);
+        setupYarnClassPath(yarnConfig, flinkConfig, containerEnv);
 
         containerEnv.put(
                 YarnConfigKeys.ENV_HADOOP_USER_NAME,
