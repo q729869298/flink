@@ -43,8 +43,7 @@ class SourceWatermarkTest extends TableTestBase {
          | ) WITH (
          |   'connector' = 'values',
          |   'enable-watermark-push-down' = 'true',
-         |   'bounded' = 'false',
-         |   'disable-lookup' = 'true'
+         |   'bounded' = 'false'
          | )
          """.stripMargin)
     
@@ -60,8 +59,7 @@ class SourceWatermarkTest extends TableTestBase {
          |   'connector' = 'values',
          |   'enable-watermark-push-down' = 'true',
          |   'nested-projection-supported' = 'true',
-         |   'bounded' = 'false',
-         |   'disable-lookup' = 'true'
+         |   'bounded' = 'false'
          | )
          """.stripMargin)
 
@@ -79,8 +77,7 @@ class SourceWatermarkTest extends TableTestBase {
          | ) with (
          |   'connector' = 'values',
          |   'bounded' = 'false',
-         |   'enable-watermark-push-down' = 'true',
-         |   'disable-lookup' = 'true'
+         |   'enable-watermark-push-down' = 'true'
          | )
          """.stripMargin)
 
@@ -97,7 +94,6 @@ class SourceWatermarkTest extends TableTestBase {
          |   'connector' = 'values',
          |   'enable-watermark-push-down' = 'true',
          |   'bounded' = 'false',
-         |   'disable-lookup' = 'true',
          |   'readable-metadata' = 'originTime:BIGINT'
          | )
          """.stripMargin)
@@ -115,7 +111,6 @@ class SourceWatermarkTest extends TableTestBase {
          |   'connector' = 'values',
          |   'enable-watermark-push-down' = 'true',
          |   'bounded' = 'false',
-         |   'disable-lookup' = 'true',
          |   'readable-metadata' = 'originTime:BIGINT'
          | )
          """.stripMargin)
@@ -130,10 +125,50 @@ class SourceWatermarkTest extends TableTestBase {
          | ) WITH (
          |   'connector' = 'values',
          |   'enable-watermark-push-down' = 'true',
-         |   'bounded' = 'false',
-         |   'disable-lookup' = 'true'
+         |   'bounded' = 'false'
          | )
          """.stripMargin)
+
+    util.tableEnv.executeSql(
+      """
+        | CREATE TABLE ValueSourceTable(
+        |   a INT,
+        |   b BIGINT,
+        |   c TIMESTAMP(3),
+        |   d AS c + INTERVAL '5' SECOND,
+        |   WATERMARK FOR d AS d - INTERVAL '5' SECOND
+        | ) WITH (
+        |   'connector' = 'values',
+        |   'bounded' = 'false',
+        |   'runtime-source' = 'Source'
+        | )
+        |""".stripMargin)
+
+    util.tableEnv.executeSql(
+      """
+        | CREATE TABLE ValuesSourceTableWithFilter(
+        |   a INT,
+        |   b BIGINT,
+        |   c TIMESTAMP(3),
+        |   d AS c + INTERVAL '5' SECOND,
+        |   WATERMARK FOR d AS d - INTERVAL '5' SECOND
+        | ) WITH (
+        |   'connector' = 'values',
+        |   'bounded' = 'false',
+        |   'filterable-fields' = 'a',
+        |   'runtime-source' = 'Source'
+        | )
+        |""".stripMargin)
+  }
+
+  @Test
+  def testValuesSourceWatermarkPushDown(): Unit ={
+    util.verifyExecPlan("SELECT a, b, c FROM ValueSourceTable")
+  }
+
+  @Test
+  def testValuesSourceWatermarkAndFilterAndProjectionPushDown(): Unit ={
+    util.verifyExecPlan("SELECT a FROM ValuesSourceTableWithFilter WHERE a < 5")
   }
 
   @Test
@@ -191,8 +226,7 @@ class SourceWatermarkTest extends TableTestBase {
          |) WITH (
          |  'connector' = 'values',
          |  'enable-watermark-push-down' = 'true',
-         |  'bounded' = 'false',
-         |  'disable-lookup' = 'true'
+         |  'bounded' = 'false'
          |)
        """.stripMargin
     util.tableEnv.executeSql(sourceDDL)

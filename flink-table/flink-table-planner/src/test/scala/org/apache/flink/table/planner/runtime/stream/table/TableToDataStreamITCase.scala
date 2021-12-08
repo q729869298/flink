@@ -20,16 +20,16 @@ package org.apache.flink.table.planner.runtime.stream.table
 
 import java.time.{LocalDateTime, ZoneOffset}
 import java.util.TimeZone
-
 import org.apache.flink.api.scala._
 import org.apache.flink.streaming.api.functions.sink.SinkFunction
 import org.apache.flink.streaming.api.scala.DataStream
 import org.apache.flink.table.api._
 import org.apache.flink.table.api.bridge.scala._
 import org.apache.flink.table.planner.factories.TestValuesTableFactory
-import org.apache.flink.table.planner.factories.TestValuesTableFactory.TestSinkContextTableSink
-import org.apache.flink.table.planner.runtime.utils.{AbstractExactlyOnceSink, StreamingTestBase, TestSinkUtil, TestingRetractSink}
+import org.apache.flink.table.planner.factories.sink.TestSinkContextTableSink
+import org.apache.flink.table.planner.runtime.utils.{AbstractExactlyOnceSinkFunction, StreamingTestBase, TestSinkUtil, TestingRetractSink}
 import org.apache.flink.types.Row
+
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -311,7 +311,7 @@ final class TableToDataStreamITCase extends StreamingTestBase {
 /**
  * Append test Sink that outputs record with timestamp.
  */
-final class StringWithTimestampSink[T] extends AbstractExactlyOnceSink[T]() {
+final class StringWithTimestampSink[T] extends AbstractExactlyOnceSinkFunction[T]() {
 
   override def invoke(value: T, context: SinkFunction.Context): Unit = {
     localResults += s"${value.toString}, ${context.timestamp()}"
