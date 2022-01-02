@@ -18,27 +18,32 @@
 
 package org.apache.flink.streaming.runtime.operators.sink;
 
+import org.apache.flink.annotation.Internal;
+import org.apache.flink.api.connector.sink.Committer;
 import org.apache.flink.api.connector.sink.GlobalCommitter;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.flink.api.connector.sink.Sink;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
+import static java.util.Collections.singletonList;
+import static org.apache.flink.streaming.runtime.operators.sink.CommittableWrapper.unwrap;
+import static org.apache.flink.streaming.runtime.operators.sink.SinkMessage.EOF;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
  * {@link CommitterHandler} for executing {@link GlobalCommitter} in the batch execution mode.
  *
- * @param <CommT> The committable type of the {@link GlobalCommitter}
+ * <p>This handler never emits output downstream.
+ *
+ * @param <CommT> The committable type of the {@link Committer}, which is the input and output type.
  * @param <GlobalCommT> The committable type of the {@link GlobalCommitter}
  */
-final class GlobalBatchCommitterHandler<CommT, GlobalCommT>
-        extends AbstractCommitterHandler<CommT, GlobalCommT, GlobalCommT> {
-
-    private static final Logger LOG = LoggerFactory.getLogger(GlobalBatchCommitterHandler.class);
+@Internal
+public final class GlobalBatchCommitterHandler<CommT, GlobalCommT>
+        extends AbstractCommitterHandler<CommT, GlobalCommT> {
 
     /**
      * Aggregate committables to global committables and commit the global committables to the
@@ -51,26 +56,37 @@ final class GlobalBatchCommitterHandler<CommT, GlobalCommT>
     }
 
     @Override
-    public List<GlobalCommT> endOfInput() throws IOException, InterruptedException {
-        List<CommT> allCommittables = pollCommittables();
+    public Collection<CommittableWrapper<CommT>> endOfInput()
+            throws IOException, InterruptedException {
+        List<CommittableWrapper<CommT>> allCommittables = pollCommittables();
         if (!allCommittables.isEmpty()) {
-            final GlobalCommT globalCommittable = globalCommitter.combine(allCommittables);
-            recoveredCommittables(
-                    globalCommitter.commit(Collections.singletonList(globalCommittable)));
+            final GlobalCommT globalCommittable = globalCommitter.combine(unwrap(allCommittables));
+            commit(singletonList(new CommittableWrapper<>(globalCommittable, 0, 0, EOF)));
         }
         globalCommitter.endOfInput();
         return Collections.emptyList();
     }
 
     @Override
-    protected void retry(List<GlobalCommT> recoveredCommittables)
+    List<GlobalCommT> commitInternal(List<GlobalCommT> committables)
             throws IOException, InterruptedException {
-        recoveredCommittables(globalCommitter.commit(recoveredCommittables));
+        return globalCommitter.commit(checkNotNull(committables));
     }
 
     @Override
     public void close() throws Exception {
         globalCommitter.close();
         super.close();
+    }
+
+    /** The serializable factory of the handler. */
+    public static class Factory<CommT, GlobalCommT>
+            implements CommitterHandler.Factory<Sink<?, CommT, ?, GlobalCommT>, CommT> {
+        @Override
+        public CommitterHandler<CommT> create(Sink<?, CommT, ?, GlobalCommT> sink)
+                throws IOException {
+            return new GlobalBatchCommitterHandler<>(
+                    checkCommitterPresent(sink.createGlobalCommitter(), true));
+        }
     }
 }

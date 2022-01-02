@@ -27,6 +27,8 @@ import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
 
+import java.io.IOException;
+import java.util.Collection;
 import java.util.Collections;
 
 import static org.apache.flink.util.IOUtils.closeAll;
@@ -35,38 +37,32 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
 /**
  * An operator that processes committables of a {@link org.apache.flink.api.connector.sink.Sink}.
  *
- * <p>The operator may be part of a sink pipeline but usually is the last operator. There are
- * currently two ways this operator is used:
+ * <p>The operator may be part of a sink pipeline and is composed by {@link
+ * org.apache.flink.streaming.runtime.translators.SinkTransformationTranslator}. It always follows
+ * {@link SinkOperator}, which initially outputs the committables.
  *
- * <ul>
- *   <li>In streaming mode, there is a {@link SinkOperator} with parallelism p containing {@link
- *       org.apache.flink.api.connector.sink.SinkWriter} and {@link
- *       org.apache.flink.api.connector.sink.Committer} and this operator containing the {@link
- *       org.apache.flink.api.connector.sink.GlobalCommitter} with parallelism 1.
- *   <li>In batch mode, there is a {@link SinkOperator} with parallelism p containing {@link
- *       org.apache.flink.api.connector.sink.SinkWriter} and this operator containing the {@link
- *       org.apache.flink.api.connector.sink.Committer} and {@link
- *       org.apache.flink.api.connector.sink.GlobalCommitter} with parallelism 1.
- * </ul>
- *
- * @param <InputT> the type of the committable
- * @param <OutputT> the type of the committable to send to downstream operators
+ * @param <CommT> the type of the committable
  */
-class CommitterOperator<InputT, OutputT> extends AbstractStreamOperator<byte[]>
+class CommitterOperator<CommT> extends AbstractStreamOperator<byte[]>
         implements OneInputStreamOperator<byte[], byte[]>, BoundedOneInput {
 
-    private final SimpleVersionedSerializer<InputT> inputSerializer;
-    private final CommitterHandler<InputT, OutputT> committerHandler;
-    private final CommitRetrier commitRetrier;
+    private final SimpleVersionedSerializer<CommittableWrapper<CommT>> committableSerializer;
+    private final CommitterHandler<CommT> committerHandler;
+    private final CommitRetrier<CommT> commitRetrier;
+    private final boolean emitDownstream;
 
     public CommitterOperator(
             ProcessingTimeService processingTimeService,
-            SimpleVersionedSerializer<InputT> inputSerializer,
-            CommitterHandler<InputT, OutputT> committerHandler) {
-        this.inputSerializer = checkNotNull(inputSerializer);
+            SimpleVersionedSerializer<CommittableWrapper<CommT>> committableSerializer,
+            CommitterHandler<CommT> committerHandler,
+            boolean emitDownstream) {
+        this.emitDownstream = emitDownstream;
+        this.processingTimeService = checkNotNull(processingTimeService);
+        this.committableSerializer = checkNotNull(committableSerializer);
         this.committerHandler = checkNotNull(committerHandler);
-        this.processingTimeService = processingTimeService;
-        this.commitRetrier = new CommitRetrier(processingTimeService, committerHandler);
+        this.commitRetrier =
+                new CommitRetrier<>(
+                        processingTimeService, committerHandler, this::emitCommittables);
     }
 
     @Override
@@ -85,14 +81,26 @@ class CommitterOperator<InputT, OutputT> extends AbstractStreamOperator<byte[]>
 
     @Override
     public void endInput() throws Exception {
-        committerHandler.endOfInput();
+        emitCommittables(committerHandler.endOfInput());
         commitRetrier.retryIndefinitely();
     }
 
     @Override
     public void notifyCheckpointComplete(long checkpointId) throws Exception {
         super.notifyCheckpointComplete(checkpointId);
-        committerHandler.notifyCheckpointCompleted(checkpointId);
+        emitCommittables(committerHandler.notifyCheckpointCompleted(checkpointId));
+    }
+
+    private void emitCommittables(Collection<CommittableWrapper<CommT>> committables)
+            throws IOException {
+        if (emitDownstream && !committables.isEmpty()) {
+            for (CommittableWrapper<CommT> committable : committables) {
+                output.collect(
+                        new StreamRecord<>(
+                                SimpleVersionedSerialization.writeVersionAndSerialize(
+                                        committableSerializer, committable)));
+            }
+        }
         commitRetrier.retryWithDelay();
     }
 
@@ -101,7 +109,7 @@ class CommitterOperator<InputT, OutputT> extends AbstractStreamOperator<byte[]>
         committerHandler.processCommittables(
                 Collections.singletonList(
                         SimpleVersionedSerialization.readVersionAndDeSerialize(
-                                inputSerializer, element.getValue())));
+                                committableSerializer, element.getValue())));
     }
 
     @Override

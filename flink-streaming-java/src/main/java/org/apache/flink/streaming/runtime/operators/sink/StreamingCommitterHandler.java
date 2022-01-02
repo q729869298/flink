@@ -18,7 +18,9 @@
 
 package org.apache.flink.streaming.runtime.operators.sink;
 
+import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.connector.sink.Committer;
+import org.apache.flink.api.connector.sink.Sink;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 
 import java.io.IOException;
@@ -32,26 +34,35 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  *
  * @param <CommT> The committable type of the {@link Committer}.
  */
-final class StreamingCommitterHandler<CommT>
+@Internal
+public final class StreamingCommitterHandler<CommT>
         extends AbstractStreamingCommitterHandler<CommT, CommT> {
 
     /** Responsible for committing the committable to the external system. * */
     private final Committer<CommT> committer;
 
     public StreamingCommitterHandler(
-            Committer<CommT> committer, SimpleVersionedSerializer<CommT> committableSerializer) {
+            Committer<CommT> committer,
+            SimpleVersionedSerializer<CommittableWrapper<CommT>> committableSerializer) {
         super(committableSerializer);
         this.committer = checkNotNull(committer);
     }
 
     @Override
-    List<CommT> prepareCommit(List<CommT> input) {
+    List<CommittableWrapper<CommT>> prepareCommit(List<CommittableWrapper<CommT>> input) {
         return prependRecoveredCommittables(checkNotNull(input));
     }
 
     @Override
-    List<CommT> commit(List<CommT> committables) throws IOException, InterruptedException {
-        return committer.commit(checkNotNull(committables));
+    List<CommT> commitInternal(List<CommT> committables) throws IOException, InterruptedException {
+        return committer.commit(committables);
+    }
+
+    @Override
+    protected Collection<CommittableWrapper<CommT>> retry(
+            List<CommittableWrapper<CommT>> recoveredCommittables)
+            throws IOException, InterruptedException {
+        return commit(recoveredCommittables).getSuccessful();
     }
 
     @Override
@@ -61,8 +72,20 @@ final class StreamingCommitterHandler<CommT>
     }
 
     @Override
-    public Collection<CommT> notifyCheckpointCompleted(long checkpointId)
+    public Collection<CommittableWrapper<CommT>> notifyCheckpointCompleted(long checkpointId)
             throws IOException, InterruptedException {
-        return commitUpTo(checkpointId);
+        return commitUpTo(checkpointId).getSuccessful();
+    }
+
+    /** The serializable factory of the handler. */
+    public static class Factory<CommT>
+            implements CommitterHandler.Factory<Sink<?, CommT, ?, ?>, CommT> {
+        @Override
+        public CommitterHandler<CommT> create(Sink<?, CommT, ?, ?> sink) throws IOException {
+            return new StreamingCommitterHandler<>(
+                    checkCommitterPresent(sink.createCommitter(), false),
+                    new CheckpointSummary.Serializer<>(
+                            checkSerializerPresent(sink.getCommittableSerializer(), false)));
+        }
     }
 }

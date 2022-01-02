@@ -41,8 +41,8 @@ import org.apache.flink.util.UserCodeClassLoader;
 import org.apache.flink.util.function.BiFunctionWithException;
 
 import javax.annotation.Nullable;
-
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.OptionalLong;
@@ -56,19 +56,8 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * same parallelism or send them downstream to a {@link CommitterOperator} with a different
  * parallelism.
  *
- * <p>The operator may be part of a sink pipeline and is the first operator. There are currently two
- * ways this operator is used:
- *
- * <ul>
- *   <li>In streaming mode, there is this operator with parallelism p containing {@link
- *       org.apache.flink.api.connector.sink.SinkWriter} and {@link
- *       org.apache.flink.api.connector.sink.Committer} and a {@link CommitterOperator} containing
- *       the {@link org.apache.flink.api.connector.sink.GlobalCommitter} with parallelism 1.
- *   <li>In batch mode, there is this operator with parallelism p containing {@link
- *       org.apache.flink.api.connector.sink.SinkWriter} and a {@link CommitterOperator} containing
- *       the {@link org.apache.flink.api.connector.sink.Committer} and {@link
- *       org.apache.flink.api.connector.sink.GlobalCommitter} with parallelism 1.
- * </ul>
+ * <p>The operator may be part of a sink pipeline and is the first operator. It's composed in {@link
+ * org.apache.flink.streaming.runtime.translators.SinkTransformationTranslator}.
  *
  * @param <InputT> the type of the committable
  * @param <CommT> the type of the committable (to send to downstream operators)
@@ -89,11 +78,11 @@ class SinkOperator<InputT, CommT, WriterStateT> extends AbstractStreamOperator<b
 
     private final SinkWriterStateHandler<WriterStateT> sinkWriterStateHandler;
 
-    private final CommitterHandler<CommT, CommT> committerHandler;
+    private final CommitterHandler<CommT> committerHandler;
 
-    private CommitRetrier commitRetrier;
+    private CommitRetrier<CommT> commitRetrier;
 
-    @Nullable private final SimpleVersionedSerializer<CommT> committableSerializer;
+    @Nullable private final SimpleVersionedSerializer<SinkMessage> messageSerializer;
 
     private final BiFunctionWithException<
                     Sink.InitContext,
@@ -117,16 +106,21 @@ class SinkOperator<InputT, CommT, WriterStateT> extends AbstractStreamOperator<b
                             IOException>
                     writerFactory,
             SinkWriterStateHandler<WriterStateT> sinkWriterStateHandler,
-            CommitterHandler<CommT, CommT> committerHandler,
-            @Nullable SimpleVersionedSerializer<CommT> committableSerializer) {
+            CommitterHandler<CommT> committerHandler,
+            @Nullable SimpleVersionedSerializer<CommittableWrapper<CommT>> committableSerializer) {
         this.processingTimeService = checkNotNull(processingTimeService);
         this.mailboxExecutor = checkNotNull(mailboxExecutor);
         this.writerFactory = checkNotNull(writerFactory);
         this.sinkWriterStateHandler = checkNotNull(sinkWriterStateHandler);
         this.committerHandler = checkNotNull(committerHandler);
-        this.committableSerializer = committableSerializer;
+        this.messageSerializer =
+                committableSerializer != null
+                        ? new SinkMessage.Serializer<>(committableSerializer)
+                        : null;
         this.context = new Context<>();
-        this.commitRetrier = new CommitRetrier(processingTimeService, committerHandler);
+        this.commitRetrier =
+                new CommitRetrier<>(
+                        processingTimeService, committerHandler, this::emitCommittables);
     }
 
     @Override
@@ -167,7 +161,9 @@ class SinkOperator<InputT, CommT, WriterStateT> extends AbstractStreamOperator<b
     public void prepareSnapshotPreBarrier(long checkpointId) throws Exception {
         super.prepareSnapshotPreBarrier(checkpointId);
         if (!endOfInput) {
-            emitCommittables(committerHandler.processCommittables(sinkWriter.prepareCommit(false)));
+            Collection<CommittableWrapper<CommT>> committables =
+                    handleCommittables(sinkWriter.prepareCommit(false), checkpointId);
+            emitCommittables(committerHandler.processCommittables(committables));
         }
     }
 
@@ -189,18 +185,48 @@ class SinkOperator<InputT, CommT, WriterStateT> extends AbstractStreamOperator<b
     @Override
     public void endInput() throws Exception {
         endOfInput = true;
-        emitCommittables(committerHandler.processCommittables(sinkWriter.prepareCommit(true)));
+        Collection<CommittableWrapper<CommT>> committables =
+                handleCommittables(sinkWriter.prepareCommit(true), Long.MAX_VALUE);
+        emitCommittables(committerHandler.processCommittables(committables));
         emitCommittables(committerHandler.endOfInput());
         commitRetrier.retryIndefinitely();
     }
 
-    private void emitCommittables(Collection<CommT> committables) throws IOException {
-        if (committableSerializer != null) {
-            for (CommT committable : committables) {
+    private Collection<CommittableWrapper<CommT>> handleCommittables(
+            List<CommT> committables, long checkpointId) throws IOException {
+        List<CommittableWrapper<CommT>> wrapped = new ArrayList<>();
+        for (int index = 0, committablesSize = committables.size();
+                index < committablesSize;
+                index++) {
+            wrapped.add(
+                    new CommittableWrapper<>(
+                            committables.get(index),
+                            getRuntimeContext().getIndexOfThisSubtask(),
+                            checkpointId,
+                            index));
+        }
+
+        // send summary downstream so that operators know when a checkpoint is fully committed
+        output.collect(
+                new StreamRecord<>(
+                        SimpleVersionedSerialization.writeVersionAndSerialize(
+                                messageSerializer,
+                                new CheckpointSummary(
+                                        getRuntimeContext().getIndexOfThisSubtask(),
+                                        getRuntimeContext().getMaxNumberOfParallelSubtasks(),
+                                        checkpointId,
+                                        committables.size()))));
+        return wrapped;
+    }
+
+    private void emitCommittables(Collection<CommittableWrapper<CommT>> committables)
+            throws IOException {
+        if (messageSerializer != null) {
+            for (CommittableWrapper<CommT> committable : committables) {
                 output.collect(
                         new StreamRecord<>(
                                 SimpleVersionedSerialization.writeVersionAndSerialize(
-                                        committableSerializer, committable)));
+                                        messageSerializer, committable)));
             }
         }
     }

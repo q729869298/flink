@@ -17,26 +17,41 @@
 
 package org.apache.flink.streaming.runtime.operators.sink;
 
+import org.apache.flink.annotation.Internal;
+import org.apache.flink.api.connector.sink.Sink;
+
 import java.io.IOException;
+import java.util.Collection;
 import java.util.List;
 
 /**
  * This committer handler simply forwards all committables downstream. It's used in {@link
  * SinkOperator} without committers but with downstream operators (in streaming, only global
  * committer on sink; in batch, committer or global committer present).
+ *
+ * @param <CommT> The input and output type of the {@link Committer}.
  */
-class ForwardCommittingHandler<CommT> extends AbstractCommitterHandler<CommT, CommT, CommT> {
-    ForwardCommittingHandler() {}
+@Internal
+public class ForwardCommittingHandler<CommT> extends AbstractCommitterHandler<CommT, Void> {
+    public ForwardCommittingHandler() {}
 
     @Override
-    public List<CommT> processCommittables(List<CommT> committables) {
-        return committables;
+    List<Void> commitInternal(List<Void> committables) {
+        throw new UnsupportedOperationException("This handler should never commit");
     }
 
     @Override
-    protected void retry(List<CommT> recoveredCommittables)
-            throws IOException, InterruptedException {
-        throw new UnsupportedOperationException(
-                "This handler should never receive recovered commits");
+    public Collection<CommittableWrapper<CommT>> processCommittables(
+            Collection<CommittableWrapper<CommT>> committables) {
+        return committables;
+    }
+
+    /** The serializable factory of the handler. */
+    public static class Factory<CommT>
+            implements CommitterHandler.Factory<Sink<?, CommT, ?, ?>, CommT> {
+        @Override
+        public CommitterHandler<CommT> create(Sink<?, CommT, ?, ?> commTSink) throws IOException {
+            return new ForwardCommittingHandler<>();
+        }
     }
 }

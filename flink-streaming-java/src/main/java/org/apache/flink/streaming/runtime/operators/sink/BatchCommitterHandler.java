@@ -18,9 +18,12 @@
 
 package org.apache.flink.streaming.runtime.operators.sink;
 
+import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.connector.sink.Committer;
+import org.apache.flink.api.connector.sink.Sink;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.List;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
@@ -29,59 +32,49 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * Runtime {@link org.apache.flink.streaming.api.operators.StreamOperator} for executing {@link
  * Committer} in the batch execution mode.
  *
- * @param <InputT> The committable type of the {@link Committer}.
+ * @param <CommT> The committable type of the {@link Committer}.
  */
-final class BatchCommitterHandler<InputT, OutputT>
-        extends AbstractCommitterHandler<InputT, OutputT, InputT> {
+@Internal
+public final class BatchCommitterHandler<CommT> extends AbstractCommitterHandler<CommT, CommT> {
 
     /** Responsible for committing the committable to the external system. */
-    private final Committer<InputT> committer;
+    private final Committer<CommT> committer;
 
-    /**
-     * The committer that is chained to this committer. It's either {@link
-     * GlobalBatchCommitterHandler} or {@link NoopCommitterHandler}.
-     */
-    private final CommitterHandler<InputT, OutputT> chainedHandler;
-
-    public BatchCommitterHandler(
-            Committer<InputT> committer, CommitterHandler<InputT, OutputT> chainedHandler) {
+    public BatchCommitterHandler(Committer<CommT> committer) {
         this.committer = checkNotNull(committer);
-        this.chainedHandler = chainedHandler;
     }
 
     @Override
-    public List<OutputT> processCommittables(List<InputT> committables) {
-        super.processCommittables(committables);
-        return chainedHandler.processCommittables(committables);
-    }
-
-    @Override
-    public boolean needsRetry() {
-        return super.needsRetry() || chainedHandler.needsRetry();
-    }
-
-    @Override
-    protected void retry(List<InputT> recoveredCommittables)
+    protected Collection<CommittableWrapper<CommT>> retry(
+            List<CommittableWrapper<CommT>> recoveredCommittables)
             throws IOException, InterruptedException {
-        if (!recoveredCommittables.isEmpty()) {
-            recoveredCommittables(committer.commit(recoveredCommittables));
-        }
-        chainedHandler.retry();
+        return commit(recoveredCommittables).getSuccessful();
     }
 
     @Override
-    public List<OutputT> endOfInput() throws IOException, InterruptedException {
-        List<InputT> allCommittables = pollCommittables();
-        if (!allCommittables.isEmpty()) {
-            recoveredCommittables(committer.commit(allCommittables));
-        }
-        return chainedHandler.endOfInput();
+    List<CommT> commitInternal(List<CommT> committables) throws IOException, InterruptedException {
+        return committer.commit(committables);
+    }
+
+    @Override
+    public Collection<CommittableWrapper<CommT>> endOfInput()
+            throws IOException, InterruptedException {
+        return commit(pollCommittables()).getSuccessful();
     }
 
     @Override
     public void close() throws Exception {
         committer.close();
-        chainedHandler.close();
         super.close();
+    }
+
+    /** The serializable factory of the handler. */
+    public static class Factory<CommT>
+            implements CommitterHandler.Factory<Sink<?, CommT, ?, ?>, CommT> {
+        @Override
+        public CommitterHandler<CommT> create(Sink<?, CommT, ?, ?> sink) throws IOException {
+            return new BatchCommitterHandler<>(
+                    checkCommitterPresent(sink.createCommitter(), false));
+        }
     }
 }

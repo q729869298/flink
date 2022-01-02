@@ -17,23 +17,36 @@
 
 package org.apache.flink.streaming.runtime.operators.sink;
 
+import org.apache.flink.api.connector.sink.Committer;
+import org.apache.flink.api.connector.sink.GlobalCommitter;
+import org.apache.flink.streaming.runtime.operators.sink.CommittableWrapper.MatchResult;
+
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
 
+import static org.apache.flink.streaming.runtime.operators.sink.CommittableWrapper.match;
+import static org.apache.flink.streaming.runtime.operators.sink.CommittableWrapper.unwrap;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
-abstract class AbstractCommitterHandler<InputT, OutputT, RecoverT>
-        implements CommitterHandler<InputT, OutputT> {
+/**
+ * Abstract base class for operators that work with a {@link Committer} or a {@link
+ * GlobalCommitter}.
+ *
+ * @param <CommT> The input and output type of the {@link Committer}.
+ * @param <StateT> The type of the internal state.
+ */
+abstract class AbstractCommitterHandler<CommT, StateT> implements CommitterHandler<CommT> {
 
     /** Record all the committables until commit. */
-    private final Deque<InputT> committables = new ArrayDeque<>();
+    private final Deque<CommittableWrapper<CommT>> committables = new ArrayDeque<>();
 
     /** The committables that need to be committed again after recovering from a failover. */
-    private final List<RecoverT> recoveredCommittables = new ArrayList<>();
+    private final List<CommittableWrapper<StateT>> recoveredCommittables = new ArrayList<>();
 
     /**
      * Notifies a list of committables that might need to be committed again after recovering from a
@@ -41,20 +54,45 @@ abstract class AbstractCommitterHandler<InputT, OutputT, RecoverT>
      *
      * @param recovered A list of committables
      */
-    protected void recoveredCommittables(List<RecoverT> recovered) throws IOException {
+    protected void recoveredCommittables(List<CommittableWrapper<StateT>> recovered)
+            throws IOException {
         recoveredCommittables.addAll(checkNotNull(recovered));
     }
 
-    protected List<RecoverT> prependRecoveredCommittables(List<RecoverT> committables) {
+    protected List<CommittableWrapper<StateT>> prependRecoveredCommittables(
+            List<CommittableWrapper<StateT>> committables) {
         if (recoveredCommittables.isEmpty()) {
             return committables;
         }
-        List<RecoverT> all = new ArrayList<>(recoveredCommittables.size() + committables.size());
+        List<CommittableWrapper<StateT>> all =
+                new ArrayList<>(recoveredCommittables.size() + committables.size());
         all.addAll(recoveredCommittables);
         all.addAll(committables);
         recoveredCommittables.clear();
         return all;
     }
+
+    protected final CommitResult<CommittableWrapper<StateT>> commit(
+            List<CommittableWrapper<StateT>> committables)
+            throws IOException, InterruptedException {
+        List<StateT> failed = commitInternal(unwrap(committables));
+        if (failed.isEmpty()) {
+            return new CommitResult<>(committables, Collections.emptyList());
+        }
+
+        MatchResult<CommittableWrapper<StateT>> correlatedFailed = match(committables, failed);
+        recoveredCommittables(correlatedFailed.getMatched());
+        return new CommitResult<>(correlatedFailed.getUnmatched(), correlatedFailed.getMatched());
+    }
+
+    /**
+     * Commits a list of committables.
+     *
+     * @param committables A list of committables that is ready for committing.
+     * @return A list of committables needed to re-commit.
+     */
+    abstract List<StateT> commitInternal(List<StateT> committables)
+            throws IOException, InterruptedException;
 
     @Override
     public boolean needsRetry() {
@@ -62,21 +100,26 @@ abstract class AbstractCommitterHandler<InputT, OutputT, RecoverT>
     }
 
     @Override
-    public void retry() throws IOException, InterruptedException {
-        retry(prependRecoveredCommittables(Collections.emptyList()));
+    public Collection<CommittableWrapper<CommT>> retry() throws IOException, InterruptedException {
+        return retry(prependRecoveredCommittables(Collections.emptyList()));
     }
 
-    protected abstract void retry(List<RecoverT> recoveredCommittables)
-            throws IOException, InterruptedException;
+    protected Collection<CommittableWrapper<CommT>> retry(
+            List<CommittableWrapper<StateT>> recoveredCommittables)
+            throws IOException, InterruptedException {
+        commit(recoveredCommittables);
+        return Collections.emptyList();
+    }
 
     @Override
-    public List<OutputT> processCommittables(List<InputT> committables) {
+    public Collection<CommittableWrapper<CommT>> processCommittables(
+            Collection<CommittableWrapper<CommT>> committables) {
         this.committables.addAll(committables);
         return Collections.emptyList();
     }
 
-    protected List<InputT> pollCommittables() {
-        List<InputT> committables = new ArrayList<>(this.committables);
+    protected List<CommittableWrapper<CommT>> pollCommittables() {
+        List<CommittableWrapper<CommT>> committables = new ArrayList<>(this.committables);
         this.committables.clear();
         return committables;
     }
@@ -84,5 +127,23 @@ abstract class AbstractCommitterHandler<InputT, OutputT, RecoverT>
     @Override
     public void close() throws Exception {
         committables.clear();
+    }
+
+    static class CommitResult<CommT> {
+        private final List<CommT> successful;
+        private final List<CommT> failed;
+
+        CommitResult(List<CommT> successful, List<CommT> failed) {
+            this.successful = checkNotNull(successful);
+            this.failed = checkNotNull(failed);
+        }
+
+        public List<CommT> getSuccessful() {
+            return successful;
+        }
+
+        public List<CommT> getFailed() {
+            return failed;
+        }
     }
 }

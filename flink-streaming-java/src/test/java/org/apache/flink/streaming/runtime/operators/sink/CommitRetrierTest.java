@@ -20,21 +20,27 @@ package org.apache.flink.streaming.runtime.operators.sink;
 import org.apache.flink.streaming.runtime.tasks.TestProcessingTimeService;
 import org.apache.flink.util.clock.Clock;
 import org.apache.flink.util.clock.ManualClock;
-
+import org.apache.flink.util.function.ThrowingConsumer;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 class CommitRetrierTest {
+
+    public static final ThrowingConsumer<Collection<CheckpointSummary<String>>, IOException> NO_OP =
+            dummy -> {};
+
     @Test
     void testRetry() throws Exception {
         TestProcessingTimeService processingTimeService = new TestProcessingTimeService();
         CommitterHandlerWithRetries committerHandler = new CommitterHandlerWithRetries();
-        CommitRetrier retryer = new CommitRetrier(processingTimeService, committerHandler);
+        CommitRetrier<String> retryer =
+                new CommitRetrier<>(processingTimeService, committerHandler, NO_OP);
         assertThat(committerHandler.needsRetry(), equalTo(false));
 
         committerHandler.addRetries(2);
@@ -57,7 +63,8 @@ class CommitRetrierTest {
     void testInfiniteRetry() throws Exception {
         TestProcessingTimeService processingTimeService = new TestProcessingTimeService();
         CommitterHandlerWithRetries committerHandler = new CommitterHandlerWithRetries();
-        CommitRetrier retryer = new CommitRetrier(processingTimeService, committerHandler);
+        CommitRetrier<String> retryer =
+                new CommitRetrier<>(processingTimeService, committerHandler, NO_OP);
         assertThat(committerHandler.needsRetry(), equalTo(false));
 
         committerHandler.addRetries(2);
@@ -76,8 +83,8 @@ class CommitRetrierTest {
         processingTimeService.setCurrentTime(manualClock.absoluteTimeMillis());
 
         CommitterHandlerWithRetries committerHandler = new CommitterHandlerWithRetries();
-        CommitRetrier retryer =
-                new CommitRetrier(processingTimeService, committerHandler, manualClock);
+        CommitRetrier<String> retryer =
+                new CommitRetrier<>(processingTimeService, committerHandler, NO_OP, manualClock);
         assertThat(committerHandler.needsRetry(), equalTo(false));
 
         committerHandler.addRetries(2);
@@ -115,8 +122,10 @@ class CommitRetrierTest {
         }
 
         @Override
-        public void retry() throws IOException, InterruptedException {
+        public Collection<CheckpointSummary<String>> retry()
+                throws IOException, InterruptedException {
             retriesNeeded.decrementAndGet();
+            return null;
         }
     }
 }

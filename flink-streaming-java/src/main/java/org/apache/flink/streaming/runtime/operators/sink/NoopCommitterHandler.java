@@ -17,21 +17,26 @@
 
 package org.apache.flink.streaming.runtime.operators.sink;
 
+import org.apache.flink.annotation.Internal;
+import org.apache.flink.api.connector.sink.Sink;
+
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
 
 /** Swallows all committables and emits nothing. */
-enum NoopCommitterHandler implements CommitterHandler<Object, Object> {
+@Internal
+public enum NoopCommitterHandler implements CommitterHandler<Object> {
     INSTANCE;
 
     @SuppressWarnings("unchecked")
-    static <InputT, OutputT> CommitterHandler<InputT, OutputT> getInstance() {
-        return (CommitterHandler<InputT, OutputT>) NoopCommitterHandler.INSTANCE;
+    public static <CommT> CommitterHandler<CommT> getInstance() {
+        return (CommitterHandler<CommT>) NoopCommitterHandler.INSTANCE;
     }
 
     @Override
-    public List<Object> processCommittables(List<Object> committables) {
+    public Collection<CommittableWrapper<Object>> processCommittables(
+            Collection<CommittableWrapper<Object>> committables) {
         return Collections.emptyList();
     }
 
@@ -44,5 +49,16 @@ enum NoopCommitterHandler implements CommitterHandler<Object, Object> {
     }
 
     @Override
-    public void retry() throws IOException, InterruptedException {}
+    public Collection<CommittableWrapper<Object>> retry() throws IOException, InterruptedException {
+        return Collections.emptyList();
+    }
+
+    /** The serializable factory of the handler. */
+    public static class Factory<CommT>
+            implements CommitterHandler.Factory<Sink<?, CommT, ?, ?>, CommT> {
+        @Override
+        public CommitterHandler<CommT> create(Sink<?, CommT, ?, ?> commTSink) throws IOException {
+            return getInstance();
+        }
+    }
 }

@@ -111,6 +111,7 @@ public class GlobalBatchCommitterHandlerTest extends TestLogger {
                                 .setGlobalCommittableSerializer(
                                         TestSink.StringCommittableSerializer.INSTANCE)
                                 .build(),
+                        new GlobalBatchCommitterHandler.Factory<>(),
                         true));
     }
 }
