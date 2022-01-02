@@ -57,6 +57,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -141,11 +142,14 @@ public final class FactoryUtil {
         final DefaultDynamicTableContext context =
                 new DefaultDynamicTableContext(
                         objectIdentifier, catalogTable, configuration, classLoader, isTemporary);
+        final Set<String> secretSet = new TreeSet();
+
         try {
             final DynamicTableSourceFactory factory =
                     preferredFactory != null
                             ? preferredFactory
                             : discoverTableFactory(DynamicTableSourceFactory.class, context);
+            initSecretSet(secretSet, factory);
             return factory.createDynamicTableSource(context);
         } catch (Throwable t) {
             throw new ValidationException(
@@ -155,7 +159,7 @@ public final class FactoryUtil {
                                     + "%s",
                             objectIdentifier.asSummaryString(),
                             catalogTable.getOptions().entrySet().stream()
-                                    .map(e -> stringifyOption(e.getKey(), e.getValue()))
+                                    .map(e -> stringifyOption(e.getKey(), e.getValue(), secretSet))
                                     .sorted()
                                     .collect(Collectors.joining("\n"))),
                     t);
@@ -208,13 +212,14 @@ public final class FactoryUtil {
         final DefaultDynamicTableContext context =
                 new DefaultDynamicTableContext(
                         objectIdentifier, catalogTable, configuration, classLoader, isTemporary);
+        final Set<String> secretSet = new TreeSet();
 
         try {
             final DynamicTableSinkFactory factory =
                     preferredFactory != null
                             ? preferredFactory
                             : discoverTableFactory(DynamicTableSinkFactory.class, context);
-
+            initSecretSet(secretSet, factory);
             return factory.createDynamicTableSink(context);
         } catch (Throwable t) {
             throw new ValidationException(
@@ -224,7 +229,7 @@ public final class FactoryUtil {
                                     + "%s",
                             objectIdentifier.asSummaryString(),
                             catalogTable.getOptions().entrySet().stream()
-                                    .map(e -> stringifyOption(e.getKey(), e.getValue()))
+                                    .map(e -> stringifyOption(e.getKey(), e.getValue(), secretSet))
                                     .sorted()
                                     .collect(Collectors.joining("\n"))),
                     t);
@@ -336,8 +341,11 @@ public final class FactoryUtil {
 
             final DefaultCatalogContext discoveryContext =
                     new DefaultCatalogContext(catalogName, options, configuration, classLoader);
+            final Set<String> secretSet = new TreeSet();
+
             try {
                 final CatalogFactory factory = getCatalogFactory(discoveryContext);
+                initSecretSet(secretSet, factory);
 
                 // The type option is only used for discovery, we don't actually want to forward it
                 // to the catalog factory itself.
@@ -363,7 +371,8 @@ public final class FactoryUtil {
                                                 optionEntry ->
                                                         stringifyOption(
                                                                 optionEntry.getKey(),
-                                                                optionEntry.getValue()))
+                                                                optionEntry.getValue(),
+                                                                secretSet))
                                         .sorted()
                                         .collect(Collectors.joining("\n"))),
                         t);
@@ -743,6 +752,28 @@ public final class FactoryUtil {
                             result.add(loadResult.getService());
                         });
         return result;
+    }
+
+    private static void initSecretSet(Set<String> secretSet, Factory factory) {
+        Set<String> requiredSet =
+                factory.requiredOptions().stream()
+                        .filter(o -> o.isSecret())
+                        .map(o -> o.key())
+                        .collect(Collectors.toSet());
+        secretSet.addAll(requiredSet);
+        Set<String> optionalSet =
+                factory.optionalOptions().stream()
+                        .filter(o -> o.isSecret())
+                        .map(o -> o.key())
+                        .collect(Collectors.toSet());
+        secretSet.addAll(optionalSet);
+    }
+
+    private static String stringifyOption(String key, String value, Set<String> secretSet) {
+        if (secretSet.contains(key)) {
+            value = HIDDEN_CONTENT;
+        }
+        return stringifyOption(key, value);
     }
 
     private static String stringifyOption(String key, String value) {
