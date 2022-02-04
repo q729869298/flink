@@ -82,6 +82,9 @@ public class KinesisFirehoseSinkITCase {
     @After
     public void teardown() {
         System.clearProperty(SdkSystemSetting.CBOR_ENABLED.property());
+        s3AsyncClient.close();
+        firehoseAsyncClient.close();
+        iamAsyncClient.close();
     }
 
     @Test
@@ -118,7 +121,9 @@ public class KinesisFirehoseSinkITCase {
         generator.sinkTo(kdsSink);
         env.execute("Integration Test");
 
-        List<S3Object> objects = listBucketObjects(s3AsyncClient, BUCKET_NAME);
+        // use a new s3asyncClient
+        List<S3Object> objects =
+                listBucketObjects(getS3Client(mockFirehoseContainer.getEndpoint()), BUCKET_NAME);
         assertThat(objects.size()).isEqualTo(NUMBER_OF_ELEMENTS);
         assertThat(
                         readObjectsFromS3Bucket(
