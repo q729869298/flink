@@ -142,5 +142,10 @@ public class WindowJoin {
                 TimestampAssignerSupplier.Context context) {
             return (event, timestamp) -> System.currentTimeMillis();
         }
+
+        @Override
+        public boolean isEventTime() {
+            return true;
+        }
     }
 }
