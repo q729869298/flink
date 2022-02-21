@@ -41,7 +41,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Random;
 
-import static org.apache.flink.api.common.typeutils.TypeSerializerMatchers.isCompatibleAfterMigration;
 import static org.apache.flink.api.common.typeutils.TypeSerializerMatchers.isCompatibleAsIs;
 import static org.apache.flink.api.common.typeutils.TypeSerializerMatchers.isIncompatible;
 import static org.hamcrest.CoreMatchers.is;
@@ -87,7 +86,7 @@ public class AvroSerializerSnapshotTest {
         assertThat(
                 AvroSerializerSnapshot.resolveSchemaCompatibility(
                         FIRST_REQUIRED_LAST_OPTIONAL, FIRST_NAME),
-                isCompatibleAfterMigration());
+                isCompatibleAsIs());
     }
 
     @Test
@@ -95,7 +94,7 @@ public class AvroSerializerSnapshotTest {
         assertThat(
                 AvroSerializerSnapshot.resolveSchemaCompatibility(
                         FIRST_NAME, FIRST_REQUIRED_LAST_OPTIONAL),
-                isCompatibleAfterMigration());
+                isCompatibleAsIs());
     }
 
     @Test
@@ -192,7 +191,7 @@ public class AvroSerializerSnapshotTest {
     }
 
     @Test
-    public void validSchemaEvaluationShouldResultInCRequiresMigration() {
+    public void validSchemaEvaluationShouldResultInCAsIs() {
         final AvroSerializer<GenericRecord> originalSerializer =
                 new AvroSerializer<>(GenericRecord.class, FIRST_NAME);
         final AvroSerializer<GenericRecord> newSerializer =
@@ -201,9 +200,7 @@ public class AvroSerializerSnapshotTest {
         TypeSerializerSnapshot<GenericRecord> originalSnapshot =
                 originalSerializer.snapshotConfiguration();
 
-        assertThat(
-                originalSnapshot.resolveSchemaCompatibility(newSerializer),
-                isCompatibleAfterMigration());
+        assertThat(originalSnapshot.resolveSchemaCompatibility(newSerializer), isCompatibleAsIs());
     }
 
     @Test
