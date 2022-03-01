@@ -107,10 +107,7 @@ public class KinesisFirehoseSinkITCase {
         KinesisFirehoseTestUtils.getSampleDataGenerator(env, NUMBER_OF_ELEMENTS).sinkTo(kdsSink);
         env.execute("Integration Test");
 
-        List<S3Object> objects =
-                listBucketObjects(
-                        createS3Client(mockFirehoseContainer.getEndpoint(), httpClient),
-                        BUCKET_NAME);
+        List<S3Object> objects = listBucketObjects(s3AsyncClient, BUCKET_NAME);
         assertThat(objects.size()).isEqualTo(NUMBER_OF_ELEMENTS);
         assertThat(
                         readObjectsFromS3Bucket(
