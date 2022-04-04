@@ -179,7 +179,7 @@ Connector Options
       <td><h5>sink.bulk-flush.max-size</h5></td>
       <td>optional</td>
       <td>yes</td>
-      <td style="word-wrap: break-word;">2mb</td>
+      <td style="word-wrap: break-word;">2 mb</td>
       <td>MemorySize</td>
       <td>Maximum size in memory of buffered actions per bulk request. Must be in MB granularity.
       Can be set to <code>'0'</code> to disable it.
@@ -189,7 +189,7 @@ Connector Options
       <td><h5>sink.bulk-flush.interval</h5></td>
       <td>optional</td>
       <td>yes</td>
-      <td style="word-wrap: break-word;">1s</td>
+      <td style="word-wrap: break-word;">1 s</td>
       <td>Duration</td>
       <td>The interval to flush buffered actions.
         Can be set to <code>'0'</code> to disable it. Note, both <code>'sink.bulk-flush.max-size'</code> and <code>'sink.bulk-flush.max-actions'</code>
