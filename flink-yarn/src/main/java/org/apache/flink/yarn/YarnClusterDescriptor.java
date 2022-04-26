@@ -438,7 +438,8 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
     @Override
     public ClusterClientProvider<ApplicationId> deployApplicationCluster(
             final ClusterSpecification clusterSpecification,
-            final ApplicationConfiguration applicationConfiguration)
+            final ApplicationConfiguration applicationConfiguration,
+            final boolean detached)
             throws ClusterDeploymentException {
         checkNotNull(clusterSpecification);
         checkNotNull(applicationConfiguration);
@@ -473,7 +474,7 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
                     "Flink Application Cluster",
                     YarnApplicationClusterEntryPoint.class.getName(),
                     null,
-                    false);
+                    detached);
         } catch (Exception e) {
             throw new ClusterDeploymentException("Couldn't deploy Yarn Application Cluster", e);
         }
@@ -535,6 +536,7 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
             boolean detached)
             throws Exception {
 
+        LOG.info("In detached mode: " + detached);
         final UserGroupInformation currentUser = UserGroupInformation.getCurrentUser();
         if (HadoopUtils.isKerberosSecurityEnabled(currentUser)) {
             boolean useTicketCache =

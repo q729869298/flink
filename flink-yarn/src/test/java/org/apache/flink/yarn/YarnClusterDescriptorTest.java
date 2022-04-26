@@ -768,7 +768,7 @@ public class YarnClusterDescriptorTest extends TestLogger {
                     ClusterDeploymentException.class,
                     () ->
                             yarnClusterDescriptor.deployApplicationCluster(
-                                    clusterSpecification, appConfig));
+                                    clusterSpecification, appConfig, false));
         }
     }
 
@@ -816,7 +816,7 @@ public class YarnClusterDescriptorTest extends TestLogger {
                     IllegalArgumentException.class,
                     () ->
                             yarnClusterDescriptor.deployApplicationCluster(
-                                    clusterSpecification, appConfig));
+                                    clusterSpecification, appConfig, false));
         }
     }
 
