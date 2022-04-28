@@ -55,10 +55,16 @@ public class MaxwellJsonDecodingFormat
 
     private final boolean ignoreParseErrors;
 
+    private final boolean allowNonNumericNumbers;
+
     private final TimestampFormat timestampFormat;
 
-    public MaxwellJsonDecodingFormat(boolean ignoreParseErrors, TimestampFormat timestampFormat) {
+    public MaxwellJsonDecodingFormat(
+            boolean ignoreParseErrors,
+            boolean allowNonNumericNumbers,
+            TimestampFormat timestampFormat) {
         this.ignoreParseErrors = ignoreParseErrors;
+        this.allowNonNumericNumbers = allowNonNumericNumbers;
         this.timestampFormat = timestampFormat;
         this.metadataKeys = Collections.emptyList();
     }
@@ -95,6 +101,7 @@ public class MaxwellJsonDecodingFormat
                 readableMetadata,
                 producedTypeInfo,
                 ignoreParseErrors,
+                allowNonNumericNumbers,
                 timestampFormat);
     }
 

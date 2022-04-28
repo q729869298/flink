@@ -44,6 +44,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
+import static org.apache.flink.formats.json.JsonFormatOptions.ALLOW_NON_NUMERIC_NUMBERS;
 import static org.apache.flink.formats.json.JsonFormatOptions.ENCODE_DECIMAL_AS_PLAIN_NUMBER;
 import static org.apache.flink.formats.json.JsonFormatOptions.FAIL_ON_MISSING_FIELD;
 import static org.apache.flink.formats.json.JsonFormatOptions.IGNORE_PARSE_ERRORS;
@@ -68,6 +69,7 @@ public class JsonFormatFactory implements DeserializationFormatFactory, Serializ
 
         final boolean failOnMissingField = formatOptions.get(FAIL_ON_MISSING_FIELD);
         final boolean ignoreParseErrors = formatOptions.get(IGNORE_PARSE_ERRORS);
+        final boolean allowNonNumericNumbers = formatOptions.get(ALLOW_NON_NUMERIC_NUMBERS);
         TimestampFormat timestampOption = JsonFormatOptionsUtil.getTimestampFormat(formatOptions);
 
         return new ProjectableDecodingFormat<DeserializationSchema<RowData>>() {
@@ -86,6 +88,7 @@ public class JsonFormatFactory implements DeserializationFormatFactory, Serializ
                         rowDataTypeInfo,
                         failOnMissingField,
                         ignoreParseErrors,
+                        allowNonNumericNumbers,
                         timestampOption);
             }
 
@@ -149,6 +152,7 @@ public class JsonFormatFactory implements DeserializationFormatFactory, Serializ
         options.add(MAP_NULL_KEY_MODE);
         options.add(MAP_NULL_KEY_LITERAL);
         options.add(ENCODE_DECIMAL_AS_PLAIN_NUMBER);
+        options.add(ALLOW_NON_NUMERIC_NUMBERS);
         return options;
     }
 
