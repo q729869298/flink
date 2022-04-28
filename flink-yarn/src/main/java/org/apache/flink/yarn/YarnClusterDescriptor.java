@@ -18,6 +18,7 @@
 
 package org.apache.flink.yarn;
 
+import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.cache.DistributedCache;
 import org.apache.flink.api.java.tuple.Tuple2;
@@ -166,6 +167,8 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
     private final String applicationType;
 
     private YarnConfigOptions.UserJarInclusion userJarInclusion;
+
+    private ApplicationId applicationId;
 
     public YarnClusterDescriptor(
             Configuration flinkConfiguration,
@@ -406,7 +409,7 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
                         "The Yarn application " + applicationId + " doesn't run anymore.");
             }
 
-            setClusterEntrypointInfoToConfig(report);
+            setClusterEntrypointInfoToConfig(flinkConfiguration, report);
 
             return () -> {
                 try {
@@ -618,7 +621,7 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
         flinkConfiguration.setString(
                 ClusterEntrypoint.INTERNAL_CLUSTER_EXECUTION_MODE, executionMode.toString());
 
-        ApplicationReport report =
+        ApplicationReportProvider appReportProvider =
                 startAppMaster(
                         flinkConfiguration,
                         applicationName,
@@ -628,21 +631,11 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
                         yarnApplication,
                         validClusterSpecification);
 
-        // print the application id for user to cancel themselves.
         if (detached) {
-            final ApplicationId yarnApplicationId = report.getApplicationId();
-            logDetachedClusterInformation(yarnApplicationId, LOG);
+            logDetachedClusterInformation(applicationId, LOG);
         }
 
-        setClusterEntrypointInfoToConfig(report);
-
-        return () -> {
-            try {
-                return new RestClusterClient<>(flinkConfiguration, report.getApplicationId());
-            } catch (Exception e) {
-                throw new RuntimeException("Error while creating RestClusterClient.", e);
-            }
-        };
+        return YarnClusterClientProvider.of(appReportProvider, flinkConfiguration, applicationId);
     }
 
     private ClusterSpecification validateClusterResources(
@@ -778,7 +771,7 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
         }
     }
 
-    private ApplicationReport startAppMaster(
+    private ApplicationReportProvider startAppMaster(
             Configuration configuration,
             String applicationName,
             String yarnClusterEntrypoint,
@@ -837,6 +830,7 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
         // Set-up ApplicationSubmissionContext for the application
 
         final ApplicationId appId = appContext.getApplicationId();
+        applicationId = appId;
 
         // ------------------ Add Zookeeper namespace to local flinkConfiguraton ------
         setHAClusterIdIfNotSet(configuration, appId);
@@ -1224,53 +1218,81 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
         yarnClient.submitApplication(appContext);
 
         LOG.info("Waiting for the cluster to be allocated");
-        final long startTime = System.currentTimeMillis();
-        ApplicationReport report;
-        YarnApplicationState lastAppState = YarnApplicationState.NEW;
-        loop:
-        while (true) {
-            try {
-                report = yarnClient.getApplicationReport(appId);
-            } catch (IOException e) {
-                throw new YarnDeploymentException("Failed to deploy the cluster.", e);
-            }
-            YarnApplicationState appState = report.getYarnApplicationState();
-            LOG.debug("Application State: {}", appState);
-            switch (appState) {
-                case FAILED:
-                case KILLED:
-                    throw new YarnDeploymentException(
-                            "The YARN application unexpectedly switched to state "
-                                    + appState
-                                    + " during deployment. \n"
-                                    + "Diagnostics from YARN: "
-                                    + report.getDiagnostics()
-                                    + "\n"
-                                    + "If log aggregation is enabled on your cluster, use this command to further investigate the issue:\n"
-                                    + "yarn logs -applicationId "
-                                    + appId);
-                    // break ..
-                case RUNNING:
-                    LOG.info("YARN application has been deployed successfully.");
-                    break loop;
-                case FINISHED:
-                    LOG.info("YARN application has been finished successfully.");
-                    break loop;
-                default:
-                    if (appState != lastAppState) {
-                        LOG.info("Deploying cluster, current state " + appState);
-                    }
-                    if (System.currentTimeMillis() - startTime > 60000) {
-                        LOG.info(
-                                "Deployment took more than 60 seconds. Please check if the requested resources are available in the YARN cluster");
-                    }
-            }
-            lastAppState = appState;
-            Thread.sleep(250);
+
+        YarnClientWrapper yarnClientWrapper = YarnClientWrapper.fromBorrowed(yarnClient);
+
+        ApplicationReport targetStateAppReport;
+        try {
+            targetStateAppReport =
+                    waitUntilTargetState(
+                            yarnClientWrapper,
+                            appId,
+                            YarnApplicationState.ACCEPTED,
+                            YarnApplicationState.RUNNING);
+        } catch (IOException e) {
+            throw new YarnDeploymentException("Failed to deploy the cluster.", e);
         }
 
         // since deployment was successful, remove the hook
         ShutdownHookUtil.removeShutdownHook(deploymentFailureHook, getClass().getSimpleName(), LOG);
+
+        return ApplicationReportProviderImpl.of(
+                YarnClientRetrieverImpl.from(yarnClientWrapper, yarnConfiguration),
+                targetStateAppReport);
+    }
+
+    public static ApplicationReport waitUntilTargetState(
+            YarnClientWrapper yarnClient, ApplicationId appId, YarnApplicationState... targetStates)
+            throws InterruptedException, YarnException, IOException {
+        final long startTime = System.currentTimeMillis();
+        ApplicationReport report;
+        YarnApplicationState lastAppState = YarnApplicationState.NEW;
+
+        loop:
+        while (true) {
+            report = yarnClient.getApplicationReport(appId);
+
+            YarnApplicationState appState = report.getYarnApplicationState();
+            LOG.debug("Application State: {}", appState);
+
+            if (appState == YarnApplicationState.FAILED
+                    || appState == YarnApplicationState.KILLED) {
+                throw new YarnDeploymentException(
+                        "The YARN application unexpectedly switched to state "
+                                + appState
+                                + " during deployment. \n"
+                                + "Diagnostics from YARN: "
+                                + report.getDiagnostics()
+                                + "\n"
+                                + "If log aggregation is enabled on your cluster, use this command to further investigate the issue:\n"
+                                + "yarn logs -applicationId "
+                                + appId);
+            }
+
+            if (appState == YarnApplicationState.FINISHED) {
+                LOG.info("YARN application has been finished successfully.");
+                break;
+            }
+
+            for (YarnApplicationState targetState : targetStates) {
+                if (appState == targetState) {
+                    LOG.info("YARN application has reached target state " + targetState);
+                    break loop;
+                }
+            }
+
+            if (appState != lastAppState) {
+                LOG.info("Deploying cluster, current state " + appState);
+            }
+            if (System.currentTimeMillis() - startTime > 60000) {
+                LOG.info(
+                        "Deployment took more than 60 seconds. Please check if the requested resources are available in the YARN cluster");
+            }
+
+            lastAppState = appState;
+            Thread.sleep(250);
+        }
+
         return report;
     }
 
@@ -1667,7 +1689,9 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
         }
     }
 
-    private static class YarnDeploymentException extends RuntimeException {
+    /** YarnDeploymentException. */
+    @Internal
+    public static class YarnDeploymentException extends RuntimeException {
         private static final long serialVersionUID = -812040641215388943L;
 
         public YarnDeploymentException(String message) {
@@ -1832,7 +1856,8 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
                 .anyMatch(name -> name.equals(DEFAULT_FLINK_USR_LIB_DIR));
     }
 
-    private void setClusterEntrypointInfoToConfig(final ApplicationReport report) {
+    public static void setClusterEntrypointInfoToConfig(
+            final Configuration flinkConfiguration, final ApplicationReport report) {
         checkNotNull(report);
 
         final ApplicationId appId = report.getApplicationId();
@@ -1852,12 +1877,17 @@ public class YarnClusterDescriptor implements ClusterDescriptor<ApplicationId> {
         setHAClusterIdIfNotSet(flinkConfiguration, appId);
     }
 
-    private void setHAClusterIdIfNotSet(Configuration configuration, ApplicationId appId) {
+    private static void setHAClusterIdIfNotSet(Configuration configuration, ApplicationId appId) {
         // set cluster-id to app id if not specified
         if (!configuration.contains(HighAvailabilityOptions.HA_CLUSTER_ID)) {
             configuration.set(
                     HighAvailabilityOptions.HA_CLUSTER_ID, ConverterUtils.toString(appId));
         }
+    }
+
+    @VisibleForTesting
+    public ApplicationId getApplicationId() {
+        return applicationId;
     }
 
     public static void logDetachedClusterInformation(
