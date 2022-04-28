@@ -360,6 +360,9 @@ public class HiveTableUtil {
         if (!newHiveTable.getSd().isSetLocation()) {
             newHiveTable.getSd().setLocation(oldHiveTable.getSd().getLocation());
         }
+        if (oldHiveTable.isSetOwner()) {
+            newHiveTable.setOwner(oldHiveTable.getOwner());
+        }
         return newHiveTable;
     }
 

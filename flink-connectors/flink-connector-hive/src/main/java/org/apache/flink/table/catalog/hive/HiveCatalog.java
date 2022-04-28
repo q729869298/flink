@@ -80,6 +80,8 @@ import org.apache.flink.table.factories.ManagedTableFactory;
 import org.apache.flink.table.factories.TableFactory;
 import org.apache.flink.util.Preconditions;
 
+import org.apache.flink.shaded.guava30.com.google.common.base.Strings;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.common.FileUtils;
@@ -101,6 +103,7 @@ import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.metastore.api.UnknownDBException;
 import org.apache.hadoop.hive.metastore.partition.spec.PartitionSpecProxy;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -149,6 +152,7 @@ public class HiveCatalog extends AbstractCatalog {
 
     private static final Logger LOG = LoggerFactory.getLogger(HiveCatalog.class);
     public static final String HIVE_SITE_FILE = "hive-site.xml";
+    private static final String HIVE_AUTHORIZATION_ENABLED = "hive.security.authorization.enabled";
 
     // Prefix used to distinguish scala/python functions
     private static final String FLINK_SCALA_FUNCTION_PREFIX = "flink:scala:";
@@ -157,6 +161,7 @@ public class HiveCatalog extends AbstractCatalog {
     private final HiveConf hiveConf;
     private final String hiveVersion;
     private final HiveShim hiveShim;
+    private String userName;
 
     @VisibleForTesting HiveMetastoreClientWrapper client;
 
@@ -305,6 +310,14 @@ public class HiveCatalog extends AbstractCatalog {
                     String.format(
                             "Configured default database %s doesn't exist in catalog %s.",
                             getDefaultDatabase(), getName()));
+        }
+
+        try {
+            if (hiveConf.getBoolean(HIVE_AUTHORIZATION_ENABLED, false)) {
+                userName = UserGroupInformation.getCurrentUser().getShortUserName();
+            }
+        } catch (IOException e) {
+            throw new CatalogException("Failed to get userName", e);
         }
     }
 
@@ -477,6 +490,10 @@ public class HiveCatalog extends AbstractCatalog {
         boolean managedTable = ManagedTableListener.isManagedTable(this, table);
         Table hiveTable =
                 HiveTableUtil.instantiateHiveTable(tablePath, table, hiveConf, managedTable);
+
+        if (!Strings.isNullOrEmpty(userName)) {
+            hiveTable.setOwner(userName);
+        }
 
         UniqueConstraint pkConstraint = null;
         List<String> notNullCols = new ArrayList<>();

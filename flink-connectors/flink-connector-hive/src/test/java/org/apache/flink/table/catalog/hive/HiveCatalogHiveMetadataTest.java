@@ -53,6 +53,7 @@ import org.apache.flink.table.types.DataType;
 import org.apache.flink.util.StringUtils;
 
 import org.apache.hadoop.hive.common.StatsSetupConst;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.TableType;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.Table;
@@ -72,6 +73,7 @@ import static org.apache.flink.sql.parser.hive.ddl.SqlCreateHiveTable.IDENTIFIER
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -80,7 +82,9 @@ public class HiveCatalogHiveMetadataTest extends HiveCatalogMetadataTestBase {
 
     @BeforeClass
     public static void init() {
-        catalog = HiveTestUtils.createHiveCatalog();
+        HiveConf conf = HiveTestUtils.createHiveConf();
+        conf.setBoolean("hive.security.authorization.enabled", true);
+        catalog = HiveTestUtils.createHiveCatalog(conf);
         catalog.open();
     }
 
@@ -89,6 +93,16 @@ public class HiveCatalogHiveMetadataTest extends HiveCatalogMetadataTestBase {
     // =====================
 
     public void testCreateTable_Streaming() throws Exception {}
+
+    @Test
+    public void testCreateTable_SetOwner() throws Exception {
+        catalog.createDatabase(db1, createDb(), false);
+        CatalogTable table = createTable();
+        catalog.createTable(path1, table, false);
+
+        Table hiveTable = ((HiveCatalog) catalog).getHiveTable(path1);
+        assertNotNull(hiveTable.getOwner());
+    }
 
     @Test
     // verifies that input/output formats and SerDe are set for Hive tables
