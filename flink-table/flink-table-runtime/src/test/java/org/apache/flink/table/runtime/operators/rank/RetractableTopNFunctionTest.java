@@ -21,14 +21,18 @@ package org.apache.flink.table.runtime.operators.rank;
 import org.apache.flink.api.common.state.StateTtlConfig;
 import org.apache.flink.runtime.checkpoint.OperatorSubtaskState;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
+import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
+import org.apache.flink.table.runtime.util.ErrorHandlingUtil;
 import org.apache.flink.table.runtime.util.StateConfigUtil;
 import org.apache.flink.table.types.logical.BigIntType;
 import org.apache.flink.table.types.logical.IntType;
 import org.apache.flink.table.types.logical.VarCharType;
 
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,6 +44,7 @@ import static org.apache.flink.table.runtime.util.StreamRecordUtils.updateBefore
 
 /** Tests for {@link RetractableTopNFunction}. */
 public class RetractableTopNFunctionTest extends TopNFunctionTestBase {
+    @Rule public ExpectedException expectedException = ExpectedException.none();
 
     @Override
     protected AbstractTopNFunction createFunction(
@@ -56,7 +61,8 @@ public class RetractableTopNFunctionTest extends TopNFunctionTestBase {
                 rankRange,
                 generatedEqualiser,
                 generateUpdateBefore,
-                outputRankNumber);
+                outputRankNumber,
+                ExecutionConfigOptions.StateStaleErrorHandling.CONTINUE_WITHOUT_LOGGING);
     }
 
     @Test
@@ -532,7 +538,8 @@ public class RetractableTopNFunctionTest extends TopNFunctionTestBase {
                         new ConstantRankRange(1, 1),
                         generatedEqualiser,
                         true,
-                        false);
+                        false,
+                        ExecutionConfigOptions.StateStaleErrorHandling.CONTINUE_WITHOUT_LOGGING);
 
         OneInputStreamOperatorTestHarness<RowData, RowData> testHarness = createTestHarness(func);
         testHarness.open();
@@ -558,7 +565,7 @@ public class RetractableTopNFunctionTest extends TopNFunctionTestBase {
     }
 
     @Test
-    public void testRetractAnStaledRecordWithRowNumber() throws Exception {
+    public void testRetractAnStaleRecordWithRowNumber() throws Exception {
         StateTtlConfig ttlConfig = StateConfigUtil.createTtlConfig(1_000);
         AbstractTopNFunction func =
                 new RetractableTopNFunction(
@@ -571,7 +578,8 @@ public class RetractableTopNFunctionTest extends TopNFunctionTestBase {
                         new ConstantRankRange(1, 2),
                         generatedEqualiser,
                         true,
-                        true);
+                        true,
+                        ExecutionConfigOptions.StateStaleErrorHandling.CONTINUE_WITHOUT_LOGGING);
 
         OneInputStreamOperatorTestHarness<RowData, RowData> testHarness = createTestHarness(func);
         testHarness.open();
@@ -591,5 +599,33 @@ public class RetractableTopNFunctionTest extends TopNFunctionTestBase {
 
         assertorWithRowNumber.assertOutputEquals(
                 "output wrong.", expectedOutput, testHarness.getOutput());
+    }
+
+    @Test
+    public void testStateStaleErrorHandling() throws Exception {
+        expectedException.expect(RuntimeException.class);
+        expectedException.expectMessage(ErrorHandlingUtil.STATE_STALE_WARN_MSG);
+
+        StateTtlConfig ttlConfig = StateConfigUtil.createTtlConfig(1_000);
+        AbstractTopNFunction func =
+                new RetractableTopNFunction(
+                        ttlConfig,
+                        InternalTypeInfo.ofFields(
+                                VarCharType.STRING_TYPE, new BigIntType(), new IntType()),
+                        comparableRecordComparator,
+                        sortKeySelector,
+                        RankType.ROW_NUMBER,
+                        new ConstantRankRange(1, 2),
+                        generatedEqualiser,
+                        true,
+                        true,
+                        ExecutionConfigOptions.StateStaleErrorHandling.ERROR);
+
+        OneInputStreamOperatorTestHarness<RowData, RowData> testHarness = createTestHarness(func);
+        testHarness.open();
+        testHarness.setStateTtlProcessingTime(0);
+        testHarness.processElement(insertRecord("a", 1L, 10));
+        testHarness.setStateTtlProcessingTime(1001);
+        testHarness.processElement(deleteRecord("a", 1L, 10));
     }
 }

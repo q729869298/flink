@@ -28,6 +28,7 @@ import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.java.typeutils.ListTypeInfo;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.util.RowDataUtil;
 import org.apache.flink.table.runtime.generated.GeneratedRecordEqualiser;
@@ -35,6 +36,7 @@ import org.apache.flink.table.runtime.generated.RecordEqualiser;
 import org.apache.flink.table.runtime.keyselector.RowDataKeySelector;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.runtime.typeutils.SortedMapTypeInfo;
+import org.apache.flink.table.runtime.util.ErrorHandlingUtil;
 import org.apache.flink.types.RowKind;
 import org.apache.flink.util.Collector;
 
@@ -58,17 +60,8 @@ public class RetractableTopNFunction extends AbstractTopNFunction {
     private static final long serialVersionUID = 1365312180599454480L;
 
     private static final Logger LOG = LoggerFactory.getLogger(RetractableTopNFunction.class);
-
-    // Message to indicate the state is cleared because of ttl restriction. The message could be
-    // used to output to log.
-    private static final String STATE_CLEARED_WARN_MSG =
-            "The state is cleared because of state ttl. "
-                    + "This will result in incorrect result. You can increase the state ttl to avoid this.";
-
     private final InternalTypeInfo<RowData> sortKeyType;
-
-    // flag to skip records with non-exist error instead to fail, true by default.
-    private final boolean lenient = true;
+    private final ExecutionConfigOptions.StateStaleErrorHandling stateStaleErrorHandling;
 
     // a map state stores mapping from sort key to records list
     private transient MapState<RowData, List<RowData>> dataState;
@@ -93,7 +86,8 @@ public class RetractableTopNFunction extends AbstractTopNFunction {
             RankRange rankRange,
             GeneratedRecordEqualiser generatedEqualiser,
             boolean generateUpdateBefore,
-            boolean outputRankNumber) {
+            boolean outputRankNumber,
+            ExecutionConfigOptions.StateStaleErrorHandling stateStaleErrorHandling) {
         super(
                 ttlConfig,
                 inputRowType,
@@ -107,6 +101,7 @@ public class RetractableTopNFunction extends AbstractTopNFunction {
         this.serializableComparator = comparableRecordComparator;
         this.generatedEqualiser = generatedEqualiser;
         this.inputRowSer = inputRowType.createSerializer(new ExecutionConfig());
+        this.stateStaleErrorHandling = stateStaleErrorHandling;
     }
 
     @Override
@@ -191,7 +186,11 @@ public class RetractableTopNFunction extends AbstractTopNFunction {
                     sortedMap.put(sortKey, count);
                 }
             } else {
-                stateStaledErrorHandle();
+                ErrorHandlingUtil.handleStateStaleError(
+                        ttlConfig,
+                        stateStaleErrorHandling,
+                        ErrorHandlingUtil.STATE_STALE_WARN_MSG,
+                        LOG);
             }
 
             if (!stateRemoved) {
@@ -220,25 +219,14 @@ public class RetractableTopNFunction extends AbstractTopNFunction {
 
     // ------------- ROW_NUMBER-------------------------------
 
-    private void processStateStaled(Iterator<Map.Entry<RowData, Long>> sortedMapIterator)
+    private void processStateStale(Iterator<Map.Entry<RowData, Long>> sortedMapIterator)
             throws RuntimeException {
-        // Sync with dataState first
+        // Call the unified error handler
+        ErrorHandlingUtil.handleStateStaleError(
+                ttlConfig, stateStaleErrorHandling, ErrorHandlingUtil.STATE_STALE_WARN_MSG, LOG);
+
+        // Post process: sync with dataState
         sortedMapIterator.remove();
-
-        stateStaledErrorHandle();
-    }
-
-    /**
-     * Handle state staled error by configured lenient option. If option is true, warning log only,
-     * otherwise a {@link RuntimeException} will be thrown.
-     */
-    private void stateStaledErrorHandle() {
-        // Skip the data if it's state is cleared because of state ttl.
-        if (lenient) {
-            LOG.warn(STATE_CLEARED_WARN_MSG);
-        } else {
-            throw new RuntimeException(STATE_CLEARED_WARN_MSG);
-        }
     }
 
     private void emitRecordsWithRowNumber(
@@ -261,7 +249,7 @@ public class RetractableTopNFunction extends AbstractTopNFunction {
             } else if (findsSortKey) {
                 List<RowData> inputs = dataState.get(key);
                 if (inputs == null) {
-                    processStateStaled(iterator);
+                    processStateStale(iterator);
                 } else {
                     int i = 0;
                     while (i < inputs.size() && isInRankEnd(currentRank)) {
@@ -306,7 +294,7 @@ public class RetractableTopNFunction extends AbstractTopNFunction {
             } else if (findsSortKey) {
                 List<RowData> inputs = dataState.get(key);
                 if (inputs == null) {
-                    processStateStaled(iterator);
+                    processStateStale(iterator);
                 } else {
                     long count = entry.getValue();
                     // gets the rank of last record with same sortKey
@@ -353,7 +341,7 @@ public class RetractableTopNFunction extends AbstractTopNFunction {
             if (!findsSortKey && key.equals(sortKey)) {
                 List<RowData> inputs = dataState.get(key);
                 if (inputs == null) {
-                    processStateStaled(iterator);
+                    processStateStale(iterator);
                 } else {
                     Iterator<RowData> inputIter = inputs.iterator();
                     while (inputIter.hasNext() && isInRankEnd(currentRank)) {
@@ -378,7 +366,7 @@ public class RetractableTopNFunction extends AbstractTopNFunction {
             } else if (findsSortKey) {
                 List<RowData> inputs = dataState.get(key);
                 if (inputs == null) {
-                    processStateStaled(iterator);
+                    processStateStale(iterator);
                 } else {
                     int i = 0;
                     while (i < inputs.size() && isInRankEnd(currentRank)) {
@@ -396,7 +384,11 @@ public class RetractableTopNFunction extends AbstractTopNFunction {
         }
         if (isInRankEnd(currentRank)) {
             if (!findsSortKey && null == prevRow) {
-                stateStaledErrorHandle();
+                ErrorHandlingUtil.handleStateStaleError(
+                        ttlConfig,
+                        stateStaleErrorHandling,
+                        ErrorHandlingUtil.STATE_STALE_WARN_MSG,
+                        LOG);
             } else {
                 // there is no enough elements in Top-N, emit DELETE message for the retract record.
                 collectDelete(out, prevRow, currentRank);
@@ -427,7 +419,7 @@ public class RetractableTopNFunction extends AbstractTopNFunction {
             if (!findsSortKey && key.equals(sortKey)) {
                 List<RowData> inputs = dataState.get(key);
                 if (inputs == null) {
-                    processStateStaled(iterator);
+                    processStateStale(iterator);
                 } else {
                     Iterator<RowData> inputIter = inputs.iterator();
                     while (inputIter.hasNext() && isInRankEnd(nextRank)) {
@@ -461,7 +453,7 @@ public class RetractableTopNFunction extends AbstractTopNFunction {
                     int index = Long.valueOf(rankEnd - nextRank).intValue();
                     List<RowData> inputs = dataState.get(key);
                     if (inputs == null) {
-                        processStateStaled(iterator);
+                        processStateStale(iterator);
                     } else {
                         RowData toAdd = inputs.get(index);
                         collectInsert(out, toAdd);

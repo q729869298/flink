@@ -19,6 +19,7 @@
 package org.apache.flink.table.runtime.operators.join.stream;
 
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.util.RowDataUtil;
@@ -60,7 +61,8 @@ public class StreamingJoinOperator extends AbstractStreamingJoinOperator {
             boolean leftIsOuter,
             boolean rightIsOuter,
             boolean[] filterNullKeys,
-            long stateRetentionTime) {
+            long stateRetentionTime,
+            ExecutionConfigOptions.StateStaleErrorHandling stateStaleErrorHandling) {
         super(
                 leftType,
                 rightType,
@@ -68,7 +70,8 @@ public class StreamingJoinOperator extends AbstractStreamingJoinOperator {
                 leftInputSideSpec,
                 rightInputSideSpec,
                 filterNullKeys,
-                stateRetentionTime);
+                stateRetentionTime,
+                stateStaleErrorHandling);
         this.leftIsOuter = leftIsOuter;
         this.rightIsOuter = rightIsOuter;
     }
@@ -89,7 +92,8 @@ public class StreamingJoinOperator extends AbstractStreamingJoinOperator {
                             "left-records",
                             leftInputSideSpec,
                             leftType,
-                            stateRetentionTime);
+                            stateRetentionTime,
+                            stateStaleErrorHandling);
         } else {
             this.leftRecordStateView =
                     JoinRecordStateViews.create(
@@ -97,7 +101,8 @@ public class StreamingJoinOperator extends AbstractStreamingJoinOperator {
                             "left-records",
                             leftInputSideSpec,
                             leftType,
-                            stateRetentionTime);
+                            stateRetentionTime,
+                            stateStaleErrorHandling);
         }
 
         if (rightIsOuter) {
@@ -107,7 +112,8 @@ public class StreamingJoinOperator extends AbstractStreamingJoinOperator {
                             "right-records",
                             rightInputSideSpec,
                             rightType,
-                            stateRetentionTime);
+                            stateRetentionTime,
+                            stateStaleErrorHandling);
         } else {
             this.rightRecordStateView =
                     JoinRecordStateViews.create(
@@ -115,7 +121,8 @@ public class StreamingJoinOperator extends AbstractStreamingJoinOperator {
                             "right-records",
                             rightInputSideSpec,
                             rightType,
-                            stateRetentionTime);
+                            stateRetentionTime,
+                            stateStaleErrorHandling);
         }
     }
 
