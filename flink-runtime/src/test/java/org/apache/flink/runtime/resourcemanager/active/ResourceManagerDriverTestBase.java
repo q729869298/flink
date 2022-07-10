@@ -23,6 +23,7 @@ import org.apache.flink.runtime.clusterframework.ApplicationStatus;
 import org.apache.flink.runtime.clusterframework.TaskExecutorProcessSpec;
 import org.apache.flink.runtime.clusterframework.TaskExecutorProcessUtils;
 import org.apache.flink.runtime.clusterframework.types.ResourceIDRetrievable;
+import org.apache.flink.runtime.metrics.groups.UnregisteredMetricGroups;
 import org.apache.flink.runtime.resourcemanager.WorkerResourceSpec;
 import org.apache.flink.util.TestLoggerExtension;
 import org.apache.flink.util.concurrent.ScheduledExecutor;
@@ -178,7 +179,8 @@ public abstract class ResourceManagerDriverTestBase<WorkerType extends ResourceI
             driver.initialize(
                     resourceEventHandlerBuilder.build(),
                     mainThreadExecutor,
-                    ForkJoinPool.commonPool());
+                    ForkJoinPool.commonPool(),
+                    UnregisteredMetricGroups.createUnregisteredResourceManagerMetricGroup());
 
             testMethod.run();
         }

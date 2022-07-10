@@ -30,6 +30,7 @@ import org.apache.flink.kubernetes.kubeclient.FlinkPod;
 import org.apache.flink.kubernetes.kubeclient.decorators.ExternalServiceDecorator;
 import org.apache.flink.kubernetes.kubeclient.decorators.InternalServiceDecorator;
 import org.apache.flink.kubernetes.kubeclient.factory.KubernetesTaskManagerFactory;
+import org.apache.flink.kubernetes.kubeclient.handlers.PodOOMHandler;
 import org.apache.flink.kubernetes.kubeclient.parameters.KubernetesTaskManagerParameters;
 import org.apache.flink.kubernetes.kubeclient.resources.KubernetesPod;
 import org.apache.flink.kubernetes.kubeclient.resources.KubernetesTooOldResourceVersionException;
@@ -52,6 +53,8 @@ import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.concurrent.FutureUtils;
+
+import org.apache.flink.shaded.guava18.com.google.common.collect.ImmutableList;
 
 import javax.annotation.Nullable;
 
@@ -91,6 +94,8 @@ public class KubernetesResourceManagerDriver
 
     private FlinkPod taskManagerPodTemplate;
 
+    private List<FlinkKubeClient.PodModifyEventHandler> podModifyEventHandlers;
+
     public KubernetesResourceManagerDriver(
             Configuration flinkConfig,
             FlinkKubeClient flinkKubeClient,
@@ -101,6 +106,7 @@ public class KubernetesResourceManagerDriver
         this.flinkKubeClient = Preconditions.checkNotNull(flinkKubeClient);
         this.requestResourceFutures = new HashMap<>();
         this.running = false;
+        this.podModifyEventHandlers = new ArrayList<>();
     }
 
     // ------------------------------------------------------------------------
@@ -110,6 +116,7 @@ public class KubernetesResourceManagerDriver
     @Override
     protected void initializeInternal() throws Exception {
         podsWatchOpt = watchTaskManagerPods();
+        podModifyEventHandlers = initPodModifyEventHandlers();
         final File podTemplateFile = KubernetesUtils.getTaskManagerPodTemplateFileInPod();
         if (podTemplateFile.exists()) {
             taskManagerPodTemplate =
@@ -219,6 +226,10 @@ public class KubernetesResourceManagerDriver
     //  Internal
     // ------------------------------------------------------------------------
 
+    private List<FlinkKubeClient.PodModifyEventHandler> initPodModifyEventHandlers() {
+        return ImmutableList.of(new PodOOMHandler(resourceManagerMetricGroup));
+    }
+
     private void recoverWorkerNodesFromPreviousAttempts() throws ResourceManagerException {
         List<KubernetesPod> podList =
                 flinkKubeClient.getPodsWithLabels(
@@ -305,6 +316,10 @@ public class KubernetesResourceManagerDriver
                         KubernetesConfigOptions.EXTERNAL_RESOURCE_KUBERNETES_CONFIG_KEY_SUFFIX));
     }
 
+    private void handlePodModifyEventsInMainThread(List<KubernetesPod> pods) {
+        getMainThreadExecutor().execute(() -> podModifyEventHandlers.forEach(h -> h.handle(pods)));
+    }
+
     private void handlePodEventsInMainThread(List<KubernetesPod> pods) {
         getMainThreadExecutor()
                 .execute(
@@ -378,6 +393,7 @@ public class KubernetesResourceManagerDriver
 
     private class PodCallbackHandlerImpl
             implements FlinkKubeClient.WatchCallbackHandler<KubernetesPod> {
+
         @Override
         public void onAdded(List<KubernetesPod> pods) {
             handlePodEventsInMainThread(pods);
@@ -385,6 +401,7 @@ public class KubernetesResourceManagerDriver
 
         @Override
         public void onModified(List<KubernetesPod> pods) {
+            handlePodModifyEventsInMainThread(pods);
             handlePodEventsInMainThread(pods);
         }
 
