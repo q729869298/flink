@@ -25,9 +25,10 @@ import org.apache.flink.table.planner.functions.aggfunctions.SumWithRetractAggFu
 import org.apache.flink.table.planner.functions.bridging.BridgingSqlAggFunction
 import org.apache.flink.table.planner.functions.sql.{SqlFirstLastValueAggFunction, SqlListAggFunction}
 import org.apache.flink.table.planner.functions.utils.AggSqlFunction
-import org.apache.flink.table.runtime.functions.aggregate.{BuiltInAggregateFunction, CollectAggFunction, FirstValueAggFunction, FirstValueWithRetractAggFunction, JsonArrayAggFunction, JsonObjectAggFunction, LagAggFunction, LastValueAggFunction, LastValueWithRetractAggFunction, ListAggWithRetractAggFunction, ListAggWsWithRetractAggFunction, MaxWithRetractAggFunction, MinWithRetractAggFunction}
+import org.apache.flink.table.runtime.functions.aggregate.{BuiltInAggregateFunction, CollectAggFunction, FirstValueWithRetractAggFunction, JsonArrayAggFunction, JsonObjectAggFunction, LagAggFunction, LastValueWithRetractAggFunction, ListAggWithRetractAggFunction, ListAggWsWithRetractAggFunction, MaxWithRetractAggFunction, MinWithRetractAggFunction}
 import org.apache.flink.table.types.logical._
 import org.apache.flink.table.types.logical.LogicalTypeRoot._
+import org.apache.flink.table.types.utils.DataTypeUtils
 
 import org.apache.calcite.rel.core.AggregateCall
 import org.apache.calcite.sql.{SqlAggFunction, SqlJsonConstructorNullClause, SqlKind, SqlRankFunction}
@@ -106,10 +107,10 @@ class AggFunctionFactory(
         createSingleValueAggFunction(argTypes)
 
       case a: SqlFirstLastValueAggFunction if a.getKind == SqlKind.FIRST_VALUE =>
-        createFirstValueAggFunction(argTypes, index)
+        createFirstValueAggFunction(argTypes, index, a.allowsNullTreatment())
 
       case a: SqlFirstLastValueAggFunction if a.getKind == SqlKind.LAST_VALUE =>
-        createLastValueAggFunction(argTypes, index)
+        createLastValueAggFunction(argTypes, index, a.allowsNullTreatment())
 
       case _: SqlListAggFunction if call.getArgList.size() == 1 =>
         createListAggFunction(argTypes, index)
@@ -468,51 +469,43 @@ class AggFunctionFactory(
 
   private def createFirstValueAggFunction(
       argTypes: Array[LogicalType],
-      index: Int): UserDefinedFunction = {
+      index: Int,
+      defaultNullTreatment: Boolean): UserDefinedFunction = {
     val valueType = argTypes(0)
     if (aggCallNeedRetractions(index)) {
       valueType.getTypeRoot match {
         case TINYINT | SMALLINT | INTEGER | BIGINT | FLOAT | DOUBLE | BOOLEAN | VARCHAR | DECIMAL =>
-          new FirstValueWithRetractAggFunction(valueType)
+          new FirstValueWithRetractAggFunction(argTypes.map(arg => arg), defaultNullTreatment)
         case t =>
           throw new TableException(
             s"FIRST_VALUE with retract aggregate function does not " +
               s"support type: ''$t''.\nPlease re-check the data type.")
       }
     } else {
-      valueType.getTypeRoot match {
-        case TINYINT | SMALLINT | INTEGER | BIGINT | FLOAT | DOUBLE | BOOLEAN | VARCHAR | DECIMAL =>
-          new FirstValueAggFunction(valueType)
-        case t =>
-          throw new TableException(
-            s"FIRST_VALUE aggregate function does not support " +
-              s"type: ''$t''.\nPlease re-check the data type.")
-      }
+      new FirstValueAggFunction(
+        argTypes.map(argType => DataTypeUtils.toInternalDataType(argType)),
+        defaultNullTreatment)
     }
   }
 
   private def createLastValueAggFunction(
       argTypes: Array[LogicalType],
-      index: Int): UserDefinedFunction = {
+      index: Int,
+      defaultNullTreatment: Boolean): UserDefinedFunction = {
     val valueType = argTypes(0)
     if (aggCallNeedRetractions(index)) {
       valueType.getTypeRoot match {
         case TINYINT | SMALLINT | INTEGER | BIGINT | FLOAT | DOUBLE | BOOLEAN | VARCHAR | DECIMAL =>
-          new LastValueWithRetractAggFunction(valueType)
+          new LastValueWithRetractAggFunction(argTypes.map(arg => arg), defaultNullTreatment)
         case t =>
           throw new TableException(
             s"LAST_VALUE with retract aggregate function does not " +
               s"support type: ''$t''.\nPlease re-check the data type.")
       }
     } else {
-      valueType.getTypeRoot match {
-        case TINYINT | SMALLINT | INTEGER | BIGINT | FLOAT | DOUBLE | BOOLEAN | VARCHAR | DECIMAL =>
-          new LastValueAggFunction(valueType)
-        case t =>
-          throw new TableException(
-            s"LAST_VALUE aggregate function does not support " +
-              s"type: ''$t''.\nPlease re-check the data type.")
-      }
+      new LastValueAggFunction(
+        argTypes.map(argType => DataTypeUtils.toInternalDataType(argType)),
+        defaultNullTreatment)
     }
   }
 

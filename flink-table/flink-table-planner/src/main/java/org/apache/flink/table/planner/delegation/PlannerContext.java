@@ -315,6 +315,6 @@ public class PlannerContext {
                         context.getCatalogManager().getDataTypeFactory(),
                         typeFactory,
                         context.getRexFactory()),
-                FlinkSqlOperatorTable.instance());
+                FlinkSqlOperatorTable.instance(context.getTableConfig()));
     }
 }

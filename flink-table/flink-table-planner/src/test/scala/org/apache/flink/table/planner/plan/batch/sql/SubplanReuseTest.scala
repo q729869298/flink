@@ -20,13 +20,14 @@ package org.apache.flink.table.planner.plan.batch.sql
 import org.apache.flink.api.scala._
 import org.apache.flink.table.api._
 import org.apache.flink.table.api.config.{ExecutionConfigOptions, OptimizerConfigOptions}
+import org.apache.flink.table.planner.functions.aggfunctions.{FirstValueAggFunction, LastValueAggFunction}
 import org.apache.flink.table.planner.plan.rules.physical.batch.BatchPhysicalSortMergeJoinRule
 import org.apache.flink.table.planner.plan.rules.physical.batch.BatchPhysicalSortRule.TABLE_EXEC_RANGE_SORT_ENABLED
 import org.apache.flink.table.planner.plan.utils.OperatorType
 import org.apache.flink.table.planner.runtime.utils.JavaUserDefinedScalarFunctions.NonDeterministicUdf
 import org.apache.flink.table.planner.runtime.utils.JavaUserDefinedTableFunctions.{NonDeterministicTableFunc, StringSplit}
 import org.apache.flink.table.planner.utils.TableTestBase
-import org.apache.flink.table.runtime.functions.aggregate.FirstValueAggFunction
+import org.apache.flink.table.runtime.functions.aggregate.{FirstValueWithRetractAggFunction, LastValueWithRetractAggFunction}
 
 import org.junit.{Before, Test}
 
@@ -203,13 +204,13 @@ class SubplanReuseTest extends TableTestBase {
 
   @Test
   def testSubplanReuseOnAggregateWithNonDeterministicAggCall(): Unit = {
-    // FirstValueAggFunction and LastValueAggFunction are not deterministic
+    // FirstValueWithRetractAggFunction and LastValueWithRetractAggFunction are not deterministic
     util.addTemporarySystemFunction(
       "MyFirst",
-      new FirstValueAggFunction(DataTypes.INT().getLogicalType))
+      new FirstValueWithRetractAggFunction(DataTypes.INT().getLogicalType))
     util.addTemporarySystemFunction(
       "MyLast",
-      new FirstValueAggFunction(DataTypes.BIGINT().getLogicalType))
+      new LastValueWithRetractAggFunction(DataTypes.BIGINT().getLogicalType))
 
     val sqlQuery =
       """
@@ -336,10 +337,10 @@ class SubplanReuseTest extends TableTestBase {
 
   @Test
   def testSubplanReuseOnOverWindowWithNonDeterministicAggCall(): Unit = {
-    // FirstValueAggFunction is not deterministic
+    // FirstValueWithRetractAggFunction is not deterministic
     util.addTemporarySystemFunction(
       "MyFirst",
-      new FirstValueAggFunction(DataTypes.STRING().getLogicalType))
+      new FirstValueWithRetractAggFunction(DataTypes.STRING().getLogicalType))
 
     val sqlQuery =
       """
