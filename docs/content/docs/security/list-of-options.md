@@ -1,7 +1,8 @@
 ---
-title: Security
-bookCollapseSection: true
-weight: 8
+title: Options for SSL, SASL, Kerberos
+weight: 5
+type: docs
+aliases:
 ---
 <!--
 Licensed to the Apache Software Foundation (ASF) under one
@@ -21,3 +22,8 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.
 -->
+
+
+# Complete List of Options for SSL, SASL, Kerberos
+
+{{< generated/security_configuration >}}

@@ -251,7 +251,7 @@ If this is not feasible for production use, Flink allows to configure a port ran
 
 The configuration parameter for specifying the REST endpoint port is [rest.bind-port]({{< ref "docs/deployment/config" >}}#rest-bind-port). This configuration option accepts single ports (for example: "50010"), ranges ("50000-50025"), or a combination of both.
 
-### User jars & Classpath
+### User JARs & Classpath
 
 **Session Mode**
 
@@ -272,4 +272,7 @@ The user-jars position in the classpath can be controlled by setting the paramet
 
 Please refer to the [Debugging Classloading Docs]({{< ref "docs/ops/debugging/debugging_classloading" >}}#overview-of-classloading-in-flink) for details.
 
-{{< top >}}
+## Security
+
+To learn about running a secure Flink cluster in YARN, go to the [security section]({{< ref "docs/security/running-cluster" >}}#running-a-secure-flink-cluster-in-yarn).
+

@@ -285,7 +285,7 @@ $ ./bin/stop-zookeeper-quorum.sh
 Stopping zookeeper daemon (pid: 7101) on host localhost.
 ```
 
-### User jars & Classpath
+### User JARs & Classpath
 
 In Standalone mode, the following jars will be recognized as user-jars and included into user classpath:
 - Session Mode: The JAR file specified in startup command.
@@ -293,4 +293,6 @@ In Standalone mode, the following jars will be recognized as user-jars and inclu
 
 Please refer to the [Debugging Classloading Docs]({{< ref "docs/ops/debugging/debugging_classloading" >}}#overview-of-classloading-in-flink) for details.
 
-{{< top >}}
+## Security
+
+To learn about running a secure Flink cluster in standalone mode, go to the [security section]({{< ref "docs/security/running-cluster" >}}#running-a-secure-flink-cluster-in-standalone-mode).

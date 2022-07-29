@@ -576,7 +576,7 @@ spec:
       emptyDir: { }
 ```
 
-### User jars & Classpath
+### User JARs & Classpath
 
 When deploying Flink natively on Kubernetes, the following jars will be recognized as user-jars and included into user classpath:
 - Session Mode: The JAR file specified in startup command.
@@ -584,4 +584,7 @@ When deploying Flink natively on Kubernetes, the following jars will be recogniz
 
 Please refer to the [Debugging Classloading Docs]({{< ref "docs/ops/debugging/debugging_classloading" >}}#overview-of-classloading-in-flink) for details.
 
-{{< top >}}
+## Security
+
+To learn about running a secure Flink cluster in Kubernetes, go to the [security section]({{< ref "docs/security/running-cluster" >}}#running-a-secure-flink-cluster-in-kubernetes).
+
