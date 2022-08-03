@@ -43,7 +43,10 @@ import org.apache.flink.util.Preconditions;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.column.page.PageReadStore;
 import org.apache.parquet.filter2.compat.FilterCompat;
+import org.apache.parquet.filter2.predicate.FilterApi;
+import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.ParquetFileReader;
+import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.GroupType;
@@ -56,12 +59,14 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.flink.formats.parquet.vector.ParquetSplitReaderUtil.createColumnReader;
@@ -85,6 +90,7 @@ public abstract class ParquetVectorizedInputFormat<T, SplitT extends FileSourceS
     private final String[] projectedFields;
     private final LogicalType[] projectedTypes;
     private final ColumnBatchFactory<SplitT> batchFactory;
+    private final List<ParquetFilters.ParquetFilterExpression> parquetFilterCallExpressions;
     private final int batchSize;
     private final boolean isUtcTimestamp;
     private final boolean isCaseSensitive;
@@ -94,6 +100,7 @@ public abstract class ParquetVectorizedInputFormat<T, SplitT extends FileSourceS
             SerializableConfiguration hadoopConfig,
             RowType projectedType,
             ColumnBatchFactory<SplitT> batchFactory,
+            List<ParquetFilters.ParquetFilterExpression> parquetFilterCallExpressions,
             int batchSize,
             boolean isUtcTimestamp,
             boolean isCaseSensitive) {
@@ -101,6 +108,7 @@ public abstract class ParquetVectorizedInputFormat<T, SplitT extends FileSourceS
         this.projectedFields = projectedType.getFieldNames().toArray(new String[0]);
         this.projectedTypes = projectedType.getChildren().toArray(new LogicalType[0]);
         this.batchFactory = batchFactory;
+        this.parquetFilterCallExpressions = parquetFilterCallExpressions;
         this.batchSize = batchSize;
         this.isUtcTimestamp = isUtcTimestamp;
         this.isCaseSensitive = isCaseSensitive;
@@ -121,6 +129,24 @@ public abstract class ParquetVectorizedInputFormat<T, SplitT extends FileSourceS
                         hadoopPath,
                         range(splitOffset, splitOffset + splitLength));
         MessageType fileSchema = footer.getFileMetaData().getSchema();
+        ParquetFilters parquetFilters = new ParquetFilters(isUtcTimestamp, fileSchema);
+
+        // get parquet filter predicate
+        List<FilterPredicate> filterPredicates = new ArrayList<>();
+        for (ParquetFilters.ParquetFilterExpression filterExpression :
+                parquetFilterCallExpressions) {
+            Optional.ofNullable(parquetFilters.toParquetPredicate(filterExpression))
+                    .ifPresent(filterPredicates::add);
+        }
+
+        // set parquet filter predicate
+        filterPredicates.stream()
+                .reduce(FilterApi::and)
+                .ifPresent(
+                        predicate ->
+                                ParquetInputFormat.setFilterPredicate(
+                                        hadoopConfig.conf(), predicate));
+
         FilterCompat.Filter filter = getFilter(hadoopConfig.conf());
         List<BlockMetaData> blocks = filterRowGroups(filter, footer.getBlocks(), fileSchema);
 

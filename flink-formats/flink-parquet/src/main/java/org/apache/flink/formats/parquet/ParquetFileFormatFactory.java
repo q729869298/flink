@@ -40,6 +40,7 @@ import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.data.columnar.vector.VectorizedColumnBatch;
+import org.apache.flink.table.expressions.ResolvedExpression;
 import org.apache.flink.table.factories.DynamicTableFactory;
 import org.apache.flink.table.plan.stats.ColumnStats;
 import org.apache.flink.table.plan.stats.TableStats;
@@ -155,6 +156,8 @@ public class ParquetFileFormatFactory implements BulkReaderFormatFactory, BulkWr
                     BulkDecodingFormat<RowData>,
                     FileBasedStatisticsReportableInputFormat {
 
+        private List<ResolvedExpression> filters;
+
         private final ReadableConfig formatOptions;
 
         public ParquetBulkDecodingFormat(ReadableConfig formatOptions) {
@@ -173,6 +176,7 @@ public class ParquetFileFormatFactory implements BulkReaderFormatFactory, BulkWr
                     sourceContext.createTypeInformation(producedDataType),
                     Collections.emptyList(),
                     null,
+                    filters,
                     VectorizedColumnBatch.DEFAULT_SIZE,
                     formatOptions.get(UTC_TIMEZONE),
                     true);
@@ -181,6 +185,11 @@ public class ParquetFileFormatFactory implements BulkReaderFormatFactory, BulkWr
         @Override
         public ChangelogMode getChangelogMode() {
             return ChangelogMode.insertOnly();
+        }
+
+        @Override
+        public void applyFilters(List<ResolvedExpression> filters) {
+            this.filters = filters;
         }
 
         @Override

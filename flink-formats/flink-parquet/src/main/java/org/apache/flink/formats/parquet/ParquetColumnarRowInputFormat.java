@@ -31,10 +31,12 @@ import org.apache.flink.table.data.columnar.ColumnarRowData;
 import org.apache.flink.table.data.columnar.vector.ColumnVector;
 import org.apache.flink.table.data.columnar.vector.VectorizedColumnBatch;
 import org.apache.flink.table.data.columnar.vector.writable.WritableColumnVector;
+import org.apache.flink.table.expressions.ResolvedExpression;
 import org.apache.flink.table.types.logical.RowType;
 
 import org.apache.hadoop.conf.Configuration;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -64,6 +66,7 @@ public class ParquetColumnarRowInputFormat<SplitT extends FileSourceSplit>
                 projectedType,
                 producedTypeInfo,
                 ColumnBatchFactory.withoutExtraFields(),
+                new ArrayList<>(),
                 batchSize,
                 isUtcTimestamp,
                 isCaseSensitive);
@@ -76,12 +79,14 @@ public class ParquetColumnarRowInputFormat<SplitT extends FileSourceSplit>
      * @param producedTypeInfo the produced row type info for this input format, includes extra
      *     fields.
      * @param batchFactory factory for creating column batch, can cram in extra fields.
+     * @param filters the filters for parquet format.
      */
     ParquetColumnarRowInputFormat(
             Configuration hadoopConfig,
             RowType projectedType,
             TypeInformation<RowData> producedTypeInfo,
             ColumnBatchFactory<SplitT> batchFactory,
+            List<ParquetFilters.ParquetFilterExpression> filters,
             int batchSize,
             boolean isUtcTimestamp,
             boolean isCaseSensitive) {
@@ -89,6 +94,7 @@ public class ParquetColumnarRowInputFormat<SplitT extends FileSourceSplit>
                 new SerializableConfiguration(hadoopConfig),
                 projectedType,
                 batchFactory,
+                filters,
                 batchSize,
                 isUtcTimestamp,
                 isCaseSensitive);
@@ -148,6 +154,7 @@ public class ParquetColumnarRowInputFormat<SplitT extends FileSourceSplit>
                     TypeInformation<RowData> producedTypeInfo,
                     List<String> partitionKeys,
                     PartitionFieldExtractor<SplitT> extractor,
+                    List<ResolvedExpression> filters,
                     int batchSize,
                     boolean isUtcTimestamp,
                     boolean isCaseSensitive) {
@@ -181,11 +188,19 @@ public class ParquetColumnarRowInputFormat<SplitT extends FileSourceSplit>
                     return new VectorizedColumnBatch(vectors);
                 };
 
+        List<ParquetFilters.ParquetFilterExpression> parquetFilterCallExpressions =
+                filters == null
+                        ? new ArrayList<>()
+                        : filters.stream()
+                                .map(ParquetFilters::toParquetFilterExpression)
+                                .collect(Collectors.toList());
+
         return new ParquetColumnarRowInputFormat<>(
                 hadoopConfig,
                 projectedRowType,
                 producedTypeInfo,
                 factory,
+                parquetFilterCallExpressions,
                 batchSize,
                 isUtcTimestamp,
                 isCaseSensitive);
