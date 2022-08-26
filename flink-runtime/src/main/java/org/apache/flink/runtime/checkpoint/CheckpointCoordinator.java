@@ -533,6 +533,8 @@ public class CheckpointCoordinator {
             CompletableFuture<CheckpointPlan> checkpointPlanFuture =
                     checkpointPlanCalculator.calculateCheckpointPlan();
 
+            CompletableFuture<Void> masterTriggerCompletionPromise = new CompletableFuture<>();
+
             final CompletableFuture<PendingCheckpoint> pendingCheckpointCompletableFuture =
                     checkpointPlanFuture
                             .thenApplyAsync(
@@ -559,17 +561,22 @@ public class CheckpointCoordinator {
                                                     request.isPeriodic,
                                                     checkpointInfo.f1.checkpointId,
                                                     checkpointInfo.f1.checkpointStorageLocation,
-                                                    request.getOnCompletionFuture()),
+                                                    request.getOnCompletionFuture(),
+                                                    masterTriggerCompletionPromise),
                                     timer);
 
             final CompletableFuture<?> coordinatorCheckpointsComplete =
                     pendingCheckpointCompletableFuture.thenComposeAsync(
-                            (pendingCheckpoint) ->
-                                    OperatorCoordinatorCheckpoints
-                                            .triggerAndAcknowledgeAllCoordinatorCheckpointsWithCompletion(
-                                                    coordinatorsToCheckpoint,
-                                                    pendingCheckpoint,
-                                                    timer),
+                            (pendingCheckpoint) -> {
+                                if (pendingCheckpoint.isDisposed()) {
+                                    // The disposed checkpoint will be handled later,
+                                    // skip snapshotting the coordinator states.
+                                    return null;
+                                }
+                                return OperatorCoordinatorCheckpoints
+                                        .triggerAndAcknowledgeAllCoordinatorCheckpointsWithCompletion(
+                                                coordinatorsToCheckpoint, pendingCheckpoint, timer);
+                            },
                             timer);
 
             // We have to take the snapshot of the master hooks after the coordinator checkpoints
@@ -587,12 +594,21 @@ public class CheckpointCoordinator {
                                 PendingCheckpoint checkpoint =
                                         FutureUtils.getWithoutException(
                                                 pendingCheckpointCompletableFuture);
+                                if (checkpoint == null || checkpoint.isDisposed()) {
+                                    // The disposed checkpoint will be handled later,
+                                    // skip snapshotting the master states.
+                                    return null;
+                                }
                                 return snapshotMasterState(checkpoint);
                             },
                             timer);
 
+            FutureUtils.forward(
+                    CompletableFuture.allOf(masterStatesComplete, coordinatorCheckpointsComplete),
+                    masterTriggerCompletionPromise);
+
             FutureUtils.assertNoException(
-                    CompletableFuture.allOf(masterStatesComplete, coordinatorCheckpointsComplete)
+                    masterTriggerCompletionPromise
                             .handleAsync(
                                     (ignored, throwable) -> {
                                         final PendingCheckpoint checkpoint =
@@ -698,7 +714,8 @@ public class CheckpointCoordinator {
             boolean isPeriodic,
             long checkpointID,
             CheckpointStorageLocation checkpointStorageLocation,
-            CompletableFuture<CompletedCheckpoint> onCompletionPromise) {
+            CompletableFuture<CompletedCheckpoint> onCompletionPromise,
+            CompletableFuture<Void> masterTriggerCompletionPromise) {
 
         synchronized (lock) {
             try {
@@ -720,7 +737,8 @@ public class CheckpointCoordinator {
                         masterHooks.keySet(),
                         props,
                         checkpointStorageLocation,
-                        onCompletionPromise);
+                        onCompletionPromise,
+                        masterTriggerCompletionPromise);
 
         trackPendingCheckpointStats(checkpoint);
 
