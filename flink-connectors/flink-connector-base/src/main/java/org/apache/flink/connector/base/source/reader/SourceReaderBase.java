@@ -26,6 +26,7 @@ import org.apache.flink.api.connector.source.SourceReader;
 import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.api.connector.source.SourceSplit;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.connector.base.source.hybrid.DynamicHybridSourceReader;
 import org.apache.flink.connector.base.source.reader.fetcher.SplitFetcherManager;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
 import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
@@ -66,7 +67,7 @@ import static org.apache.flink.util.Preconditions.checkState;
  */
 @PublicEvolving
 public abstract class SourceReaderBase<E, T, SplitT extends SourceSplit, SplitStateT>
-        implements SourceReader<T, SplitT> {
+        implements DynamicHybridSourceReader<T, SplitT> {
     private static final Logger LOG = LoggerFactory.getLogger(SourceReaderBase.class);
 
     /** A queue to buffer the elements fetched by the fetcher thread. */
@@ -74,6 +75,9 @@ public abstract class SourceReaderBase<E, T, SplitT extends SourceSplit, SplitSt
 
     /** The state of the splits. */
     private final Map<String, SplitContext<T, SplitStateT>> splitStates;
+
+    /** The list of finished splits. */
+    private final List<SplitT> finishedSplits;
 
     /** The record emitter to handle the records read by the SplitReaders. */
     protected final RecordEmitter<E, T, SplitStateT> recordEmitter;
@@ -111,6 +115,7 @@ public abstract class SourceReaderBase<E, T, SplitT extends SourceSplit, SplitSt
         this.splitFetcherManager = splitFetcherManager;
         this.recordEmitter = recordEmitter;
         this.splitStates = new HashMap<>();
+        this.finishedSplits = new ArrayList<>();
         this.options = new SourceReaderOptions(config);
         this.config = config;
         this.context = context;
@@ -190,8 +195,9 @@ public abstract class SourceReaderBase<E, T, SplitT extends SourceSplit, SplitSt
             LOG.info("Finished reading split(s) {}", finishedSplits);
             Map<String, SplitStateT> stateOfFinishedSplits = new HashMap<>();
             for (String finishedSplitId : finishedSplits) {
-                stateOfFinishedSplits.put(
-                        finishedSplitId, splitStates.remove(finishedSplitId).state);
+                SplitStateT splitState = splitStates.remove(finishedSplitId).state;
+                stateOfFinishedSplits.put(finishedSplitId, splitState);
+                this.finishedSplits.add(toSplitType(finishedSplitId, splitState));
                 output.releaseOutputForSplit(finishedSplitId);
             }
             onSplitFinished(stateOfFinishedSplits);
@@ -252,6 +258,11 @@ public abstract class SourceReaderBase<E, T, SplitT extends SourceSplit, SplitSt
     @Override
     public void handleSourceEvents(SourceEvent sourceEvent) {
         LOG.info("Received unhandled source event: {}", sourceEvent);
+    }
+
+    @Override
+    public List<SplitT> getFinishedSplits() {
+        return finishedSplits;
     }
 
     @Override

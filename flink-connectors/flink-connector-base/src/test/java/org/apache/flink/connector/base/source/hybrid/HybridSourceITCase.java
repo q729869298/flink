@@ -23,7 +23,9 @@ import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.connector.source.Boundedness;
 import org.apache.flink.api.connector.source.Source;
+import org.apache.flink.api.connector.source.mocks.MockSourceSplit;
 import org.apache.flink.connector.base.source.reader.mocks.MockBaseSource;
+import org.apache.flink.connector.base.source.reader.mocks.MockSplitEnumerator;
 import org.apache.flink.runtime.highavailability.nonha.embedded.HaLeadershipControl;
 import org.apache.flink.runtime.minicluster.MiniCluster;
 import org.apache.flink.runtime.minicluster.RpcServiceSharing;
@@ -108,9 +110,19 @@ public class HybridSourceITCase extends TestLogger {
     }
 
     private Source sourceWithDynamicSwitchPosition() {
-        return HybridSource.builder(new MockBaseSource(2, 10, Boundedness.BOUNDED))
-                .addSource(
-                        (enumerator) -> {
+        HybridSource.HybridSourceBuilder<Integer, MockSourceSplit, MockSplitEnumerator> builder =
+                HybridSource.builder(new MockBaseSource(2, 10, Boundedness.BOUNDED));
+        return builder.addSource(
+                        (context) -> {
+                            List<MockSourceSplit> previousSplits = context.getPreviousSplits();
+                            assertThat(previousSplits.size()).isEqualTo(2);
+                            previousSplits.forEach(
+                                    split -> {
+                                        assertThat(split).isInstanceOf(MockSourceSplit.class);
+                                        assertThat(split.isFinished()).isTrue();
+                                        assertThat(split.endIndex()).isEqualTo(10);
+                                    });
+
                             // lazily create source here
                             return new MockBaseSource(2, 10, 20, Boundedness.BOUNDED);
                         },

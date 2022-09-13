@@ -43,6 +43,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 
 /**
  * Wraps the actual split enumerators and facilitates source switching. Enumerators are created
@@ -73,6 +74,7 @@ public class HybridSourceSplitEnumerator
     // Splits that have been returned due to subtask reset
     private final Map<Integer, TreeMap<Integer, List<HybridSourceSplit>>> pendingSplits;
     private final Set<Integer> finishedReaders;
+    private final List<HybridSourceSplit> finishedSplits;
     private final Map<Integer, Integer> readerSourceIndex;
     private int currentSourceIndex;
     private HybridSourceEnumeratorState restoredEnumeratorState;
@@ -90,6 +92,7 @@ public class HybridSourceSplitEnumerator
         this.currentSourceIndex = initialSourceIndex;
         this.pendingSplits = new HashMap<>();
         this.finishedReaders = new HashSet<>();
+        this.finishedSplits = new ArrayList<>();
         this.readerSourceIndex = new HashMap<>();
         this.restoredEnumeratorState = restoredEnumeratorState;
     }
@@ -228,7 +231,9 @@ public class HybridSourceSplitEnumerator
             }
 
             // track readers that have finished processing for current enumerator
+            // TODO: should finishedReaders be reset after switching to a new numerator?
             finishedReaders.add(subtaskId);
+            finishedSplits.addAll(srfe.getFinishedSplits());
             if (finishedReaders.size() == context.currentParallelism()) {
                 LOG.debug("All readers finished, ready to switch enumerator!");
                 if (currentSourceIndex + 1 < sources.size()) {
@@ -254,6 +259,7 @@ public class HybridSourceSplitEnumerator
 
     private void switchEnumerator() {
 
+        Integer previousSourceIndex = currentSourceIndex;
         SplitEnumerator<SourceSplit, Object> previousEnumerator = currentEnumerator;
         if (currentEnumerator != null) {
             try {
@@ -265,11 +271,24 @@ public class HybridSourceSplitEnumerator
             currentSourceIndex++;
         }
 
-        HybridSource.SourceSwitchContext<?> switchContext =
-                new HybridSource.SourceSwitchContext<Object>() {
+        List<SourceSplit> previousSplits =
+                finishedSplits.stream()
+                        .filter(
+                                split ->
+                                        split.isFinished
+                                                && split.sourceIndex() == previousSourceIndex)
+                        .map(split -> HybridSourceSplit.unwrapSplit(split, switchedSources))
+                        .collect(Collectors.toList());
+        HybridSource.SourceSwitchContext<?, ?> switchContext =
+                new HybridSource.SourceSwitchContext<SourceSplit, SplitEnumerator>() {
                     @Override
-                    public Object getPreviousEnumerator() {
+                    public SplitEnumerator getPreviousEnumerator() {
                         return previousEnumerator;
+                    }
+
+                    @Override
+                    public List getPreviousSplits() {
+                        return previousSplits;
                     }
                 };
 
