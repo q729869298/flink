@@ -18,6 +18,7 @@
 package org.apache.flink.table.planner.expressions
 
 import org.apache.flink.table.api._
+import org.apache.flink.table.api.Expressions.addMonths
 import org.apache.flink.table.expressions.TimeIntervalUnit
 import org.apache.flink.table.planner.codegen.CodeGenException
 import org.apache.flink.table.planner.expressions.utils.ExpressionTestBase
@@ -560,6 +561,13 @@ class TemporalTypesTest extends ExpressionTestBase {
     testSqlApi(
       s"DATE_FORMAT(${timestampLtz("2018-03-14 01:02:03.123456")}, 'yyyy-MM-dd HH:mm:ss.SSSSSS')",
       "2018-03-14 01:02:03.123456")
+  }
+
+  @Test
+  def testAddMonths(): Unit = {
+    testSqlApi("add_months('2016-08-31', 1)", "2016-09-30")
+    testSqlApi("add_months('2016-08-31', -6)", "2016-02-29")
+    testAllApis(addMonths("2016-07-30", 1), "add_months('2016-07-30', 1)", "2016-08-30")
   }
 
   @Test
