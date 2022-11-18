@@ -21,6 +21,8 @@ package org.apache.flink.configuration;
 import org.apache.flink.util.InstantiationUtil;
 import org.apache.flink.util.TestLogger;
 
+import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
+
 import org.junit.Test;
 
 import java.time.Duration;
@@ -55,14 +57,24 @@ public class ConfigurationTest extends TestLogger {
     private static final ConfigOption<Map<String, String>> MAP_OPTION =
             ConfigOptions.key("test-map-key").mapType().noDefaultValue();
 
+    private static final ConfigOption<Map<String, Integer>> MAP_OPTION_INTEGER_TYPE =
+            ConfigOptions.key("test-map-key").mapType(Integer.class).noDefaultValue();
+
+    private static final ConfigOption<List<Map<String, String>>> MAP_OPTION_LIST =
+            ConfigOptions.key("test-map-list-key").mapType().asList().noDefaultValue();
+
     private static final ConfigOption<Duration> DURATION_OPTION =
             ConfigOptions.key("test-duration-key").durationType().noDefaultValue();
 
     private static final Map<String, String> PROPERTIES_MAP = new HashMap<>();
 
+    private static final Map<String, Integer> PROPERTIES_MAP2 = new HashMap<>();
+
     static {
         PROPERTIES_MAP.put("prop1", "value1");
         PROPERTIES_MAP.put("prop2", "12");
+        PROPERTIES_MAP2.put("prop1", 1);
+        PROPERTIES_MAP2.put("prop2", 2);
     }
 
     private static final String MAP_PROPERTY_1 = MAP_OPTION.key() + ".prop1";
@@ -453,6 +465,48 @@ public class ConfigurationTest extends TestLogger {
         assertFalse(cfg.contains(MAP_OPTION));
         assertFalse(cfg.containsKey(MAP_PROPERTY_1));
         assertFalse(cfg.containsKey(MAP_PROPERTY_2));
+    }
+
+    @Test
+    public void testMapWithIntegerType() {
+        final Configuration cfg = new Configuration();
+        Map<String, Integer> map = ImmutableMap.of("one", 1, "two", 2);
+        cfg.set(MAP_OPTION_INTEGER_TYPE, map);
+
+        assertEquals(map, cfg.get(MAP_OPTION_INTEGER_TYPE));
+    }
+
+    @Test
+    public void testMapWithIntegerTypeParsing() {
+        final Configuration cfg = new Configuration();
+        cfg.setString(MAP_OPTION_INTEGER_TYPE.key() + ".prop1", "1");
+        cfg.setString(MAP_OPTION_INTEGER_TYPE.key() + ".prop2", "2");
+
+        Map<String, Integer> stringIntegerMap = cfg.get(MAP_OPTION_INTEGER_TYPE);
+        assertEquals((Integer) 1, stringIntegerMap.get("prop1"));
+    }
+
+    @Test
+    public void testMapList() {
+        final Configuration cfg = new Configuration();
+        Map<String, String> first = ImmutableMap.of("test1", "first");
+        Map<String, String> second = ImmutableMap.of("test2", "second");
+        cfg.set(MAP_OPTION_LIST, Arrays.asList(first, second));
+
+        List<Map<String, String>> stringIntegerMap = cfg.get(MAP_OPTION_LIST);
+        assertEquals(first, stringIntegerMap.get(0));
+        assertEquals(second, stringIntegerMap.get(1));
+    }
+
+    @Test
+    public void testMapListParsing() {
+        final Configuration cfg = new Configuration();
+        Map<String, String> first = ImmutableMap.of("test1", "one");
+        Map<String, String> second = ImmutableMap.of("test2", "two", "test3", "three");
+        cfg.setString(MAP_OPTION_LIST.key(), "test1:one;" + "test2:two,test3:three");
+
+        List<Map<String, String>> listMap = cfg.get(MAP_OPTION_LIST);
+        assertEquals(Arrays.asList(first, second), listMap);
     }
 
     // --------------------------------------------------------------------------------------------
