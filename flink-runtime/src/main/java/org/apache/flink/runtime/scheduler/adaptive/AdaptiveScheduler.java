@@ -103,7 +103,7 @@ import org.apache.flink.runtime.scheduler.adaptive.scalingpolicy.ReactiveScaleUp
 import org.apache.flink.runtime.scheduler.adaptive.scalingpolicy.ScaleUpController;
 import org.apache.flink.runtime.scheduler.exceptionhistory.ExceptionHistoryEntry;
 import org.apache.flink.runtime.scheduler.exceptionhistory.RootExceptionHistoryEntry;
-import org.apache.flink.runtime.scheduler.metrics.DeploymentStateTimeMetrics;
+import org.apache.flink.runtime.scheduler.metrics.RunningSubStateTimeMetrics;
 import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.util.BoundedFIFOQueue;
 import org.apache.flink.runtime.util.ResourceCounter;
@@ -212,7 +212,7 @@ public class AdaptiveScheduler
 
     private final SchedulerExecutionMode executionMode;
 
-    private final DeploymentStateTimeMetrics deploymentTimeMetrics;
+    private final RunningSubStateTimeMetrics runningSubStateTimeMetrics;
 
     private final BoundedFIFOQueue<RootExceptionHistoryEntry> exceptionHistory;
 
@@ -281,14 +281,14 @@ public class AdaptiveScheduler
         final MetricOptions.JobStatusMetricsSettings jobStatusMetricsSettings =
                 MetricOptions.JobStatusMetricsSettings.fromConfiguration(configuration);
 
-        deploymentTimeMetrics =
-                new DeploymentStateTimeMetrics(jobGraph.getJobType(), jobStatusMetricsSettings);
+        runningSubStateTimeMetrics =
+                new RunningSubStateTimeMetrics(jobGraph.getJobType(), jobStatusMetricsSettings);
 
         SchedulerBase.registerJobMetrics(
                 jobManagerJobMetricGroup,
                 jobStatusStore,
                 () -> (long) numRestarts,
-                deploymentTimeMetrics,
+                runningSubStateTimeMetrics,
                 tmpJobStatusListeners::add,
                 initializationTimestamp,
                 jobStatusMetricsSettings);
@@ -1030,7 +1030,7 @@ public class AdaptiveScheduler
                 initializationTimestamp,
                 vertexAttemptNumberStore,
                 adjustedParallelismStore,
-                deploymentTimeMetrics,
+                runningSubStateTimeMetrics,
                 LOG);
     }
 
