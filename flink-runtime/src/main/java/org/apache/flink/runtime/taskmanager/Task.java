@@ -1495,9 +1495,15 @@ public class Task
             throw new TaskNotRunningException("Task is not running, but in state " + currentState);
         }
 
+        if (taskStateManager.isTaskDeployedAsFinished()) {
+            throw new TaskNotRunningException("Task is deployed as finished");
+        }
+
         if (invokable instanceof CoordinatedTask) {
             try {
                 ((CoordinatedTask) invokable).dispatchOperatorEvent(operator, evt);
+            } catch (TaskNotRunningException e) {
+                throw e;
             } catch (Throwable t) {
                 ExceptionUtils.rethrowIfFatalErrorOrOOM(t);
 
