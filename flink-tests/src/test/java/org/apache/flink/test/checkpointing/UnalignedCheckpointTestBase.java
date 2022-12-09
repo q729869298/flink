@@ -61,6 +61,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.co.RichCoFlatMapFunction;
 import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
 import org.apache.flink.streaming.api.graph.StreamGraph;
+import org.apache.flink.streaming.api.graph.StreamNode;
 import org.apache.flink.test.util.MiniClusterWithClientResource;
 import org.apache.flink.test.util.TestUtils;
 import org.apache.flink.testutils.junit.FailsWithAdaptiveScheduler;
@@ -153,16 +154,16 @@ public abstract class UnalignedCheckpointTestBase extends TestLogger {
         final StreamGraph streamGraph = getStreamGraph(settings, conf);
         final int requiredSlots =
                 streamGraph.getStreamNodes().stream()
-                        .mapToInt(node -> node.getParallelism())
+                        .mapToInt(StreamNode::getParallelism)
                         .reduce(0, settings.channelType.slotSharing ? Integer::max : Integer::sum);
-        int numberTaskmanagers = settings.channelType.slotsToTaskManagers.apply(requiredSlots);
+        int numberTaskManagers = settings.channelType.slotsToTaskManagers.apply(requiredSlots);
 
-        final int slotsPerTM = (requiredSlots + numberTaskmanagers - 1) / numberTaskmanagers;
+        final int slotsPerTM = (requiredSlots + numberTaskManagers - 1) / numberTaskManagers;
         final MiniClusterWithClientResource miniCluster =
                 new MiniClusterWithClientResource(
                         new MiniClusterResourceConfiguration.Builder()
                                 .setConfiguration(conf)
-                                .setNumberTaskManagers(numberTaskmanagers)
+                                .setNumberTaskManagers(numberTaskManagers)
                                 .setNumberSlotsPerTaskManager(slotsPerTM)
                                 .build());
         miniCluster.before();
@@ -659,7 +660,7 @@ public abstract class UnalignedCheckpointTestBase extends TestLogger {
         int expectedFailures = 0;
         int tolerableCheckpointFailures = 0;
         private final DagCreator dagCreator;
-        private int alignmentTimeout = 0;
+        private int alignedCheckpointTimeout = 0;
         private Duration checkpointTimeout = CHECKPOINTING_TIMEOUT.defaultValue();
         private int failuresAfterSourceFinishes = 0;
         private ChannelType channelType = ChannelType.MIXED;
@@ -694,8 +695,8 @@ public abstract class UnalignedCheckpointTestBase extends TestLogger {
             return this;
         }
 
-        public UnalignedSettings setAlignmentTimeout(int alignmentTimeout) {
-            this.alignmentTimeout = alignmentTimeout;
+        public UnalignedSettings setAlignedCheckpointTimeout(int alignedCheckpointTimeout) {
+            this.alignedCheckpointTimeout = alignedCheckpointTimeout;
             return this;
         }
 
@@ -721,7 +722,8 @@ public abstract class UnalignedCheckpointTestBase extends TestLogger {
 
         public void configure(StreamExecutionEnvironment env) {
             env.enableCheckpointing(Math.max(100L, parallelism * 50L));
-            env.getCheckpointConfig().setAlignmentTimeout(Duration.ofMillis(alignmentTimeout));
+            env.getCheckpointConfig()
+                    .setAlignedCheckpointTimeout(Duration.ofMillis(alignedCheckpointTimeout));
             env.getCheckpointConfig().setCheckpointTimeout(checkpointTimeout.toMillis());
             env.getCheckpointConfig()
                     .setTolerableCheckpointFailureNumber(tolerableCheckpointFailures);
@@ -785,8 +787,8 @@ public abstract class UnalignedCheckpointTestBase extends TestLogger {
                     + expectedFailures
                     + ", dagCreator="
                     + dagCreator
-                    + ", alignmentTimeout="
-                    + alignmentTimeout
+                    + ", alignedCheckpointTimeout="
+                    + alignedCheckpointTimeout
                     + ", failuresAfterSourceFinishes="
                     + failuresAfterSourceFinishes
                     + ", channelType="

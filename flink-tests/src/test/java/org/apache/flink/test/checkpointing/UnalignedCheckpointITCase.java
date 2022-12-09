@@ -126,7 +126,7 @@ public class UnalignedCheckpointITCase extends UnalignedCheckpointTestBase {
                                         "source")
                                 .slotSharingGroup(slotSharing ? "default" : "source")
                                 .disableChaining()
-                                .map(i -> checkHeader(i))
+                                .map(UnalignedCheckpointTestBase::checkHeader)
                                 .name("forward")
                                 .uid("forward")
                                 .slotSharingGroup(slotSharing ? "default" : "forward")
@@ -278,7 +278,7 @@ public class UnalignedCheckpointITCase extends UnalignedCheckpointTestBase {
                         // after triggering)
                         .setCheckpointTimeout(Duration.ofSeconds(30))
                         .setTolerableCheckpointFailures(3)
-                        .setAlignmentTimeout(timeout)
+                        .setAlignedCheckpointTimeout(timeout)
                         .setBuffersPerChannel(buffersPerChannel);
     }
 
