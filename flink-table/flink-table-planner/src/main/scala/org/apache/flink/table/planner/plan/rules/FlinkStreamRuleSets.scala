@@ -211,6 +211,13 @@ object FlinkStreamRuleSets {
     ProjectWindowTableFunctionTransposeRule.INSTANCE
   )
 
+  val JOIN_COND_EQUAL_TRANSFER_RULES: RuleSet = RuleSets.ofList(
+    (
+      RuleSets.ofList(JoinConditionEqualityTransferRule.INSTANCE).asScala ++
+        PREDICATE_SIMPLIFY_EXPRESSION_RULES.asScala ++
+        FILTER_RULES.asScala
+    ).asJava)
+
   val JOIN_REORDER_PREPARE_RULES: RuleSet = RuleSets.ofList(
     // merge project to MultiJoin
     CoreRules.PROJECT_MULTI_JOIN_MERGE,
@@ -473,4 +480,8 @@ object FlinkStreamRuleSets {
     PushFilterPastChangelogNormalizeRule.INSTANCE
   )
 
+  /** RuleSet for optimize shuffle operations in the job. */
+  val REMOVE_REDUNDANT_EXCHANGE: RuleSet = RuleSets.ofList(
+    StreamRemoveRedundantExchangeRule.INSTANCE
+  )
 }

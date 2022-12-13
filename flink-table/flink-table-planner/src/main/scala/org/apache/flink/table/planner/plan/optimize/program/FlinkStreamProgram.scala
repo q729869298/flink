@@ -33,6 +33,7 @@ object FlinkStreamProgram {
   val DEFAULT_REWRITE = "default_rewrite"
   val PREDICATE_PUSHDOWN = "predicate_pushdown"
   val JOIN_REORDER = "join_reorder"
+  val JOIN_REWRITE = "join_rewrite"
   val PROJECT_REWRITE = "project_rewrite"
   val LOGICAL = "logical"
   val LOGICAL_REWRITE = "logical_rewrite"
@@ -229,6 +230,16 @@ object FlinkStreamProgram {
       )
     }
 
+    // join rewrite
+    chainedProgram.addLast(
+      JOIN_REWRITE,
+      FlinkHepRuleSetProgramBuilder.newBuilder
+        .setHepRulesExecutionType(HEP_RULES_EXECUTION_TYPE.RULE_COLLECTION)
+        .setHepMatchOrder(HepMatchOrder.BOTTOM_UP)
+        .add(FlinkStreamRuleSets.JOIN_COND_EQUAL_TRANSFER_RULES)
+        .build()
+    )
+
     // project rewrite
     chainedProgram.addLast(
       PROJECT_REWRITE,
@@ -295,6 +306,14 @@ object FlinkStreamProgram {
             .add(FlinkStreamRuleSets.MINI_BATCH_RULES)
             .build(),
           "mini-batch interval rules"
+        )
+        .addProgram(
+          FlinkHepRuleSetProgramBuilder.newBuilder
+            .setHepRulesExecutionType(HEP_RULES_EXECUTION_TYPE.RULE_COLLECTION)
+            .setHepMatchOrder(HepMatchOrder.BOTTOM_UP)
+            .add(FlinkStreamRuleSets.REMOVE_REDUNDANT_EXCHANGE)
+            .build(),
+          "remove redundant exchange"
         )
         .addProgram(
           FlinkHepRuleSetProgramBuilder.newBuilder
