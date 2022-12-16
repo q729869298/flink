@@ -16,29 +16,22 @@
  * limitations under the License.
  */
 
-package org.apache.flink.connector.pulsar.source.enumerator.cursor.stop;
+package org.apache.flink.connector.pulsar.table.testutils;
 
-import org.apache.flink.connector.pulsar.source.enumerator.cursor.StopCursor;
+import org.apache.flink.connector.pulsar.sink.writer.context.PulsarSinkContext;
+import org.apache.flink.connector.pulsar.sink.writer.router.TopicRouter;
+import org.apache.flink.table.data.RowData;
 
-import org.apache.pulsar.client.api.Message;
+import java.util.List;
 
-/** A implementation which wouldn't stop forever. */
-public class NeverStopCursor implements StopCursor {
-    private static final long serialVersionUID = -3113601090292771786L;
+/** A mock topic Router for testing purposes only. */
+public class MockTopicRouter implements TopicRouter<RowData> {
 
-    @Override
-    public StopCondition shouldStop(Message<?> message) {
-        return StopCondition.CONTINUE;
-    }
+    private static final long serialVersionUID = 1316133122715449818L;
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        return true;
+    public String route(
+            RowData rowData, String key, List<String> partitions, PulsarSinkContext context) {
+        return "never-exist-topic";
     }
 }

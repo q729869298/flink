@@ -482,7 +482,7 @@ public class PulsarRuntimeOperator implements Closeable {
         }
     }
 
-    private <T> Producer<T> createProducer(String topic, Schema<T> schema) {
+    public synchronized <T> Producer<T> createProducer(String topic, Schema<T> schema) {
         ProducerBuilder<T> builder =
                 client().newProducer(schema)
                         .topic(topic)
