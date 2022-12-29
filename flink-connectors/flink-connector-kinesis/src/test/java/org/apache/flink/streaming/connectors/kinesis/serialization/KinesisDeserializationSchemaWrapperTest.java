@@ -16,30 +16,25 @@
  * limitations under the License.
  */
 
-package org.apache.flink.streaming.connectors.kinesis;
+package org.apache.flink.streaming.connectors.kinesis.serialization;
 
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.util.Collector;
-import org.apache.flink.util.TestLogger;
 
-import org.junit.Rule;
+import org.junit.Assert;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import java.io.IOException;
-import java.util.Properties;
 
 /**
- * Tests for {@link FlinkKinesisConsumer}. In contrast to tests in {@link FlinkKinesisConsumerTest}
- * it does not use power mock, which makes it possible to use e.g. the {@link ExpectedException}.
+ * Tests for the {@link KinesisDeserializationSchemaWrapper} using Deserialization schemas with and
+ * without a Collector.
  */
-public class KinesisConsumerTest extends TestLogger {
-
-    @Rule public ExpectedException thrown = ExpectedException.none();
+public class KinesisDeserializationSchemaWrapperTest {
 
     @Test
-    public void testKinesisConsumerThrowsExceptionIfSchemaImplementsCollector() {
+    public void testKinesisConsumerRecognizesSchemaWithCollector() {
         DeserializationSchema<Object> schemaWithCollector =
                 new DeserializationSchema<Object>() {
                     @Override
@@ -64,12 +59,32 @@ public class KinesisConsumerTest extends TestLogger {
                         return null;
                     }
                 };
+        KinesisDeserializationSchemaWrapper<Object> wrapper =
+                new KinesisDeserializationSchemaWrapper(schemaWithCollector);
+        Assert.assertTrue(wrapper.isUseCollector());
+    }
 
-        thrown.expect(IllegalArgumentException.class);
-        thrown.expectMessage(
-                "Kinesis consumer does not support DeserializationSchema that implements deserialization with a"
-                        + " Collector. Unsupported DeserializationSchema: "
-                        + "org.apache.flink.streaming.connectors.kinesis.KinesisConsumerTest");
-        new FlinkKinesisConsumer<>("fakeStream", schemaWithCollector, new Properties());
+    @Test
+    public void testKinesisConsumerRecognizesSchemaWithoutCollector() {
+        DeserializationSchema<Object> schemaWithCollector =
+                new DeserializationSchema<Object>() {
+                    @Override
+                    public Object deserialize(byte[] message) throws IOException {
+                        return null;
+                    }
+
+                    @Override
+                    public boolean isEndOfStream(Object nextElement) {
+                        return false;
+                    }
+
+                    @Override
+                    public TypeInformation<Object> getProducedType() {
+                        return null;
+                    }
+                };
+        KinesisDeserializationSchemaWrapper<Object> wrapper =
+                new KinesisDeserializationSchemaWrapper(schemaWithCollector);
+        Assert.assertFalse(wrapper.isUseCollector());
     }
 }

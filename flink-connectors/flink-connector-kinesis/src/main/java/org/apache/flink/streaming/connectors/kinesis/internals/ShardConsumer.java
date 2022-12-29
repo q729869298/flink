@@ -33,6 +33,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.List;
 
 import static java.util.Optional.ofNullable;
 import static org.apache.flink.streaming.connectors.kinesis.internals.publisher.RecordPublisher.RecordPublisherRunResult.CANCELLED;
@@ -196,9 +197,9 @@ public class ShardConsumer<T> implements Runnable {
 
         final long approxArrivalTimestamp = record.getApproximateArrivalTimestamp().getTime();
 
-        final T value;
+        final List<T> values;
         try {
-            value =
+            values =
                     deserializer.deserialize(
                             dataBytes,
                             record.getPartitionKey(),
@@ -216,8 +217,13 @@ public class ShardConsumer<T> implements Runnable {
                                 record.getSequenceNumber(), record.getSubSequenceNumber())
                         : new SequenceNumber(record.getSequenceNumber());
 
-        fetcherRef.emitRecordAndUpdateState(
-                value, approxArrivalTimestamp, subscribedShardStateIndex, collectedSequenceNumber);
+        for (T val : values) {
+            fetcherRef.emitRecordAndUpdateState(
+                    val,
+                    approxArrivalTimestamp,
+                    subscribedShardStateIndex,
+                    collectedSequenceNumber);
+        }
 
         this.lastSequenceNum = collectedSequenceNumber;
     }

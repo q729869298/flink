@@ -18,11 +18,15 @@
 package org.apache.flink.streaming.connectors.kinesis.serialization;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.api.common.functions.util.ListCollector;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.util.Collector;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * A simple wrapper for using the {@link DeserializationSchema} with the {@link
@@ -35,22 +39,22 @@ public class KinesisDeserializationSchemaWrapper<T> implements KinesisDeserializ
     private static final long serialVersionUID = 9143148962928375886L;
 
     private final DeserializationSchema<T> deserializationSchema;
+    private final boolean useCollector;
 
     public KinesisDeserializationSchemaWrapper(DeserializationSchema<T> deserializationSchema) {
+
+        boolean useCollector = false;
         try {
-            Class<? extends DeserializationSchema> deserilizationClass =
+            Class<? extends DeserializationSchema> deserializationClass =
                     deserializationSchema.getClass();
-            if (!deserilizationClass
-                    .getMethod("deserialize", byte[].class, Collector.class)
-                    .isDefault()) {
-                throw new IllegalArgumentException(
-                        "Kinesis consumer does not support DeserializationSchema that implements "
-                                + "deserialization with a Collector. Unsupported DeserializationSchema: "
-                                + deserilizationClass.getName());
-            }
+            useCollector =
+                    !deserializationClass
+                            .getMethod("deserialize", byte[].class, Collector.class)
+                            .isDefault();
         } catch (NoSuchMethodException e) {
             // swallow the exception
         }
+        this.useCollector = useCollector;
         this.deserializationSchema = deserializationSchema;
     }
 
@@ -60,7 +64,7 @@ public class KinesisDeserializationSchemaWrapper<T> implements KinesisDeserializ
     }
 
     @Override
-    public T deserialize(
+    public List<T> deserialize(
             byte[] recordValue,
             String partitionKey,
             String seqNum,
@@ -68,7 +72,18 @@ public class KinesisDeserializationSchemaWrapper<T> implements KinesisDeserializ
             String stream,
             String shardId)
             throws IOException {
-        return deserializationSchema.deserialize(recordValue);
+
+        List<T> out = new ArrayList<>();
+        if (useCollector) {
+            ListCollector<T> coll = new ListCollector<>(out);
+            deserializationSchema.deserialize(recordValue, coll);
+        } else {
+            T val = deserializationSchema.deserialize(recordValue);
+            if (val != null) {
+                out.add(val);
+            }
+        }
+        return out;
     }
 
     /*
@@ -82,5 +97,10 @@ public class KinesisDeserializationSchemaWrapper<T> implements KinesisDeserializ
     @Override
     public TypeInformation<T> getProducedType() {
         return deserializationSchema.getProducedType();
+    }
+
+    @VisibleForTesting
+    protected boolean isUseCollector() {
+        return useCollector;
     }
 }

@@ -24,13 +24,15 @@ import com.amazonaws.services.dynamodbv2.streamsadapter.model.RecordObjectMapper
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
 
 /** Schema used for deserializing DynamoDB streams records. */
 public class DynamoDBStreamsSchema implements KinesisDeserializationSchema<Record> {
     private static final ObjectMapper MAPPER = new RecordObjectMapper();
 
     @Override
-    public Record deserialize(
+    public List<Record> deserialize(
             byte[] message,
             String partitionKey,
             String seqNum,
@@ -38,7 +40,7 @@ public class DynamoDBStreamsSchema implements KinesisDeserializationSchema<Recor
             String stream,
             String shardId)
             throws IOException {
-        return MAPPER.readValue(message, Record.class);
+        return Collections.singletonList(MAPPER.readValue(message, Record.class));
     }
 
     @Override

@@ -33,6 +33,7 @@ import org.apache.flink.util.Preconditions;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -108,7 +109,7 @@ public final class RowDataKinesisDeserializationSchema
     }
 
     @Override
-    public RowData deserialize(
+    public List<RowData> deserialize(
             byte[] recordValue,
             String partitionKey,
             String seqNum,
@@ -134,7 +135,8 @@ public final class RowDataKinesisDeserializationSchema
             }
         }
 
-        return new JoinedRowData(physicalRow.getRowKind(), physicalRow, metadataRow);
+        return Collections.singletonList(
+                new JoinedRowData(physicalRow.getRowKind(), physicalRow, metadataRow));
     }
 
     @Override

@@ -23,6 +23,7 @@ import org.apache.flink.api.java.typeutils.ResultTypeQueryable;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * This is a deserialization schema specific for the Flink Kinesis Consumer. Different from the
@@ -57,11 +58,9 @@ public interface KinesisDeserializationSchema<T> extends Serializable, ResultTyp
      *     the record
      * @param stream the name of the Kinesis stream that this record was sent to
      * @param shardId The identifier of the shard the record was sent to
-     * @return the deserialized message as an Java object ({@code null} if the message cannot be
-     *     deserialized).
      * @throws IOException
      */
-    T deserialize(
+    List<T> deserialize(
             byte[] recordValue,
             String partitionKey,
             String seqNum,
