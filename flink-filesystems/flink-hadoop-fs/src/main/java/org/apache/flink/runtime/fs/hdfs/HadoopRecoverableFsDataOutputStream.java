@@ -35,7 +35,10 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.viewfs.ViewFileSystem;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
 import org.apache.hadoop.util.VersionInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -53,7 +56,9 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
 @Internal
 class HadoopRecoverableFsDataOutputStream extends RecoverableFsDataOutputStream {
 
-    private static final long LEASE_TIMEOUT = 100_000L;
+    private static final long LEASE_RECOVERY_TIMEOUT_MS = 900_000L;
+
+    private static final long BLOCK_RECOVERY_TIMEOUT_MS = 300_000L;
 
     private static Method truncateHandle;
 
@@ -64,6 +69,9 @@ class HadoopRecoverableFsDataOutputStream extends RecoverableFsDataOutputStream 
     private final Path tempFile;
 
     private final FSDataOutputStream out;
+
+    private static final Logger LOG =
+            LoggerFactory.getLogger(HadoopRecoverableFsDataOutputStream.class);
 
     HadoopRecoverableFsDataOutputStream(FileSystem fs, Path targetFile, Path tempFile)
             throws IOException {
@@ -160,7 +168,17 @@ class HadoopRecoverableFsDataOutputStream extends RecoverableFsDataOutputStream 
 
         ensureTruncateInitialized();
 
-        revokeLeaseByFileSystem(fileSystem, path);
+        LOG.debug("Truncating file {}.", path);
+        long start = System.currentTimeMillis();
+
+        boolean isLeaseReleased = revokeLeaseByFileSystem(fileSystem, path);
+        Preconditions.checkState(
+                isLeaseReleased,
+                "Failed to release lease on file `%s` in %d ms.",
+                path.toString(),
+                LEASE_RECOVERY_TIMEOUT_MS);
+        long leaseRecoveredTime = System.currentTimeMillis();
+        LOG.debug("Lease recovery for file {} take {} ms.", path, leaseRecoveredTime - start);
 
         // truncate back and append
         boolean truncated;
@@ -171,10 +189,20 @@ class HadoopRecoverableFsDataOutputStream extends RecoverableFsDataOutputStream 
         }
 
         if (!truncated) {
-            // Truncate did not complete immediately, we must wait for
-            // the operation to complete and release the lease.
-            revokeLeaseByFileSystem(fileSystem, path);
+            // Truncate does not complete immediately if block recovery is needed,
+            // thus wait for block recovery
+            LOG.debug("Waiting for block recovery for file {}.", path);
+            boolean recovered = waitForBlockRecovery(fileSystem, path);
+            if (!recovered) {
+                throw new IOException(
+                        String.format(
+                                "Failed to recover blocks for file %s in %d ms.",
+                                path.toString(), BLOCK_RECOVERY_TIMEOUT_MS));
+            }
         }
+
+        long truncateFinishedTime = System.currentTimeMillis();
+        LOG.debug("File {} recovered in {} ms.", path, truncateFinishedTime - start);
     }
 
     private static void ensureTruncateInitialized() throws FlinkRuntimeException {
@@ -338,6 +366,9 @@ class HadoopRecoverableFsDataOutputStream extends RecoverableFsDataOutputStream 
      * <p>The lease of the file we are resuming writing/committing to may still belong to the
      * process that failed previously and whose state we are recovering.
      *
+     * <p>The recovery process would be fast in most cases, but in case of the file's primary node
+     * crashes, the NameNode must wait for a socket timeout which is 10 min by default.
+     *
      * @param path The path to the file we want to resume writing to.
      */
     private static boolean waitUntilLeaseIsRevoked(final FileSystem fs, final Path path)
@@ -347,7 +378,7 @@ class HadoopRecoverableFsDataOutputStream extends RecoverableFsDataOutputStream 
         final DistributedFileSystem dfs = (DistributedFileSystem) fs;
         dfs.recoverLease(path);
 
-        final Deadline deadline = Deadline.now().plus(Duration.ofMillis(LEASE_TIMEOUT));
+        final Deadline deadline = Deadline.now().plus(Duration.ofMillis(LEASE_RECOVERY_TIMEOUT_MS));
 
         boolean isClosed = dfs.isFileClosed(path);
         while (!isClosed && deadline.hasTimeLeft()) {
@@ -359,5 +390,38 @@ class HadoopRecoverableFsDataOutputStream extends RecoverableFsDataOutputStream 
             isClosed = dfs.isFileClosed(path);
         }
         return isClosed;
+    }
+
+    /**
+     * If the last block of the file that the previous execution was writing to is not in COMPLETE
+     * state, HDFS will perform block recovery which blocks truncate. Thus we have to wait for block
+     * recovery to ensure the truncate is successful.
+     */
+    private static boolean waitForBlockRecovery(final FileSystem fs, final Path path)
+            throws IOException {
+        Preconditions.checkState(fs instanceof DistributedFileSystem);
+
+        final DistributedFileSystem dfs = (DistributedFileSystem) fs;
+
+        final Deadline deadline = Deadline.now().plus(Duration.ofMillis(BLOCK_RECOVERY_TIMEOUT_MS));
+
+        boolean success = false;
+        while (deadline.hasTimeLeft()) {
+            String absolutePath = Path.getPathWithoutSchemeAndAuthority(path).toString();
+            LocatedBlocks blocks =
+                    dfs.getClient().getLocatedBlocks(absolutePath, 0, Long.MAX_VALUE);
+            boolean noLastBlock = blocks.getLastLocatedBlock() == null;
+            if (!blocks.isUnderConstruction() && (noLastBlock || blocks.isLastBlockComplete())) {
+                success = true;
+                break;
+            }
+            try {
+                Thread.sleep(500L);
+            } catch (InterruptedException e) {
+                LOG.warn("Interrupted when waiting for block recovery for file {}.", path);
+                break;
+            }
+        }
+        return success;
     }
 }
