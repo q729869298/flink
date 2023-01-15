@@ -34,6 +34,7 @@ import org.apache.flink.runtime.io.network.metrics.InputChannelMetrics;
 import org.apache.flink.runtime.io.network.partition.PartitionProducerStateProvider;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionManager;
+import org.apache.flink.runtime.io.network.partition.ResultPartitionType;
 import org.apache.flink.runtime.metrics.MetricNames;
 import org.apache.flink.runtime.shuffle.NettyShuffleDescriptor;
 import org.apache.flink.runtime.shuffle.NettyShuffleUtils;
@@ -75,9 +76,9 @@ public class SingleInputGateFactory {
 
     @Nonnull protected final NetworkBufferPool networkBufferPool;
 
-    protected final int networkBuffersPerChannel;
+    protected final int configuredBuffersPerChannel;
 
-    private final int floatingNetworkBuffersPerGate;
+    private final int configuredFloatingBuffersPerGate;
 
     private final boolean batchShuffleCompressionEnabled;
 
@@ -97,10 +98,10 @@ public class SingleInputGateFactory {
         this.taskExecutorResourceId = taskExecutorResourceId;
         this.partitionRequestInitialBackoff = networkConfig.partitionRequestInitialBackoff();
         this.partitionRequestMaxBackoff = networkConfig.partitionRequestMaxBackoff();
-        this.networkBuffersPerChannel =
+        this.configuredBuffersPerChannel =
                 NettyShuffleUtils.getNetworkBuffersPerInputChannel(
                         networkConfig.networkBuffersPerChannel());
-        this.floatingNetworkBuffersPerGate = networkConfig.floatingNetworkBuffersPerGate();
+        this.configuredFloatingBuffersPerGate = networkConfig.floatingNetworkBuffersPerGate();
         this.batchShuffleCompressionEnabled = networkConfig.isBatchShuffleCompressionEnabled();
         this.compressionCodec = networkConfig.getCompressionCodec();
         this.networkBufferSize = networkConfig.networkBufferSize();
@@ -119,7 +120,13 @@ public class SingleInputGateFactory {
             @Nonnull PartitionProducerStateProvider partitionProducerStateProvider,
             @Nonnull InputChannelMetrics metrics) {
         SupplierWithException<BufferPool, IOException> bufferPoolFactory =
-                createBufferPoolFactory(networkBufferPool, floatingNetworkBuffersPerGate);
+                createBufferPoolFactory(
+                        networkBufferPool,
+                        computeFloatingBuffersPerGate(
+                                igdd.getConsumedPartitionType(),
+                                calculateNumChannels(
+                                        igdd.getShuffleDescriptors().length,
+                                        igdd.getConsumedSubpartitionIndexRange())));
 
         BufferDecompressor bufferDecompressor = null;
         if (igdd.getConsumedPartitionType().supportCompression()
@@ -151,6 +158,19 @@ public class SingleInputGateFactory {
 
         createInputChannels(owningTaskName, igdd, inputGate, subpartitionIndexRange, metrics);
         return inputGate;
+    }
+
+    private int computeFloatingBuffersPerGate(
+            ResultPartitionType partitionType, int numInputChannels) {
+        return partitionType.isBlockingOrBlockingPersistentResultPartition()
+                ? configuredBuffersPerChannel * numInputChannels + configuredFloatingBuffersPerGate
+                : configuredFloatingBuffersPerGate;
+    }
+
+    private int computeBuffersPerChannel(ResultPartitionType partitionType) {
+        return partitionType.isBlockingOrBlockingPersistentResultPartition()
+                ? 0
+                : configuredBuffersPerChannel;
     }
 
     private BufferDebloater maybeCreateBufferDebloater(
@@ -200,6 +220,8 @@ public class SingleInputGateFactory {
                         createInputChannel(
                                 inputGate,
                                 channelIdx,
+                                computeBuffersPerChannel(
+                                        inputGateDeploymentDescriptor.getConsumedPartitionType()),
                                 shuffleDescriptors[i],
                                 subpartitionIndex,
                                 channelStatistics,
@@ -220,6 +242,7 @@ public class SingleInputGateFactory {
     private InputChannel createInputChannel(
             SingleInputGate inputGate,
             int index,
+            int buffersPerChannel,
             ShuffleDescriptor shuffleDescriptor,
             int consumedSubpartitionIndex,
             ChannelStatistics channelStatistics,
@@ -239,13 +262,14 @@ public class SingleInputGateFactory {
                             connectionManager,
                             partitionRequestInitialBackoff,
                             partitionRequestMaxBackoff,
-                            networkBuffersPerChannel,
+                            buffersPerChannel,
                             metrics);
                 },
                 nettyShuffleDescriptor ->
                         createKnownInputChannel(
                                 inputGate,
                                 index,
+                                buffersPerChannel,
                                 nettyShuffleDescriptor,
                                 consumedSubpartitionIndex,
                                 channelStatistics,
@@ -262,6 +286,7 @@ public class SingleInputGateFactory {
     protected InputChannel createKnownInputChannel(
             SingleInputGate inputGate,
             int index,
+            int buffersPerChannel,
             NettyShuffleDescriptor inputChannelDescriptor,
             int consumedSubpartitionIndex,
             ChannelStatistics channelStatistics,
@@ -279,7 +304,7 @@ public class SingleInputGateFactory {
                     taskEventPublisher,
                     partitionRequestInitialBackoff,
                     partitionRequestMaxBackoff,
-                    networkBuffersPerChannel,
+                    buffersPerChannel,
                     metrics);
         } else {
             // Different instances => remote
@@ -293,7 +318,7 @@ public class SingleInputGateFactory {
                     connectionManager,
                     partitionRequestInitialBackoff,
                     partitionRequestMaxBackoff,
-                    networkBuffersPerChannel,
+                    buffersPerChannel,
                     metrics);
         }
     }
