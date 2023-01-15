@@ -973,6 +973,14 @@ public interface TableEnvironment {
     String explainSql(String statement, ExplainDetail... extraDetails);
 
     /**
+     * Returns the field-level lineage of the specified sql task.
+     *
+     * @param statements The statements for which the field-level lineage will be returned.
+     * @return The lineage represented by Json format.
+     */
+    String explainLineage(List<String> statements);
+
+    /**
      * Returns completion hints for the given statement at the given cursor position. The completion
      * happens case insensitively.
      *
