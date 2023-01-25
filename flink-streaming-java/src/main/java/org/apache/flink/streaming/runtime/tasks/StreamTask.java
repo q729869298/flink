@@ -22,6 +22,7 @@ import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.operators.MailboxExecutor;
 import org.apache.flink.api.common.operators.ProcessingTimeService.ProcessingTimeCallback;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.StateChangelogOptions;
 import org.apache.flink.configuration.StateChangelogOptionsInternal;
 import org.apache.flink.configuration.TaskManagerOptions;
 import org.apache.flink.core.fs.AutoCloseableRegistry;
@@ -1476,19 +1477,20 @@ public abstract class StreamTask<OUT, OP extends StreamOperator<OUT>>
     private StateBackend createStateBackend() throws Exception {
         final StateBackend fromApplication =
                 configuration.getStateBackend(getUserCodeClassLoader());
-        final Optional<Boolean> isChangelogEnabledOptional =
-                environment
-                        .getJobConfiguration()
-                        .getOptional(
-                                StateChangelogOptionsInternal.ENABLE_CHANGE_LOG_FOR_APPLICATION);
-        final TernaryBoolean isChangelogStateBackendEnableFromApplication =
-                isChangelogEnabledOptional.isPresent()
-                        ? TernaryBoolean.fromBoolean(isChangelogEnabledOptional.get())
-                        : TernaryBoolean.UNDEFINED;
+
+        Configuration changelogConfigFromJob =
+                StateChangelogOptionsInternal.getConfiguration(
+                        environment.getJobConfiguration(), getClass().getClassLoader());
+
+        final TernaryBoolean isChangelogEnabled =
+                changelogConfigFromJob
+                        .getOptional(StateChangelogOptions.ENABLE_STATE_CHANGE_LOG)
+                        .map(TernaryBoolean::fromBoolean)
+                        .orElse(TernaryBoolean.UNDEFINED);
 
         return StateBackendLoader.fromApplicationOrConfigOrDefault(
                 fromApplication,
-                isChangelogStateBackendEnableFromApplication,
+                isChangelogEnabled,
                 getEnvironment().getTaskManagerInfo().getConfiguration(),
                 getUserCodeClassLoader(),
                 LOG);

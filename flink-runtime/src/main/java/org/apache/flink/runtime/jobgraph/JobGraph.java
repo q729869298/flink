@@ -636,14 +636,16 @@ public class JobGraph implements Serializable {
         }
     }
 
-    public void setChangelogStateBackendEnabled(TernaryBoolean changelogStateBackendEnabled) {
+    public void setChangelogStateBackendEnabled(
+            TernaryBoolean changelogStateBackendEnabled, Configuration changelogConfiguration) {
         if (changelogStateBackendEnabled == null
                 || TernaryBoolean.UNDEFINED.equals(changelogStateBackendEnabled)) {
             return;
         }
-        this.jobConfiguration.setBoolean(
-                StateChangelogOptionsInternal.ENABLE_CHANGE_LOG_FOR_APPLICATION,
-                changelogStateBackendEnabled.getAsBoolean());
+        if (changelogStateBackendEnabled.getOrDefault(false)) {
+            StateChangelogOptionsInternal.putConfiguration(
+                    jobConfiguration, changelogConfiguration);
+        }
     }
 
     public void setJobStatusHooks(List<JobStatusHook> hooks) {

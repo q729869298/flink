@@ -18,20 +18,41 @@
 package org.apache.flink.configuration;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.util.InstantiationUtil;
 
-import static org.apache.flink.configuration.StateChangelogOptions.ENABLE_STATE_CHANGE_LOG;
+import java.io.IOException;
 
 /** StateChangelog options that are used to pass job-level configuration from JM to TM. */
 @Internal
 public class StateChangelogOptionsInternal {
+    private StateChangelogOptionsInternal() {}
 
-    public static final ConfigOption<Boolean> ENABLE_CHANGE_LOG_FOR_APPLICATION =
-            ConfigOptions.key("state.backend.changelog.enabled_for_application")
-                    .booleanType()
-                    .noDefaultValue()
-                    .withDescription(
-                            String.format(
-                                    "Whether to enable job-level changelog."
-                                            + "If this config is not set explicitly, it would use %s's value",
-                                    ENABLE_STATE_CHANGE_LOG.key()));
+    public static final String CHANGE_LOG_CONFIGURATION = "state.backend.changelog.configuration";
+
+    public static void putConfiguration(
+            Configuration target, Configuration changelogConfiguration) {
+        try {
+            InstantiationUtil.writeObjectToConfig(
+                    changelogConfiguration, target, CHANGE_LOG_CONFIGURATION);
+        } catch (IOException e) {
+            throw new IllegalConfigurationException(
+                    "Couldn't serialize changelog configuration", e);
+        }
+    }
+
+    public static Configuration getConfiguration(
+            Configuration jobConfiguration, ClassLoader classLoader)
+            throws IllegalConfigurationException {
+        try {
+            Configuration configuration =
+                    InstantiationUtil.readObjectFromConfig(
+                            jobConfiguration,
+                            StateChangelogOptionsInternal.CHANGE_LOG_CONFIGURATION,
+                            classLoader);
+            return configuration == null ? new Configuration() : configuration;
+        } catch (ClassNotFoundException | IOException e) {
+            throw new IllegalConfigurationException(
+                    "Couldn't deserialize changelog configuration", e);
+        }
+    }
 }
