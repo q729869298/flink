@@ -21,6 +21,7 @@ import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.CoreOptions;
 import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.configuration.MetricOptions;
 import org.apache.flink.configuration.SchedulerExecutionMode;
@@ -137,6 +138,7 @@ public class AdaptiveSchedulerTest extends TestLogger {
 
     private static final int PARALLELISM = 4;
     private static final JobVertex JOB_VERTEX = createNoOpVertex("v1", PARALLELISM);
+    private static final int defaultParallelism = CoreOptions.DEFAULT_PARALLELISM.defaultValue();
 
     @ClassRule
     public static final TestExecutorResource<ScheduledExecutorService> EXECUTOR_RESOURCE =
@@ -1424,7 +1426,8 @@ public class AdaptiveSchedulerTest extends TestLogger {
                 AdaptiveScheduler.computeVertexParallelismStoreForExecution(
                         graph,
                         SchedulerExecutionMode.REACTIVE,
-                        SchedulerBase::getDefaultMaxParallelism);
+                        SchedulerBase::getDefaultMaxParallelism,
+                        defaultParallelism);
 
         for (JobVertex vertex : graph.getVertices()) {
             VertexParallelismInformation info = parallelismStore.getParallelismInfo(vertex.getID());
@@ -1442,7 +1445,7 @@ public class AdaptiveSchedulerTest extends TestLogger {
 
         VertexParallelismStore parallelismStore =
                 AdaptiveScheduler.computeVertexParallelismStoreForExecution(
-                        graph, null, SchedulerBase::getDefaultMaxParallelism);
+                        graph, null, SchedulerBase::getDefaultMaxParallelism, defaultParallelism);
 
         for (JobVertex vertex : graph.getVertices()) {
             VertexParallelismInformation info = parallelismStore.getParallelismInfo(vertex.getID());
