@@ -307,27 +307,27 @@ public class FileSystemTableSink extends AbstractFileSystemTable
 
         if (bulkReaderFormat != null) {
             final BulkFormat<RowData, FileSourceSplit> format =
-                    new FileInfoExtractorBulkFormat(
+                    new FileInfoExtractorBulkFormat<>(
                             bulkReaderFormat.createRuntimeDecoder(
                                     createSourceContext(context), physicalDataType),
                             producedDataType,
                             context.createTypeInformation(producedDataType),
                             Collections.emptyMap(),
                             partitionKeys,
-                            defaultPartName);
+                            PartitionFieldExtractor.forFileSystem(defaultPartName));
             return Optional.of(CompactBulkReader.factory(format));
         } else if (deserializationFormat != null) {
             final DeserializationSchema<RowData> decoder =
                     deserializationFormat.createRuntimeDecoder(
                             createSourceContext(context), physicalDataType);
             final BulkFormat<RowData, FileSourceSplit> format =
-                    new FileInfoExtractorBulkFormat(
+                    new FileInfoExtractorBulkFormat<>(
                             new DeserializationSchemaAdapter(decoder),
                             producedDataType,
                             context.createTypeInformation(producedDataType),
                             Collections.emptyMap(),
                             partitionKeys,
-                            defaultPartName);
+                            PartitionFieldExtractor.forFileSystem(defaultPartName));
             return Optional.of(CompactBulkReader.factory(format));
         }
         return Optional.empty();

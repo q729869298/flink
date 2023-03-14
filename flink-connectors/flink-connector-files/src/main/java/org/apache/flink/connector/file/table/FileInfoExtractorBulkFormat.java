@@ -23,95 +23,53 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.file.src.FileSourceSplit;
 import org.apache.flink.connector.file.src.reader.BulkFormat;
 import org.apache.flink.connector.file.src.util.RecordMapperWrapperRecordIterator;
-import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
-import org.apache.flink.table.utils.PartitionPathUtils;
 
 import java.io.IOException;
-import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * This {@link BulkFormat} is a wrapper that attaches file information columns to the output
  * records.
  */
-class FileInfoExtractorBulkFormat implements BulkFormat<RowData, FileSourceSplit> {
+public class FileInfoExtractorBulkFormat<SplitT extends FileSourceSplit>
+        implements BulkFormat<RowData, SplitT> {
 
-    private final BulkFormat<RowData, FileSourceSplit> wrapped;
-    private final TypeInformation<RowData> producedType;
-
-    private final List<FileSystemTableSource.FileInfoAccessor> metadataColumnsFunctions;
-    private final List<Map.Entry<String, DataType>> partitionColumnTypes;
-    private final int[] extendedRowIndexMapping;
-
-    private final String defaultPartName;
+    private final BulkFormat<RowData, SplitT> wrapped;
+    private final PartitionFieldExtractor<SplitT> partitionFieldExtractor;
+    private final FileInfoExtractor fileInfoExtractor;
+    public final List<FileSystemTableSource.FileInfoAccessor> metadataColumnsFunctions;
+    public final TypeInformation<RowData> producedType;
 
     public FileInfoExtractorBulkFormat(
-            BulkFormat<RowData, FileSourceSplit> wrapped,
+            BulkFormat<RowData, SplitT> wrapped,
             DataType producedDataType,
             TypeInformation<RowData> producedTypeInformation,
             Map<String, FileSystemTableSource.FileInfoAccessor> metadataColumns,
             List<String> partitionColumns,
-            String defaultPartName) {
-        this.wrapped = wrapped;
-        this.producedType = producedTypeInformation;
-        this.defaultPartName = defaultPartName;
-
-        // Compute index mapping for the extended row and the functions to compute metadata
-        List<DataTypes.Field> producedRowField = DataType.getFields(producedDataType);
-        List<String> producedRowFieldNames =
-                producedRowField.stream()
-                        .map(DataTypes.Field::getName)
-                        .collect(Collectors.toList());
-        List<String> mutableRowFieldNames =
-                producedRowFieldNames.stream()
-                        .filter(
-                                key ->
-                                        !metadataColumns.containsKey(key)
-                                                && !partitionColumns.contains(key))
-                        .collect(Collectors.toList());
+            PartitionFieldExtractor<SplitT> partitionFieldExtractor) {
         List<String> metadataFieldNames = new ArrayList<>(metadataColumns.keySet());
-
-        List<String> fixedRowFieldNames =
-                Stream.concat(metadataFieldNames.stream(), partitionColumns.stream())
-                        .collect(Collectors.toList());
-
-        this.partitionColumnTypes =
-                partitionColumns.stream()
-                        .map(
-                                fieldName ->
-                                        new SimpleImmutableEntry<>(
-                                                fieldName,
-                                                producedRowField
-                                                        .get(
-                                                                producedRowFieldNames.indexOf(
-                                                                        fieldName))
-                                                        .getDataType()))
-                        .collect(Collectors.toList());
-
-        this.extendedRowIndexMapping =
-                EnrichedRowData.computeIndexMapping(
-                        producedRowFieldNames, mutableRowFieldNames, fixedRowFieldNames);
+        this.wrapped = wrapped;
+        this.partitionFieldExtractor = partitionFieldExtractor;
+        this.producedType = producedTypeInformation;
+        this.fileInfoExtractor =
+                new FileInfoExtractor(producedDataType, metadataFieldNames, partitionColumns);
         this.metadataColumnsFunctions =
                 metadataFieldNames.stream().map(metadataColumns::get).collect(Collectors.toList());
     }
 
     @Override
-    public Reader<RowData> createReader(Configuration config, FileSourceSplit split)
-            throws IOException {
+    public Reader<RowData> createReader(Configuration config, SplitT split) throws IOException {
         return wrapReader(wrapped.createReader(config, split), split);
     }
 
     @Override
-    public Reader<RowData> restoreReader(Configuration config, FileSourceSplit split)
-            throws IOException {
+    public Reader<RowData> restoreReader(Configuration config, SplitT split) throws IOException {
         return wrapReader(wrapped.restoreReader(config, split), split);
     }
 
@@ -125,41 +83,38 @@ class FileInfoExtractorBulkFormat implements BulkFormat<RowData, FileSourceSplit
         return producedType;
     }
 
-    private Reader<RowData> wrapReader(Reader<RowData> superReader, FileSourceSplit split) {
+    private Reader<RowData> wrapReader(Reader<RowData> superReader, SplitT split) {
         // Fill the metadata + partition columns row
+        List<FileInfoExtractor.PartitionColumn> partitionColumns =
+                fileInfoExtractor.getPartitionColumns();
         final GenericRowData fileInfoRowData =
-                new GenericRowData(metadataColumnsFunctions.size() + partitionColumnTypes.size());
+                new GenericRowData(metadataColumnsFunctions.size() + partitionColumns.size());
         int fileInfoRowIndex = 0;
         for (; fileInfoRowIndex < metadataColumnsFunctions.size(); fileInfoRowIndex++) {
             fileInfoRowData.setField(
                     fileInfoRowIndex,
                     metadataColumnsFunctions.get(fileInfoRowIndex).getValue(split));
         }
-        if (!partitionColumnTypes.isEmpty()) {
-            final LinkedHashMap<String, String> partitionSpec =
-                    PartitionPathUtils.extractPartitionSpecFromPath(split.path());
+        if (!partitionColumns.isEmpty()) {
             for (int partitionFieldIndex = 0;
                     fileInfoRowIndex < fileInfoRowData.getArity();
                     fileInfoRowIndex++, partitionFieldIndex++) {
-                final String fieldName = partitionColumnTypes.get(partitionFieldIndex).getKey();
-                final DataType fieldType = partitionColumnTypes.get(partitionFieldIndex).getValue();
-                if (!partitionSpec.containsKey(fieldName)) {
-                    throw new RuntimeException(
-                            "Cannot find the partition value from path for partition: "
-                                    + fieldName);
-                }
+                FileInfoExtractor.PartitionColumn partition =
+                        partitionColumns.get(partitionFieldIndex);
 
-                String valueStr = partitionSpec.get(fieldName);
-                valueStr = valueStr.equals(defaultPartName) ? null : valueStr;
+                Object partitionValue =
+                        partitionFieldExtractor.extract(
+                                split, partition.fieldName, partition.dataType.getLogicalType());
+
                 fileInfoRowData.setField(
-                        fileInfoRowIndex,
-                        PartitionPathUtils.convertStringToInternalValue(valueStr, fieldType));
+                        fileInfoRowIndex, partition.converter.toInternal(partitionValue));
             }
         }
 
         // This row is going to be reused for every record
         final EnrichedRowData producedRowData =
-                new EnrichedRowData(fileInfoRowData, this.extendedRowIndexMapping);
+                new EnrichedRowData(
+                        fileInfoRowData, fileInfoExtractor.getExtendedRowIndexMapping());
 
         return RecordMapperWrapperRecordIterator.wrapReader(
                 superReader,
