@@ -36,8 +36,8 @@ import org.apache.flink.runtime.scheduler.SchedulerBase;
 import org.apache.flink.runtime.taskexecutor.TaskExecutorThreadInfoGateway;
 import org.apache.flink.runtime.testutils.DirectScheduledExecutorService;
 import org.apache.flink.runtime.util.JvmUtils;
+import org.apache.flink.runtime.webmonitor.retriever.AddressBasedGatewayRetriever;
 import org.apache.flink.testutils.TestingUtils;
-import org.apache.flink.util.TestLogger;
 
 import org.apache.flink.shaded.guava30.com.google.common.cache.Cache;
 import org.apache.flink.shaded.guava30.com.google.common.cache.CacheBuilder;
@@ -73,10 +73,10 @@ import java.util.stream.Collectors;
 
 import static org.apache.flink.runtime.scheduler.SchedulerTestingUtils.createScheduler;
 import static org.apache.flink.util.Preconditions.checkState;
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /** Tests for the {@link JobVertexThreadInfoTracker}. */
-public class JobVertexThreadInfoTrackerTest extends TestLogger {
+class JobVertexThreadInfoTrackerTest {
 
     private static final int REQUEST_ID = 0;
     private static final ExecutionJobVertex EXECUTION_JOB_VERTEX = createExecutionJobVertex();
@@ -104,7 +104,7 @@ public class JobVertexThreadInfoTrackerTest extends TestLogger {
     private static ScheduledExecutorService executor;
 
     @BeforeAll
-    public static void setUp() {
+    static void setUp() {
         // Time gap determines endTime of stats, which controls if the "refresh" is triggered:
         // now >= stats.getEndTime() + statsRefreshInterval
         // Using a small gap to be able to test cache updates without much delay.
@@ -113,7 +113,7 @@ public class JobVertexThreadInfoTrackerTest extends TestLogger {
     }
 
     @AfterAll
-    public static void tearDown() {
+    static void tearDown() {
         if (executor != null) {
             executor.shutdownNow();
         }
@@ -121,13 +121,13 @@ public class JobVertexThreadInfoTrackerTest extends TestLogger {
 
     /** Tests successful thread info stats request. */
     @Test
-    public void testGetThreadInfoStats() throws Exception {
+    void testGetThreadInfoStats() throws Exception {
         doInitialRequestAndVerifyResult(createThreadInfoTracker());
     }
 
     /** Tests that cached result is reused within refresh interval. */
     @Test
-    public void testCachedStatsNotUpdatedWithinRefreshInterval() throws Exception {
+    void testCachedStatsNotUpdatedWithinRefreshInterval() throws Exception {
         final VertexThreadInfoStats unusedThreadInfoStats = createThreadInfoStats(1, TIME_GAP);
 
         final JobVertexThreadInfoTracker<VertexThreadInfoStats> tracker =
@@ -145,7 +145,7 @@ public class JobVertexThreadInfoTrackerTest extends TestLogger {
 
     /** Tests that cached result is NOT reused after refresh interval. */
     @Test
-    public void testCachedStatsUpdatedAfterRefreshInterval() throws Exception {
+    void testCachedStatsUpdatedAfterRefreshInterval() throws Exception {
         final Duration shortRefreshInterval = Duration.ofMillis(1);
 
         // first entry is in the past, so refresh is triggered immediately upon fetching it
@@ -189,7 +189,7 @@ public class JobVertexThreadInfoTrackerTest extends TestLogger {
 
     /** Tests that cached results are removed within the cleanup interval. */
     @Test
-    public void testCachedStatsCleanedAfterCleanupInterval() throws Exception {
+    void testCachedStatsCleanedAfterCleanupInterval() throws Exception {
         final Duration shortCleanUpInterval = Duration.ofMillis(1);
 
         // register a CountDownLatch with the cache so we can await expiry of the entry
@@ -213,7 +213,7 @@ public class JobVertexThreadInfoTrackerTest extends TestLogger {
 
     /** Tests that cached results are NOT removed within the cleanup interval. */
     @Test
-    public void testCachedStatsNotCleanedWithinCleanupInterval() throws Exception {
+    void testCachedStatsNotCleanedWithinCleanupInterval() throws Exception {
         final JobVertexThreadInfoTracker<VertexThreadInfoStats> tracker = createThreadInfoTracker();
 
         doInitialRequestAndVerifyResult(tracker);
@@ -226,7 +226,7 @@ public class JobVertexThreadInfoTrackerTest extends TestLogger {
 
     /** Tests that cached results are not served after the shutdown. */
     @Test
-    public void testShutDown() throws Exception {
+    void testShutDown() throws Exception {
         final JobVertexThreadInfoTracker<VertexThreadInfoStats> tracker = createThreadInfoTracker();
         doInitialRequestAndVerifyResult(tracker);
 
@@ -295,6 +295,7 @@ public class JobVertexThreadInfoTrackerTest extends TestLogger {
 
         return JobVertexThreadInfoTrackerBuilder.newBuilder(
                         JobVertexThreadInfoTrackerTest::createMockResourceManagerGateway,
+                        new TestingTaskExecutorThreadInfoGatewayRetriever(new HashMap<>()),
                         Function.identity(),
                         executor,
                         TestingUtils.TIMEOUT)
@@ -354,12 +355,12 @@ public class JobVertexThreadInfoTrackerTest extends TestLogger {
 
     private static CompletableFuture<ResourceManagerGateway> createMockResourceManagerGateway() {
         // ignored in TestingThreadInfoRequestCoordinator
-        Function<ResourceID, CompletableFuture<TaskExecutorThreadInfoGateway>> function =
+        Function<ResourceID, CompletableFuture<String>> function =
                 (resourceID) -> CompletableFuture.completedFuture(null);
 
         TestingResourceManagerGateway testingResourceManagerGateway =
                 new TestingResourceManagerGateway();
-        testingResourceManagerGateway.setRequestTaskExecutorGatewayFunction(function);
+        testingResourceManagerGateway.setRequestTaskExecutorGatewayAddressFunction(function);
         return CompletableFuture.completedFuture(testingResourceManagerGateway);
     }
 
@@ -382,10 +383,10 @@ public class JobVertexThreadInfoTrackerTest extends TestLogger {
 
         @Override
         public CompletableFuture<VertexThreadInfoStats> triggerThreadInfoRequest(
-                Map<
-                                ImmutableSet<ExecutionAttemptID>,
-                                CompletableFuture<TaskExecutorThreadInfoGateway>>
+                Map<ImmutableSet<ExecutionAttemptID>, CompletableFuture<String>>
                         executionsWithGateways,
+                AddressBasedGatewayRetriever<TaskExecutorThreadInfoGateway>
+                        taskExecutorThreadInfoGatewayRetriever,
                 int ignored2,
                 Duration ignored3,
                 int ignored4) {

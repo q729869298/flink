@@ -78,7 +78,6 @@ import org.apache.flink.runtime.taskexecutor.TaskExecutorGateway;
 import org.apache.flink.runtime.taskexecutor.TaskExecutorHeartbeatPayload;
 import org.apache.flink.runtime.taskexecutor.TaskExecutorRegistrationRejection;
 import org.apache.flink.runtime.taskexecutor.TaskExecutorRegistrationSuccess;
-import org.apache.flink.runtime.taskexecutor.TaskExecutorThreadInfoGateway;
 import org.apache.flink.runtime.taskexecutor.partition.ClusterPartitionReport;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FlinkException;
@@ -134,7 +133,7 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
     /** Service to retrieve the job leader ids. */
     private final JobLeaderIdService jobLeaderIdService;
 
-    /** All currently registered TaskExecutors with there framework specific worker information. */
+    /** All currently registered TaskExecutors with their framework specific worker information. */
     private final Map<ResourceID, WorkerRegistration<WorkerType>> taskExecutors;
 
     /** Ongoing registration of TaskExecutors per resource ID. */
@@ -888,8 +887,8 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
     }
 
     @Override
-    @Local // Bug; see FLINK-27954
-    public CompletableFuture<TaskExecutorThreadInfoGateway> requestTaskExecutorThreadInfoGateway(
+    @Local
+    public CompletableFuture<String> requestTaskExecutorThreadInfoGatewayAddress(
             ResourceID taskManagerId, Time timeout) {
 
         final WorkerRegistration<WorkerType> taskExecutor = taskExecutors.get(taskManagerId);
@@ -898,7 +897,7 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
             return FutureUtils.completedExceptionally(
                     new UnknownTaskExecutorException(taskManagerId));
         } else {
-            return CompletableFuture.completedFuture(taskExecutor.getTaskExecutorGateway());
+            return CompletableFuture.completedFuture(taskExecutor.getTaskExecutorAddress());
         }
     }
 
@@ -1028,7 +1027,8 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
                             taskExecutorRegistration.getMemoryConfiguration(),
                             taskExecutorRegistration.getTotalResourceProfile(),
                             taskExecutorRegistration.getDefaultSlotResourceProfile(),
-                            taskExecutorRegistration.getNodeId());
+                            taskExecutorRegistration.getNodeId(),
+                            taskExecutorRegistration.getTaskExecutorAddress());
 
             log.info(
                     "Registering TaskManager with ResourceID {} ({}) at ResourceManager",
@@ -1367,27 +1367,18 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
 
         @Override
         public void jobLeaderLostLeadership(final JobID jobId, final JobMasterId oldJobMasterId) {
-            runAsync(
-                    new Runnable() {
-                        @Override
-                        public void run() {
-                            ResourceManager.this.jobLeaderLostLeadership(jobId, oldJobMasterId);
-                        }
-                    });
+            runAsync(() -> ResourceManager.this.jobLeaderLostLeadership(jobId, oldJobMasterId));
         }
 
         @Override
         public void notifyJobTimeout(final JobID jobId, final UUID timeoutId) {
             runAsync(
-                    new Runnable() {
-                        @Override
-                        public void run() {
-                            if (jobLeaderIdService.isValidTimeout(jobId, timeoutId)) {
-                                removeJob(
-                                        jobId,
-                                        new Exception(
-                                                "Job " + jobId + "was removed because of timeout"));
-                            }
+                    () -> {
+                        if (jobLeaderIdService.isValidTimeout(jobId, timeoutId)) {
+                            removeJob(
+                                    jobId,
+                                    new Exception(
+                                            "Job " + jobId + "was removed because of timeout"));
                         }
                     });
         }
