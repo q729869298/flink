@@ -58,7 +58,6 @@ import org.apache.flink.sql.parser.ddl.SqlStopJob;
 import org.apache.flink.sql.parser.ddl.SqlTableOption;
 import org.apache.flink.sql.parser.ddl.SqlUseCatalog;
 import org.apache.flink.sql.parser.ddl.SqlUseDatabase;
-import org.apache.flink.sql.parser.ddl.SqlUseModules;
 import org.apache.flink.sql.parser.ddl.resource.SqlResource;
 import org.apache.flink.sql.parser.ddl.resource.SqlResourceType;
 import org.apache.flink.sql.parser.dml.RichSqlInsert;
@@ -68,7 +67,6 @@ import org.apache.flink.sql.parser.dml.SqlEndStatementSet;
 import org.apache.flink.sql.parser.dml.SqlExecute;
 import org.apache.flink.sql.parser.dml.SqlExecutePlan;
 import org.apache.flink.sql.parser.dml.SqlStatementSet;
-import org.apache.flink.sql.parser.dql.SqlLoadModule;
 import org.apache.flink.sql.parser.dql.SqlRichDescribeTable;
 import org.apache.flink.sql.parser.dql.SqlRichExplain;
 import org.apache.flink.sql.parser.dql.SqlShowCatalogs;
@@ -81,11 +79,9 @@ import org.apache.flink.sql.parser.dql.SqlShowDatabases;
 import org.apache.flink.sql.parser.dql.SqlShowFunctions;
 import org.apache.flink.sql.parser.dql.SqlShowJars;
 import org.apache.flink.sql.parser.dql.SqlShowJobs;
-import org.apache.flink.sql.parser.dql.SqlShowModules;
 import org.apache.flink.sql.parser.dql.SqlShowPartitions;
 import org.apache.flink.sql.parser.dql.SqlShowTables;
 import org.apache.flink.sql.parser.dql.SqlShowViews;
-import org.apache.flink.sql.parser.dql.SqlUnloadModule;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.api.TableException;
@@ -131,7 +127,6 @@ import org.apache.flink.table.operations.DeleteFromFilterOperation;
 import org.apache.flink.table.operations.DescribeTableOperation;
 import org.apache.flink.table.operations.EndStatementSetOperation;
 import org.apache.flink.table.operations.ExplainOperation;
-import org.apache.flink.table.operations.LoadModuleOperation;
 import org.apache.flink.table.operations.ModifyOperation;
 import org.apache.flink.table.operations.NopOperation;
 import org.apache.flink.table.operations.Operation;
@@ -145,17 +140,14 @@ import org.apache.flink.table.operations.ShowCurrentDatabaseOperation;
 import org.apache.flink.table.operations.ShowDatabasesOperation;
 import org.apache.flink.table.operations.ShowFunctionsOperation;
 import org.apache.flink.table.operations.ShowFunctionsOperation.FunctionScope;
-import org.apache.flink.table.operations.ShowModulesOperation;
 import org.apache.flink.table.operations.ShowPartitionsOperation;
 import org.apache.flink.table.operations.ShowTablesOperation;
 import org.apache.flink.table.operations.ShowViewsOperation;
 import org.apache.flink.table.operations.SinkModifyOperation;
 import org.apache.flink.table.operations.SourceQueryOperation;
 import org.apache.flink.table.operations.StatementSetOperation;
-import org.apache.flink.table.operations.UnloadModuleOperation;
 import org.apache.flink.table.operations.UseCatalogOperation;
 import org.apache.flink.table.operations.UseDatabaseOperation;
-import org.apache.flink.table.operations.UseModulesOperation;
 import org.apache.flink.table.operations.command.AddJarOperation;
 import org.apache.flink.table.operations.command.ExecutePlanOperation;
 import org.apache.flink.table.operations.command.RemoveJarOperation;
@@ -301,21 +293,13 @@ public class SqlNodeToOperationConversion {
                 new SqlNodeToOperationConversion(flinkPlanner, catalogManager);
         if (validated instanceof SqlDropCatalog) {
             return Optional.of(converter.convertDropCatalog((SqlDropCatalog) validated));
-        } else if (validated instanceof SqlLoadModule) {
-            return Optional.of(converter.convertLoadModule((SqlLoadModule) validated));
         } else if (validated instanceof SqlShowCatalogs) {
             return Optional.of(converter.convertShowCatalogs((SqlShowCatalogs) validated));
         } else if (validated instanceof SqlShowCurrentCatalog) {
             return Optional.of(
                     converter.convertShowCurrentCatalog((SqlShowCurrentCatalog) validated));
-        } else if (validated instanceof SqlShowModules) {
-            return Optional.of(converter.convertShowModules((SqlShowModules) validated));
-        } else if (validated instanceof SqlUnloadModule) {
-            return Optional.of(converter.convertUnloadModule((SqlUnloadModule) validated));
         } else if (validated instanceof SqlUseCatalog) {
             return Optional.of(converter.convertUseCatalog((SqlUseCatalog) validated));
-        } else if (validated instanceof SqlUseModules) {
-            return Optional.of(converter.convertUseModules((SqlUseModules) validated));
         } else if (validated instanceof SqlCreateDatabase) {
             return Optional.of(converter.convertCreateDatabase((SqlCreateDatabase) validated));
         } else if (validated instanceof SqlDropDatabase) {
@@ -1230,17 +1214,6 @@ public class SqlNodeToOperationConversion {
         return new DescribeTableOperation(identifier, sqlRichDescribeTable.isExtended());
     }
 
-    /** Convert LOAD MODULE statement. */
-    private Operation convertLoadModule(SqlLoadModule sqlLoadModule) {
-        String moduleName = sqlLoadModule.moduleName();
-        Map<String, String> properties = new HashMap<>();
-        for (SqlNode node : sqlLoadModule.getPropertyList().getList()) {
-            SqlTableOption option = (SqlTableOption) node;
-            properties.put(option.getKeyString(), option.getValueString());
-        }
-        return new LoadModuleOperation(moduleName, properties);
-    }
-
     private Operation convertAddJar(SqlAddJar sqlAddJar) {
         return new AddJarOperation(sqlAddJar.getPath());
     }
@@ -1251,22 +1224,6 @@ public class SqlNodeToOperationConversion {
 
     private Operation convertShowJars(SqlShowJars sqlShowJars) {
         return new ShowJarsOperation();
-    }
-
-    /** Convert UNLOAD MODULE statement. */
-    private Operation convertUnloadModule(SqlUnloadModule sqlUnloadModule) {
-        String moduleName = sqlUnloadModule.moduleName();
-        return new UnloadModuleOperation(moduleName);
-    }
-
-    /** Convert USE MODULES statement. */
-    private Operation convertUseModules(SqlUseModules sqlUseModules) {
-        return new UseModulesOperation(sqlUseModules.moduleNames());
-    }
-
-    /** Convert SHOW [FULL] MODULES statement. */
-    private Operation convertShowModules(SqlShowModules sqlShowModules) {
-        return new ShowModulesOperation(sqlShowModules.requireFull());
     }
 
     /** Convert SET ['key' = 'value']. */
