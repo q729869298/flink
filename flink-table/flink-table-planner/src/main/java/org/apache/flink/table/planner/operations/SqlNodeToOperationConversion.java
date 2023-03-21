@@ -39,13 +39,11 @@ import org.apache.flink.sql.parser.ddl.SqlAlterViewProperties;
 import org.apache.flink.sql.parser.ddl.SqlAlterViewRename;
 import org.apache.flink.sql.parser.ddl.SqlAnalyzeTable;
 import org.apache.flink.sql.parser.ddl.SqlCompilePlan;
-import org.apache.flink.sql.parser.ddl.SqlCreateCatalog;
 import org.apache.flink.sql.parser.ddl.SqlCreateDatabase;
 import org.apache.flink.sql.parser.ddl.SqlCreateFunction;
 import org.apache.flink.sql.parser.ddl.SqlCreateTable;
 import org.apache.flink.sql.parser.ddl.SqlCreateTableAs;
 import org.apache.flink.sql.parser.ddl.SqlCreateView;
-import org.apache.flink.sql.parser.ddl.SqlDropCatalog;
 import org.apache.flink.sql.parser.ddl.SqlDropDatabase;
 import org.apache.flink.sql.parser.ddl.SqlDropFunction;
 import org.apache.flink.sql.parser.ddl.SqlDropPartitions;
@@ -56,7 +54,6 @@ import org.apache.flink.sql.parser.ddl.SqlReset;
 import org.apache.flink.sql.parser.ddl.SqlSet;
 import org.apache.flink.sql.parser.ddl.SqlStopJob;
 import org.apache.flink.sql.parser.ddl.SqlTableOption;
-import org.apache.flink.sql.parser.ddl.SqlUseCatalog;
 import org.apache.flink.sql.parser.ddl.SqlUseDatabase;
 import org.apache.flink.sql.parser.ddl.SqlUseModules;
 import org.apache.flink.sql.parser.ddl.resource.SqlResource;
@@ -71,11 +68,9 @@ import org.apache.flink.sql.parser.dml.SqlStatementSet;
 import org.apache.flink.sql.parser.dql.SqlLoadModule;
 import org.apache.flink.sql.parser.dql.SqlRichDescribeTable;
 import org.apache.flink.sql.parser.dql.SqlRichExplain;
-import org.apache.flink.sql.parser.dql.SqlShowCatalogs;
 import org.apache.flink.sql.parser.dql.SqlShowColumns;
 import org.apache.flink.sql.parser.dql.SqlShowCreateTable;
 import org.apache.flink.sql.parser.dql.SqlShowCreateView;
-import org.apache.flink.sql.parser.dql.SqlShowCurrentCatalog;
 import org.apache.flink.sql.parser.dql.SqlShowCurrentDatabase;
 import org.apache.flink.sql.parser.dql.SqlShowDatabases;
 import org.apache.flink.sql.parser.dql.SqlShowFunctions;
@@ -136,11 +131,9 @@ import org.apache.flink.table.operations.ModifyOperation;
 import org.apache.flink.table.operations.NopOperation;
 import org.apache.flink.table.operations.Operation;
 import org.apache.flink.table.operations.QueryOperation;
-import org.apache.flink.table.operations.ShowCatalogsOperation;
 import org.apache.flink.table.operations.ShowColumnsOperation;
 import org.apache.flink.table.operations.ShowCreateTableOperation;
 import org.apache.flink.table.operations.ShowCreateViewOperation;
-import org.apache.flink.table.operations.ShowCurrentCatalogOperation;
 import org.apache.flink.table.operations.ShowCurrentDatabaseOperation;
 import org.apache.flink.table.operations.ShowDatabasesOperation;
 import org.apache.flink.table.operations.ShowFunctionsOperation;
@@ -153,7 +146,6 @@ import org.apache.flink.table.operations.SinkModifyOperation;
 import org.apache.flink.table.operations.SourceQueryOperation;
 import org.apache.flink.table.operations.StatementSetOperation;
 import org.apache.flink.table.operations.UnloadModuleOperation;
-import org.apache.flink.table.operations.UseCatalogOperation;
 import org.apache.flink.table.operations.UseDatabaseOperation;
 import org.apache.flink.table.operations.UseModulesOperation;
 import org.apache.flink.table.operations.command.AddJarOperation;
@@ -176,12 +168,10 @@ import org.apache.flink.table.operations.ddl.AlterViewRenameOperation;
 import org.apache.flink.table.operations.ddl.AnalyzeTableOperation;
 import org.apache.flink.table.operations.ddl.CompilePlanOperation;
 import org.apache.flink.table.operations.ddl.CreateCatalogFunctionOperation;
-import org.apache.flink.table.operations.ddl.CreateCatalogOperation;
 import org.apache.flink.table.operations.ddl.CreateDatabaseOperation;
 import org.apache.flink.table.operations.ddl.CreateTempSystemFunctionOperation;
 import org.apache.flink.table.operations.ddl.CreateViewOperation;
 import org.apache.flink.table.operations.ddl.DropCatalogFunctionOperation;
-import org.apache.flink.table.operations.ddl.DropCatalogOperation;
 import org.apache.flink.table.operations.ddl.DropDatabaseOperation;
 import org.apache.flink.table.operations.ddl.DropPartitionsOperation;
 import org.apache.flink.table.operations.ddl.DropTableOperation;
@@ -299,21 +289,12 @@ public class SqlNodeToOperationConversion {
         // TODO: all the below conversion logic should be migrated to SqlNodeConverters
         SqlNodeToOperationConversion converter =
                 new SqlNodeToOperationConversion(flinkPlanner, catalogManager);
-        if (validated instanceof SqlDropCatalog) {
-            return Optional.of(converter.convertDropCatalog((SqlDropCatalog) validated));
-        } else if (validated instanceof SqlLoadModule) {
+        if (validated instanceof SqlLoadModule) {
             return Optional.of(converter.convertLoadModule((SqlLoadModule) validated));
-        } else if (validated instanceof SqlShowCatalogs) {
-            return Optional.of(converter.convertShowCatalogs((SqlShowCatalogs) validated));
-        } else if (validated instanceof SqlShowCurrentCatalog) {
-            return Optional.of(
-                    converter.convertShowCurrentCatalog((SqlShowCurrentCatalog) validated));
         } else if (validated instanceof SqlShowModules) {
             return Optional.of(converter.convertShowModules((SqlShowModules) validated));
         } else if (validated instanceof SqlUnloadModule) {
             return Optional.of(converter.convertUnloadModule((SqlUnloadModule) validated));
-        } else if (validated instanceof SqlUseCatalog) {
-            return Optional.of(converter.convertUseCatalog((SqlUseCatalog) validated));
         } else if (validated instanceof SqlUseModules) {
             return Optional.of(converter.convertUseModules((SqlUseModules) validated));
         } else if (validated instanceof SqlCreateDatabase) {
@@ -878,35 +859,6 @@ public class SqlNodeToOperationConversion {
         return new EndStatementSetOperation();
     }
 
-    /** Convert use catalog statement. */
-    private Operation convertUseCatalog(SqlUseCatalog useCatalog) {
-        return new UseCatalogOperation(useCatalog.catalogName());
-    }
-
-    /** Convert CREATE CATALOG statement. */
-    private Operation convertCreateCatalog(SqlCreateCatalog sqlCreateCatalog) {
-        String catalogName = sqlCreateCatalog.catalogName();
-
-        // set with properties
-        Map<String, String> properties = new HashMap<>();
-        sqlCreateCatalog
-                .getPropertyList()
-                .getList()
-                .forEach(
-                        p ->
-                                properties.put(
-                                        ((SqlTableOption) p).getKeyString(),
-                                        ((SqlTableOption) p).getValueString()));
-
-        return new CreateCatalogOperation(catalogName, properties);
-    }
-
-    /** Convert DROP CATALOG statement. */
-    private Operation convertDropCatalog(SqlDropCatalog sqlDropCatalog) {
-        String catalogName = sqlDropCatalog.catalogName();
-        return new DropCatalogOperation(catalogName, sqlDropCatalog.getIfExists());
-    }
-
     /** Convert use database statement. */
     private Operation convertUseDatabase(SqlUseDatabase useDatabase) {
         String[] fullDatabaseName = useDatabase.fullDatabaseName();
@@ -1012,16 +964,6 @@ public class SqlNodeToOperationConversion {
         CatalogDatabase catalogDatabase =
                 new CatalogDatabaseImpl(properties, originCatalogDatabase.getComment());
         return new AlterDatabaseOperation(catalogName, databaseName, catalogDatabase);
-    }
-
-    /** Convert SHOW CATALOGS statement. */
-    private Operation convertShowCatalogs(SqlShowCatalogs sqlShowCatalogs) {
-        return new ShowCatalogsOperation();
-    }
-
-    /** Convert SHOW CURRENT CATALOG statement. */
-    private Operation convertShowCurrentCatalog(SqlShowCurrentCatalog sqlShowCurrentCatalog) {
-        return new ShowCurrentCatalogOperation();
     }
 
     /** Convert SHOW DATABASES statement. */
