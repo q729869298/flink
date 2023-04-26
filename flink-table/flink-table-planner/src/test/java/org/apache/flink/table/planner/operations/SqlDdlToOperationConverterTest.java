@@ -26,7 +26,6 @@ import org.apache.flink.table.api.SqlDialect;
 import org.apache.flink.table.api.TableColumn;
 import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.api.ValidationException;
-import org.apache.flink.table.api.constraints.UniqueConstraint;
 import org.apache.flink.table.catalog.Catalog;
 import org.apache.flink.table.catalog.CatalogDatabaseImpl;
 import org.apache.flink.table.catalog.CatalogFunction;
@@ -40,6 +39,7 @@ import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.catalog.ResolvedCatalogTable;
 import org.apache.flink.table.catalog.TableChange;
+import org.apache.flink.table.catalog.UniqueConstraint;
 import org.apache.flink.table.catalog.exceptions.DatabaseNotExistException;
 import org.apache.flink.table.catalog.exceptions.FunctionAlreadyExistException;
 import org.apache.flink.table.expressions.SqlCallExpression;
@@ -251,7 +251,7 @@ public class SqlDdlToOperationConverterTest extends SqlNodeToOperationConversion
                                 .getPrimaryKey()
                                 .map(UniqueConstraint::asSummaryString)
                                 .orElse("fakeVal"))
-                .isEqualTo("CONSTRAINT ct1 PRIMARY KEY (a, b)");
+                .isEqualTo("CONSTRAINT `ct1` PRIMARY KEY (`a`, `b`) NOT ENFORCED");
         assertThat(tableSchema.getFieldNames()).isEqualTo(new String[] {"a", "b", "c", "d"});
         assertThat(tableSchema.getFieldDataTypes())
                 .isEqualTo(

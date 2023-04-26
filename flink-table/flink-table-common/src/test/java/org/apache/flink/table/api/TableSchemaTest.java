@@ -20,7 +20,7 @@ package org.apache.flink.table.api;
 
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.tuple.Tuple3;
-import org.apache.flink.table.api.constraints.UniqueConstraint;
+import org.apache.flink.table.catalog.UniqueConstraint;
 import org.apache.flink.table.types.DataType;
 
 import org.junit.jupiter.api.Test;
@@ -328,7 +328,7 @@ class TableSchemaTest {
                                 + " |-- f0: BIGINT NOT NULL\n"
                                 + " |-- f1: STRING NOT NULL\n"
                                 + " |-- f2: DOUBLE NOT NULL\n"
-                                + " |-- CONSTRAINT pk PRIMARY KEY (f0, f2)\n");
+                                + " |-- CONSTRAINT `pk` PRIMARY KEY (`f0`, `f2`) NOT ENFORCED\n");
     }
 
     @Test
