@@ -51,8 +51,8 @@ public class HiveTableSourceStatisticsReportTest extends StatisticsReportTestBas
     private static final String sourceTable = "sourceTable";
 
     @BeforeEach
-    public void setup(@TempDir File file) throws Exception {
-        super.setup(file);
+    public void before(@TempDir File file) throws Exception {
+        super.before(file);
         hiveCatalog = HiveTestUtils.createHiveCatalog();
         hiveCatalog.open();
 
@@ -82,7 +82,7 @@ public class HiveTableSourceStatisticsReportTest extends StatisticsReportTestBas
     }
 
     @AfterEach
-    public void after() {
+    public void after() throws Exception {
         super.after();
         if (null != hiveCatalog) {
             hiveCatalog.close();
