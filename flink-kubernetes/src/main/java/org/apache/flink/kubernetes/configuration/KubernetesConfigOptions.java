@@ -33,6 +33,7 @@ import org.apache.flink.kubernetes.kubeclient.services.ServiceType;
 import org.apache.flink.kubernetes.utils.Constants;
 import org.apache.flink.runtime.util.EnvironmentInformation;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -49,6 +50,9 @@ public class KubernetesConfigOptions {
 
     private static final String KUBERNETES_SERVICE_ACCOUNT_KEY = "kubernetes.service-account";
     private static final String KUBERNETES_POD_TEMPLATE_FILE_KEY = "kubernetes.pod-template-file";
+    private static final String KUBERNETES_POD_SCHEDULER_NAME_KEY = "kubernetes.scheduler-name";
+
+    private static final String KUBERNETES_PODGROUP_CONFIG = "kubernetes.podgroup.config";
 
     public static final ConfigOption<String> CONTEXT =
             key("kubernetes.context")
@@ -443,6 +447,59 @@ public class KubernetesConfigOptions {
     public static final ConfigOption<String> JOB_MANAGER_POD_TEMPLATE;
 
     public static final ConfigOption<String> TASK_MANAGER_POD_TEMPLATE;
+
+    public static final ConfigOption<String> JOB_MANAGER_POD_SCHEDULER_NAME =
+            key("kubernetes.jobmanager.scheduler-name")
+                    .stringType()
+                    .defaultValue("default-scheduler")
+                    .withFallbackKeys(KUBERNETES_POD_SCHEDULER_NAME_KEY)
+                    .withDescription(
+                            "Specify the kubernetes pod scheduler for jobmanager pods of deployment. "
+                                    + "The default value is using the kubernetes default pod scheduler. "
+                                    + "For customerized kubernetes pod scheduler, allow to set pod scheduler "
+                                    + "for customerized pod scheduling. If not explicitly configured, config option '"
+                                    + KUBERNETES_POD_SCHEDULER_NAME_KEY
+                                    + "' will be used.");
+
+    public static final ConfigOption<String> TASK_MANAGER_POD_SCHEDULER_NAME =
+            key("kubernetes.taskmanager.scheduler-name")
+                    .stringType()
+                    .defaultValue("default-scheduler")
+                    .withFallbackKeys(KUBERNETES_POD_SCHEDULER_NAME_KEY)
+                    .withDescription(
+                            "Specify the kubernetes pod scheduler for taskmanager pods of deployment. "
+                                    + "The default value is using the kubernetes default pod scheduler. "
+                                    + "For customerized kubernetes pod scheduler, allow to set pod scheduler "
+                                    + "for customerized pod scheduling. If not explicitly configured, config option '"
+                                    + KUBERNETES_POD_SCHEDULER_NAME_KEY
+                                    + "' will be used.");
+
+    public static final ConfigOption<String> POD_SCHEDULER_NAME =
+            key(KUBERNETES_POD_SCHEDULER_NAME_KEY)
+                    .stringType()
+                    .defaultValue("default-scheduler")
+                    .withDescription(
+                            "Specify the kubernetes pod scheduler for Flink pods of deployment. "
+                                    + "The default value is using the kubernetes default pod scheduler. "
+                                    + "For customerized kubernetes pod scheduler, allow to set pod scheduler "
+                                    + "for customerized pod scheduling. Notice that this can be overwritten by config options '"
+                                    + JOB_MANAGER_POD_SCHEDULER_NAME.key()
+                                    + "' and '"
+                                    + TASK_MANAGER_POD_SCHEDULER_NAME.key()
+                                    + "' for jobmanager and taskmanager respectively.");
+
+    public static final ConfigOption<Map<String, String>> POD_GROUP_CONFOG =
+            key(KUBERNETES_PODGROUP_CONFIG)
+                    .mapType()
+                    .defaultValue(
+                            new HashMap<String, String>() {
+                                {
+                                    put("priorityClassName", "mid-priority");
+                                    put("minMember", "1");
+                                    put("queue", "default");
+                                }
+                            })
+                    .withDescription("the pod group config of volcano");
 
     /**
      * This option is here only for documentation generation, it is the fallback key of

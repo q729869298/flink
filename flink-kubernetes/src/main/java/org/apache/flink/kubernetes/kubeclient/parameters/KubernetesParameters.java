@@ -110,4 +110,10 @@ public interface KubernetesParameters {
      * container(s).
      */
     List<Map<String, String>> getEnvironmentsFromSecrets();
+
+    /** The custom kubernetes pod scheduler name. */
+    String getPodSchedulerName();
+
+    /** Get podGroupConfig of volcano. */
+    Map<String, String> getPodGroupConfig();
 }

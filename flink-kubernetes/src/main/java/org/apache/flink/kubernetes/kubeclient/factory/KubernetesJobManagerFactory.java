@@ -23,6 +23,7 @@ import org.apache.flink.kubernetes.kubeclient.FlinkPod;
 import org.apache.flink.kubernetes.kubeclient.KubernetesJobManagerSpecification;
 import org.apache.flink.kubernetes.kubeclient.decorators.CmdJobManagerDecorator;
 import org.apache.flink.kubernetes.kubeclient.decorators.EnvSecretsDecorator;
+import org.apache.flink.kubernetes.kubeclient.decorators.ExtStepDecoratorUtils;
 import org.apache.flink.kubernetes.kubeclient.decorators.ExternalServiceDecorator;
 import org.apache.flink.kubernetes.kubeclient.decorators.FlinkConfMountDecorator;
 import org.apache.flink.kubernetes.kubeclient.decorators.HadoopConfMountDecorator;
@@ -65,6 +66,7 @@ public class KubernetesJobManagerFactory {
             throws IOException {
         FlinkPod flinkPod = Preconditions.checkNotNull(podTemplate).copy();
         List<HasMetadata> accompanyingResources = new ArrayList<>();
+        List<HasMetadata> prePreparedResources = new ArrayList<>();
 
         final List<KubernetesStepDecorator> stepDecorators =
                 new ArrayList<>(
@@ -89,15 +91,24 @@ public class KubernetesJobManagerFactory {
                         new FlinkConfMountDecorator(kubernetesJobManagerParameters),
                         new PodTemplateMountDecorator(kubernetesJobManagerParameters)));
 
+        // load extend step decorators via SPI
+        stepDecorators.addAll(
+                ExtStepDecoratorUtils.loadExtStepDecorators(kubernetesJobManagerParameters));
+
         for (KubernetesStepDecorator stepDecorator : stepDecorators) {
+            prePreparedResources.addAll(stepDecorator.buildPrePreparedResources());
             flinkPod = stepDecorator.decorateFlinkPod(flinkPod);
             accompanyingResources.addAll(stepDecorator.buildAccompanyingKubernetesResources());
         }
 
+        // Add all prepared AccompanyingResources to refresh owner reference
+        accompanyingResources.addAll(prePreparedResources);
+
         final Deployment deployment =
                 createJobManagerDeployment(flinkPod, kubernetesJobManagerParameters);
 
-        return new KubernetesJobManagerSpecification(deployment, accompanyingResources);
+        return new KubernetesJobManagerSpecification(
+                deployment, accompanyingResources, prePreparedResources);
     }
 
     private static Deployment createJobManagerDeployment(
