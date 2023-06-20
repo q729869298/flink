@@ -26,20 +26,22 @@ import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.binary.BinaryStringData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.utils.DataTypeUtils;
 
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.List;
-
-import static org.apache.flink.table.types.utils.DataTypeUtils.toInternalDataType;
 
 /** Built-in LAST_VALUE aggregate function. */
 @Internal
 public final class LastValueAggFunction<T> extends BuiltInAggregateFunction<T, RowData> {
 
-    private final transient DataType valueDataType;
+    private final transient DataType[] valueDataTypes;
 
-    public LastValueAggFunction(LogicalType valueType) {
-        this.valueDataType = toInternalDataType(valueType);
+    public LastValueAggFunction(LogicalType... valueTypes) {
+        this.valueDataTypes =
+                Arrays.stream(valueTypes)
+                        .map(DataTypeUtils::toInternalDataType)
+                        .toArray(DataType[]::new);
     }
 
     // --------------------------------------------------------------------------------------------
@@ -48,20 +50,20 @@ public final class LastValueAggFunction<T> extends BuiltInAggregateFunction<T, R
 
     @Override
     public List<DataType> getArgumentDataTypes() {
-        return Collections.singletonList(valueDataType);
+        return Arrays.asList(valueDataTypes);
     }
 
     @Override
     public DataType getAccumulatorDataType() {
         return DataTypes.ROW(
-                        DataTypes.FIELD("lastValue", valueDataType.nullable()),
+                        DataTypes.FIELD("lastValue", valueDataTypes[0].nullable()),
                         DataTypes.FIELD("lastOrder", DataTypes.BIGINT()))
                 .bridgedTo(RowData.class);
     }
 
     @Override
     public DataType getOutputDataType() {
-        return valueDataType;
+        return valueDataTypes[0];
     }
 
     @Override
@@ -82,29 +84,61 @@ public final class LastValueAggFunction<T> extends BuiltInAggregateFunction<T, R
     }
 
     public void accumulate(RowData rowData, Object value) {
-        GenericRowData acc = (GenericRowData) rowData;
-        if (value != null) {
+        // todo: what's the default value? default ignore null, following legacy code
+        accumulate(rowData, value, true);
+    }
+
+    public void accumulate(RowData rowData, Object value, boolean ignoreNull) {
+        if (value != null || !ignoreNull) {
+            GenericRowData acc = (GenericRowData) rowData;
             acc.setField(0, value);
         }
     }
 
     public void accumulate(RowData rowData, Object value, Long order) {
-        GenericRowData acc = (GenericRowData) rowData;
-        if (value != null && acc.getLong(1) < order) {
-            acc.setField(0, value);
-            acc.setField(1, order);
+        // todo: what's the default value? default ignore null, following legacy code
+        accumulate(rowData, value, order, true);
+    }
+
+    public void accumulate(RowData rowData, Object value, Long order, boolean ignoreNull) {
+        if ((value != null || !ignoreNull) && order != null) {
+            GenericRowData acc = (GenericRowData) rowData;
+            // todo: how to deal with order = null ? throw exception or just ignore it
+            // it's legacy code, such method won't be exposed to user.
+            if (acc.getLong(1) < order) {
+                acc.setField(0, value);
+                acc.setField(1, order);
+            }
         }
     }
 
     public void accumulate(GenericRowData acc, StringData value) {
-        if (value != null) {
-            accumulate(acc, (Object) ((BinaryStringData) value).copy());
+        // todo: what's the default value? default ignore null, following legacy code
+        accumulate(acc, value, true);
+    }
+
+    public void accumulate(GenericRowData acc, StringData value, boolean ignoreNull) {
+        if (value != null || !ignoreNull) {
+            if (value != null) {
+                accumulate(acc, (Object) ((BinaryStringData) value).copy());
+            } else {
+                accumulate(acc, (Object) null);
+            }
         }
     }
 
     public void accumulate(GenericRowData acc, StringData value, Long order) {
-        if (value != null) {
-            accumulate(acc, (Object) ((BinaryStringData) value).copy(), order);
+        // todo: what's the default value? default ignore null, following legacy code
+        accumulate(acc, value, order, true);
+    }
+
+    public void accumulate(GenericRowData acc, StringData value, Long order, boolean ignoreNull) {
+        if (value != null || !ignoreNull) {
+            if (value != null) {
+                accumulate(acc, (Object) ((BinaryStringData) value).copy(), order, ignoreNull);
+            } else {
+                accumulate(acc, (Object) null, order, false);
+            }
         }
     }
 
