@@ -19,9 +19,13 @@
 package org.apache.flink.runtime.leaderelection;
 
 import org.apache.flink.runtime.leaderretrieval.StandaloneLeaderRetrievalService;
+import org.apache.flink.runtime.util.TestingFatalErrorHandlerExtension;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -29,6 +33,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class StandaloneLeaderElectionTest {
+
+    @RegisterExtension
+    public final TestingFatalErrorHandlerExtension fatalErrorHandlerExtension =
+            new TestingFatalErrorHandlerExtension();
 
     private static final UUID SESSION_ID = UUID.randomUUID();
 
@@ -45,15 +53,22 @@ class StandaloneLeaderElectionTest {
         TestingListener testingListener = new TestingListener();
 
         try (LeaderElection leaderElection = new StandaloneLeaderElection(expectedSessionID)) {
-            TestingContender contender = new TestingContender(TEST_URL, leaderElection);
-            contender.startLeaderElection();
+            final Queue<LeaderElectionEvent> eventQueue = new LinkedList<>();
+            final LeaderContender contender =
+                    TestingLeaderContender.newBuilder(
+                                    eventQueue,
+                                    leaderElection,
+                                    TEST_URL,
+                                    fatalErrorHandlerExtension.getTestingFatalErrorHandler()
+                                            ::onFatalError)
+                            .build();
+            leaderElection.startLeaderElection(contender);
 
             leaderRetrievalService.start(testingListener);
 
-            contender.waitForLeader();
-
-            assertThat(contender.isLeader()).isTrue();
-            assertThat(contender.getLeaderSessionID()).isEqualTo(expectedSessionID);
+            final LeaderElectionEvent.IsLeaderEvent nextEvent =
+                    eventQueue.remove().asIsLeaderEvent();
+            assertThat(nextEvent.getLeaderSessionID()).isEqualTo(expectedSessionID);
 
             testingListener.waitForNewLeader();
 
@@ -67,9 +82,11 @@ class StandaloneLeaderElectionTest {
     @Test
     void testStartLeaderElection() throws Exception {
         final CompletableFuture<UUID> grantLeadershipResult = new CompletableFuture<>();
-        final TestingGenericLeaderContender contender =
-                TestingGenericLeaderContender.newBuilder()
-                        .setGrantLeadershipConsumer(grantLeadershipResult::complete)
+        final TestingLeaderContender contender =
+                TestingLeaderContender.newBuilderForNoOpContender()
+                        .setGrantLeadershipConsumer(
+                                (ignoredLock, sessionID) ->
+                                        grantLeadershipResult.complete(sessionID))
                         .build();
         try (final LeaderElection testInstance = new StandaloneLeaderElection(SESSION_ID)) {
             testInstance.startLeaderElection(contender);
@@ -80,8 +97,8 @@ class StandaloneLeaderElectionTest {
 
     @Test
     void testHasLeadershipWithContender() throws Exception {
-        final TestingGenericLeaderContender contender =
-                TestingGenericLeaderContender.newBuilder().build();
+        final TestingLeaderContender contender =
+                TestingLeaderContender.newBuilderForNoOpContender().build();
         try (final LeaderElection testInstance = new StandaloneLeaderElection(SESSION_ID)) {
             testInstance.startLeaderElection(contender);
 
@@ -105,9 +122,10 @@ class StandaloneLeaderElectionTest {
     @Test
     void testRevokeCallOnClose() throws Exception {
         final AtomicBoolean revokeLeadershipCalled = new AtomicBoolean(false);
-        final TestingGenericLeaderContender contender =
-                TestingGenericLeaderContender.newBuilder()
-                        .setRevokeLeadershipRunnable(() -> revokeLeadershipCalled.set(true))
+        final TestingLeaderContender contender =
+                TestingLeaderContender.newBuilderForNoOpContender()
+                        .setRevokeLeadershipConsumer(
+                                ignoredLock -> revokeLeadershipCalled.set(true))
                         .build();
         try (final LeaderElection testInstance = new StandaloneLeaderElection(SESSION_ID)) {
             testInstance.startLeaderElection(contender);

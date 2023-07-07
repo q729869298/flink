@@ -181,8 +181,7 @@ public class DefaultLeaderElectionService extends AbstractLeaderElectionService
 
             running = true;
 
-            leaderElectionDriver =
-                    leaderElectionDriverFactory.create(this, new LeaderElectionFatalErrorHandler());
+            leaderElectionDriver = leaderElectionDriverFactory.create(this);
 
             LOG.info(
                     "A connection to the HA backend was established through LeaderElectionDriver {}.",
@@ -530,22 +529,27 @@ public class DefaultLeaderElectionService extends AbstractLeaderElectionService
 
     private void forwardErrorToLeaderContender(Throwable t) {
         synchronized (lock) {
+            final LeaderElectionException leaderElectionException =
+                    convertToLeaderElectionException(t);
             if (leaderContenderRegistry.isEmpty()) {
-                fallbackErrorHandler.onFatalError(t);
+                fallbackErrorHandler.onFatalError(leaderElectionException);
                 return;
             }
 
             leaderContenderRegistry
                     .values()
                     .forEach(
-                            leaderContender -> {
-                                if (t instanceof LeaderElectionException) {
-                                    leaderContender.handleError((LeaderElectionException) t);
-                                } else {
-                                    leaderContender.handleError(new LeaderElectionException(t));
-                                }
-                            });
+                            leaderContender ->
+                                    leaderContender.handleError(leaderElectionException));
         }
+    }
+
+    private static LeaderElectionException convertToLeaderElectionException(Throwable t) {
+        if (t instanceof LeaderElectionException) {
+            return (LeaderElectionException) t;
+        }
+
+        return new LeaderElectionException(t);
     }
 
     @Override
@@ -590,11 +594,8 @@ public class DefaultLeaderElectionService extends AbstractLeaderElectionService
         }
     }
 
-    private class LeaderElectionFatalErrorHandler implements FatalErrorHandler {
-
-        @Override
-        public void onFatalError(Throwable throwable) {
-            forwardErrorToLeaderContender(throwable);
-        }
+    @Override
+    public void onError(Throwable t) {
+        forwardErrorToLeaderContender(t);
     }
 }

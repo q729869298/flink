@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,17 +18,23 @@
 
 package org.apache.flink.runtime.leaderelection;
 
-/** Factory for {@link LeaderElectionDriver}. */
-public interface LeaderElectionDriverFactory {
+import java.util.UUID;
 
-    /**
-     * Creates a {@link LeaderElectionDriver} for the given leader contender description. Moreover,
-     * it registers the given leader election listener with the service.
-     *
-     * @param leaderElectionListener listener for the callbacks of the {@link LeaderElectionDriver}
-     * @return created {@link LeaderElectionDriver} instance
-     * @throws Exception if the creation fails
-     */
-    LeaderElectionDriver create(LeaderElectionDriver.Listener leaderElectionListener)
-            throws Exception;
+/** {@code NoOpLeaderElection} is a no-operations implementation of {@link LeaderElection}. */
+public enum NoOpLeaderElection implements LeaderElection {
+    INSTANCE;
+
+    @Override
+    public void startLeaderElection(LeaderContender contender) {}
+
+    @Override
+    public void confirmLeadership(UUID leaderSessionID, String leaderAddress) {}
+
+    @Override
+    public boolean hasLeadership(UUID leaderSessionId) {
+        return false;
+    }
+
+    @Override
+    public void close() {}
 }
