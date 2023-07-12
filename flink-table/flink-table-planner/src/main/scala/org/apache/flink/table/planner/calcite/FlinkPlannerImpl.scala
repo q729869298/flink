@@ -21,6 +21,7 @@ import org.apache.flink.sql.parser.ExtendedSqlNode
 import org.apache.flink.sql.parser.ddl.{SqlCompilePlan, SqlReset, SqlSet, SqlUseModules}
 import org.apache.flink.sql.parser.dml.{RichSqlInsert, SqlBeginStatementSet, SqlCompileAndExecutePlan, SqlEndStatementSet, SqlExecute, SqlExecutePlan, SqlStatementSet, SqlTruncateTable}
 import org.apache.flink.sql.parser.dql._
+import org.apache.flink.sql.parser.validate.FlinkSqlConformance
 import org.apache.flink.table.api.{TableException, ValidationException}
 import org.apache.flink.table.planner.hint.JoinStrategy
 import org.apache.flink.table.planner.parse.CalciteParser
@@ -105,6 +106,7 @@ class FlinkPlannerImpl(
         .withIdentifierExpansion(true)
         .withDefaultNullCollation(FlinkPlannerImpl.defaultNullCollation)
         .withTypeCoercionEnabled(false)
+        .withSqlConformance(FlinkSqlConformance.DEFAULT)
     ) // Disable implicit type coercion for now.
     validator
   }
