@@ -59,6 +59,9 @@ public abstract class FlinkHints {
      */
     public static final String HINT_NAME_JSON_AGGREGATE_WRAPPED = "JSON_AGGREGATE_WRAPPED";
 
+    /** Internal hint to preserve the current common project node. */
+    public static final String HINT_NAME_COMMON_PROJECT_PRESERVED = "COMMON_PROJECT_PRESERVED";
+
     // ~ Tools ------------------------------------------------------------------
 
     /**
