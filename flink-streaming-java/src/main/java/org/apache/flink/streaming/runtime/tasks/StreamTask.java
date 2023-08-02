@@ -46,6 +46,7 @@ import org.apache.flink.runtime.execution.Environment;
 import org.apache.flink.runtime.io.AvailabilityProvider;
 import org.apache.flink.runtime.io.network.api.CancelCheckpointMarker;
 import org.apache.flink.runtime.io.network.api.CheckpointBarrier;
+import org.apache.flink.runtime.io.network.api.FlushEvent;
 import org.apache.flink.runtime.io.network.api.StopMode;
 import org.apache.flink.runtime.io.network.api.writer.MultipleRecordWriters;
 import org.apache.flink.runtime.io.network.api.writer.NonRecordWriter;
@@ -559,6 +560,7 @@ public abstract class StreamTask<OUT, OP extends StreamOperator<OUT>>
      * @throws Exception on any problems in the action.
      */
     protected void processInput(MailboxDefaultAction.Controller controller) throws Exception {
+        //        System.out.println("process input in Stream Task");
         DataInputStatus status = inputProcessor.processInput();
         switch (status) {
             case MORE_AVAILABLE:
@@ -1125,6 +1127,80 @@ public abstract class StreamTask<OUT, OP extends StreamOperator<OUT>>
 
     RecordWriterOutput<?>[] getStreamOutputs() {
         return operatorChain.getStreamOutputs();
+    }
+
+    @Override
+    public CompletableFuture<Boolean> triggerFlushEventAsync(
+            long flushEventID, long flushEventTimeStamp) {
+        CompletableFuture<Boolean> result = new CompletableFuture<>();
+        try {
+            result.complete(performFlushEvent(flushEventID, flushEventTimeStamp));
+        } catch (Exception e) {
+            result.completeExceptionally(e);
+        }
+        return result;
+    }
+
+    @Override
+    public void triggerFlushEventOnEvent(FlushEvent flushEvent) throws IOException {
+        try {
+            performFlushEvent(flushEvent.getFlushEventId(), flushEvent.getTimestamp());
+        } catch (Exception e) {
+            throw new IOException(
+                    "Could not perform flush event "
+                            + flushEvent.getFlushEventId()
+                            + " for operator "
+                            + getName()
+                            + '.',
+                    e);
+        }
+    }
+
+    @Override
+    public void triggerLocalFlushEvent(long flushEventID) throws IOException {
+        try {
+            LOG.info("Triggering local flush event {} on operator {}.", flushEventID, getName());
+            operatorChain.flush();
+        } catch (Exception e) {
+            throw new IOException(
+                    "Could not perform flush event "
+                            + flushEventID
+                            + " for operator "
+                            + getName()
+                            + '.',
+                    e);
+        }
+    }
+
+    private boolean performFlushEvent(long flushEventID, long flushEventTimeStamp)
+            throws Exception {
+
+        LOG.debug(
+                "Starting flush event {}@{} on task {}",
+                flushEventID,
+                flushEventTimeStamp,
+                getName());
+
+        if (isRunning) {
+            actionExecutor.runThrowing(
+                    () -> {
+                        subtaskCheckpointCoordinator.emitFlushEvent(
+                                flushEventID,
+                                flushEventTimeStamp,
+                                operatorChain,
+                                finishedOperators,
+                                this::isRunning);
+                    });
+
+            return true;
+        } else {
+            actionExecutor.runThrowing(
+                    () -> {
+                        LOG.debug("cannot emit flush event");
+                    });
+
+            return false;
+        }
     }
 
     // ------------------------------------------------------------------------

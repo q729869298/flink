@@ -43,8 +43,10 @@ import org.apache.flink.runtime.io.network.partition.consumer.RemoteInputChannel
 import org.apache.flink.runtime.io.network.partition.consumer.SingleInputGate;
 import org.apache.flink.runtime.io.network.partition.consumer.SingleInputGateBuilder;
 import org.apache.flink.runtime.jobgraph.tasks.AbstractInvokable;
+import org.apache.flink.runtime.operators.testutils.DummyCheckpointInvokable;
 import org.apache.flink.runtime.operators.testutils.DummyEnvironment;
 import org.apache.flink.runtime.state.CheckpointStorageLocationReference;
+import org.apache.flink.streaming.runtime.io.flushing.FlushEventHandler;
 import org.apache.flink.streaming.runtime.tasks.StreamTaskActionExecutor;
 import org.apache.flink.streaming.runtime.tasks.mailbox.MailboxExecutorImpl;
 import org.apache.flink.streaming.runtime.tasks.mailbox.TaskMailboxImpl;
@@ -232,7 +234,9 @@ public class CheckpointedInputGateTest {
                         new CheckpointedInputGate(
                                 singleInputGate,
                                 barrierHandler,
+                                new FlushEventHandler(new DummyCheckpointInvokable(), "test"),
                                 mailboxExecutor,
+                                false,
                                 UpstreamRecoveryTracker.forInputGate(singleInputGate));
 
                 final int oldSize = mailbox.size();
@@ -352,7 +356,9 @@ public class CheckpointedInputGateTest {
                 new CheckpointedInputGate(
                         singleInputGate,
                         barrierHandler,
+                        new FlushEventHandler(new DummyCheckpointInvokable(), "test"),
                         mailboxExecutor,
+                        false,
                         UpstreamRecoveryTracker.forInputGate(singleInputGate));
         for (int i = 0; i < numberOfChannels; i++) {
             ((RemoteInputChannel) checkpointedInputGate.getChannel(i)).requestSubpartition();
@@ -392,7 +398,9 @@ public class CheckpointedInputGateTest {
                 new CheckpointedInputGate(
                         singleInputGate,
                         barrierHandler,
+                        new FlushEventHandler(new DummyCheckpointInvokable(), "test"),
                         mailboxExecutor,
+                        false,
                         UpstreamRecoveryTracker.forInputGate(singleInputGate));
         for (int i = 0; i < numberOfChannels; i++) {
             ((RemoteInputChannel) checkpointedInputGate.getChannel(i)).requestSubpartition();

@@ -20,16 +20,13 @@ package org.apache.flink.runtime.checkpoint;
 
 import java.util.concurrent.CompletableFuture;
 
-/**
- * Calculates the plan of the next checkpoint, including the tasks to trigger, wait or commit for
- * each checkpoint.
- */
-public interface CheckpointPlanCalculator {
+/** Calculates the plan of the next checkpoint or flushing. */
+public interface PlanCalculator {
 
     /**
      * Calculates the plan of the next checkpoint.
      *
      * @return The result plan.
      */
-    CompletableFuture<CheckpointPlan> calculateCheckpointPlan();
+    CompletableFuture<Plan> calculateEventPlan();
 }
