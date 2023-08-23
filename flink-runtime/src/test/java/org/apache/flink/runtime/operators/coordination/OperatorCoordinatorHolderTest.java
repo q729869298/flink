@@ -32,6 +32,7 @@ import org.apache.flink.runtime.operators.coordination.EventReceivingTasks.Event
 import org.apache.flink.runtime.scheduler.GlobalFailureHandler;
 import org.apache.flink.runtime.testtasks.NoOpInvokable;
 import org.apache.flink.util.ExceptionUtils;
+import org.apache.flink.util.FlinkRuntimeException;
 import org.apache.flink.util.TestLogger;
 
 import org.junit.After;
@@ -449,6 +450,22 @@ public class OperatorCoordinatorHolderTest extends TestLogger {
         assertThat(tasks.getSentEventsForSubtask(1)).containsExactly(new TestOperatorEvent(1));
     }
 
+    @Test
+    public void testOperatorCoordinatorCreationTriggersGlobalFailure() throws Exception {
+        final EventReceivingTasks tasks = EventReceivingTasks.createForRunningTasks();
+        final Throwable[] jobException = new Throwable[1];
+
+        final OperatorCoordinatorHolder holder =
+                createCoordinatorHolder(
+                        tasks,
+                        FailingOperatorCoordinator::new,
+                        ComponentMainThreadExecutorServiceAdapter.forMainThread(),
+                        (throwable) -> jobException[0] = throwable);
+
+        assertThat(jobException[0])
+                .hasMessageContaining("Global failure triggered by OperatorCoordinator");
+    }
+
     // ------------------------------------------------------------------------
     //   test actions
     // ------------------------------------------------------------------------
@@ -493,6 +510,16 @@ public class OperatorCoordinatorHolderTest extends TestLogger {
             final SubtaskAccess.SubtaskAccessFactory eventTarget,
             final Function<OperatorCoordinator.Context, OperatorCoordinator> coordinatorCtor,
             final ComponentMainThreadExecutor mainThreadExecutor)
+            throws Exception {
+        return createCoordinatorHolder(
+                eventTarget, coordinatorCtor, mainThreadExecutor, globalFailureHandler);
+    }
+
+    private OperatorCoordinatorHolder createCoordinatorHolder(
+            final SubtaskAccess.SubtaskAccessFactory eventTarget,
+            final Function<OperatorCoordinator.Context, OperatorCoordinator> coordinatorCtor,
+            final ComponentMainThreadExecutor mainThreadExecutor,
+            final GlobalFailureHandler globalFailureHandler)
             throws Exception {
 
         final OperatorID opId = new OperatorID();
@@ -743,5 +770,17 @@ public class OperatorCoordinatorHolderTest extends TestLogger {
         }
 
         protected abstract void step() throws Exception;
+    }
+
+    private static class FailingOperatorCoordinator extends TestingOperatorCoordinator {
+
+        public FailingOperatorCoordinator(Context context) {
+            super(context);
+        }
+
+        @Override
+        public void start() throws Exception {
+            throw new FlinkRuntimeException("Operator coordinator failure");
+        }
     }
 }
