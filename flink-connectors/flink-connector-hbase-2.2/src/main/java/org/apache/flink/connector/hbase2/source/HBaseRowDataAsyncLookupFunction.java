@@ -136,6 +136,10 @@ public class HBaseRowDataAsyncLookupFunction extends AsyncLookupFunction {
     private void fetchResult(
             CompletableFuture<Collection<RowData>> resultFuture, int currentRetry, Object rowKey) {
         Get get = serde.createGet(rowKey);
+        if (get == null) {
+            resultFuture.complete(Collections.emptyList());
+            return;
+        }
         CompletableFuture<Result> responseFuture = table.get(get);
         responseFuture.whenCompleteAsync(
                 (result, throwable) -> {
