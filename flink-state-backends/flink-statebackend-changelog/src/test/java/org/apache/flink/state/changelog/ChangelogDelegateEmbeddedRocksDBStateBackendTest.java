@@ -33,22 +33,21 @@ import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.state.StateBackend;
 import org.apache.flink.runtime.state.TestTaskStateManager;
 
-import org.junit.Ignore;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.TestTemplate;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.File;
 import java.io.IOException;
 
 /** Tests for {@link ChangelogStateBackend} delegating {@link EmbeddedRocksDBStateBackend}. */
-public class ChangelogDelegateEmbeddedRocksDBStateBackendTest
-        extends EmbeddedRocksDBStateBackendTest {
+class ChangelogDelegateEmbeddedRocksDBStateBackendTest extends EmbeddedRocksDBStateBackendTest {
 
-    @Rule public final TemporaryFolder temp = new TemporaryFolder();
+    @TempDir static File tmPath;
 
     @Override
     protected TestTaskStateManager getTestTaskStateManager() throws IOException {
-        return ChangelogStateBackendTestUtils.createTaskStateManager(temp.newFolder());
+        return ChangelogStateBackendTestUtils.createTaskStateManager(tmPath);
     }
 
     @Override
@@ -66,9 +65,9 @@ public class ChangelogDelegateEmbeddedRocksDBStateBackendTest
         return true;
     }
 
-    @Test
-    @Ignore("The type of handle returned from snapshot() is not incremental")
-    public void testSharedIncrementalStateDeRegistration() {}
+    @TestTemplate
+    @Disabled("The type of handle returned from snapshot() is not incremental")
+    void testSharedIncrementalStateDeRegistration() {}
 
     @Override
     protected <K> CheckpointableKeyedStateBackend<K> createKeyedBackend(
@@ -91,16 +90,16 @@ public class ChangelogDelegateEmbeddedRocksDBStateBackendTest
         return new ChangelogStateBackend(super.getStateBackend());
     }
 
-    @Test
-    public void testMaterializedRestore() throws Exception {
+    @TestTemplate
+    void testMaterializedRestore() throws Exception {
         CheckpointStreamFactory streamFactory = createStreamFactory();
 
         ChangelogStateBackendTestUtils.testMaterializedRestore(
                 getStateBackend(), StateTtlConfig.DISABLED, env, streamFactory);
     }
 
-    @Test
-    public void testMaterializedRestoreWithWrappedState() throws Exception {
+    @TestTemplate
+    void testMaterializedRestoreWithWrappedState() throws Exception {
         CheckpointStreamFactory streamFactory = createStreamFactory();
 
         Configuration configuration = new Configuration();
@@ -115,8 +114,8 @@ public class ChangelogDelegateEmbeddedRocksDBStateBackendTest
                 streamFactory);
     }
 
-    @Test
-    public void testMaterializedRestorePriorityQueue() throws Exception {
+    @TestTemplate
+    void testMaterializedRestorePriorityQueue() throws Exception {
         CheckpointStreamFactory streamFactory = createStreamFactory();
 
         ChangelogStateBackendTestUtils.testMaterializedRestoreForPriorityQueue(

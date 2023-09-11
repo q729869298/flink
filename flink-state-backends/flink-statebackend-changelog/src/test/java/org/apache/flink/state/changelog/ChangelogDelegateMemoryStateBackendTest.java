@@ -35,20 +35,20 @@ import org.apache.flink.runtime.state.TestTaskStateManager;
 import org.apache.flink.runtime.state.memory.MemoryStateBackend;
 import org.apache.flink.runtime.state.storage.JobManagerCheckpointStorage;
 
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.TestTemplate;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.File;
 import java.io.IOException;
 
 /** Tests for {@link ChangelogStateBackend} delegating {@link MemoryStateBackend}. */
-public class ChangelogDelegateMemoryStateBackendTest extends MemoryStateBackendTest {
+class ChangelogDelegateMemoryStateBackendTest extends MemoryStateBackendTest {
 
-    @Rule public final TemporaryFolder temp = new TemporaryFolder();
+    @TempDir static File temp;
 
     @Override
     protected TestTaskStateManager getTestTaskStateManager() throws IOException {
-        return ChangelogStateBackendTestUtils.createTaskStateManager(temp.newFolder());
+        return ChangelogStateBackendTestUtils.createTaskStateManager(temp);
     }
 
     @Override
@@ -87,16 +87,16 @@ public class ChangelogDelegateMemoryStateBackendTest extends MemoryStateBackendT
         return new JobManagerCheckpointStorage();
     }
 
-    @Test
-    public void testMaterializedRestore() throws Exception {
+    @TestTemplate
+    void testMaterializedRestore() throws Exception {
         CheckpointStreamFactory streamFactory = createStreamFactory();
 
         ChangelogStateBackendTestUtils.testMaterializedRestore(
                 getStateBackend(), StateTtlConfig.DISABLED, env, streamFactory);
     }
 
-    @Test
-    public void testMaterializedRestoreWithWrappedState() throws Exception {
+    @TestTemplate
+    void testMaterializedRestoreWithWrappedState() throws Exception {
         CheckpointStreamFactory streamFactory = createStreamFactory();
 
         Configuration configuration = new Configuration();
@@ -111,8 +111,8 @@ public class ChangelogDelegateMemoryStateBackendTest extends MemoryStateBackendT
                 streamFactory);
     }
 
-    @Test
-    public void testMaterializedRestorePriorityQueue() throws Exception {
+    @TestTemplate
+    void testMaterializedRestorePriorityQueue() throws Exception {
         CheckpointStreamFactory streamFactory = createStreamFactory();
 
         ChangelogStateBackendTestUtils.testMaterializedRestoreForPriorityQueue(
