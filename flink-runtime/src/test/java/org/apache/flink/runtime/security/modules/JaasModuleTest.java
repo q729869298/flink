@@ -21,11 +21,11 @@ package org.apache.flink.runtime.security.modules;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.CoreOptions;
 import org.apache.flink.runtime.security.SecurityConfiguration;
+import org.apache.flink.testutils.junit.utils.TempDirUtils;
 
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
@@ -33,50 +33,46 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.apache.flink.runtime.security.modules.JaasModule.JAVA_SECURITY_AUTH_LOGIN_CONFIG;
-import static org.hamcrest.core.StringStartsWith.startsWith;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /** Test for {@link JaasModule}. */
-public class JaasModuleTest {
-    @Rule public TemporaryFolder folder = new TemporaryFolder();
+class JaasModuleTest {
+    @TempDir public java.nio.file.Path folder;
 
-    @Before
-    public void setUp() throws IOException {
+    @BeforeEach
+    void setUp() throws IOException {
         // clear the property
         System.getProperties().remove(JAVA_SECURITY_AUTH_LOGIN_CONFIG);
-        folder.create();
     }
 
     @Test
-    public void testJaasModuleFilePathIfWorkingDirPresent() throws IOException {
-        File file = folder.newFolder();
+    void testJaasModuleFilePathIfWorkingDirPresent() throws IOException {
+        File file = TempDirUtils.newFolder(folder);
         testJaasModuleFilePath(file.toPath().toString());
     }
 
     @Test
-    public void testJaasModuleFilePathIfWorkingDirNotPresent() throws IOException {
-        File file = folder.newFolder();
+    void testJaasModuleFilePathIfWorkingDirNotPresent() throws IOException {
+        File file = TempDirUtils.newFolder(folder);
         testJaasModuleFilePath(file.toPath().toString() + "/tmp");
     }
 
     @Test
-    public void testJaasModuleFilePathIfWorkingDirIsSymLink() throws IOException {
+    void testJaasModuleFilePathIfWorkingDirIsSymLink() throws IOException {
         Path symlink = createSymLinkFolderStructure();
         testJaasModuleFilePath(symlink.toString());
     }
 
     @Test
-    public void testJaasModuleFilePathIfWorkingDirNoPresentAndPathContainsSymLink()
-            throws IOException {
+    void testJaasModuleFilePathIfWorkingDirNoPresentAndPathContainsSymLink() throws IOException {
         Path symlink = createSymLinkFolderStructure();
         testJaasModuleFilePath(symlink.toString() + "/tmp");
     }
 
     private Path createSymLinkFolderStructure() throws IOException {
-        File baseFolder = folder.newFolder();
+        File baseFolder = TempDirUtils.newFolder(folder);
         File actualFolder = new File(baseFolder, "actual_folder");
-        assertTrue(actualFolder.mkdirs());
+        assertThat(actualFolder.mkdirs()).isTrue();
 
         Path symlink = new File(baseFolder, "symlink").toPath();
         Files.createSymbolicLink(symlink, actualFolder.toPath());
@@ -102,7 +98,7 @@ public class JaasModuleTest {
      * CoreOptions#TMP_DIRS}'s default value if we do not manually specify it.
      */
     @Test
-    public void testCreateJaasModuleFileInTemporary() throws IOException {
+    void testCreateJaasModuleFileInTemporary() throws IOException {
         Configuration configuration = new Configuration();
         SecurityConfiguration sc = new SecurityConfiguration(configuration);
         JaasModule module = new JaasModule(sc);
@@ -119,14 +115,12 @@ public class JaasModuleTest {
                         .toPath()
                         .toRealPath()
                         .toString();
-        assertThat(
-                "The resolved configured directory does not match the expected resolved one.",
-                resolvedActualPathWithFile,
-                startsWith(resolvedExpectedPath));
+        assertThat(resolvedActualPathWithFile)
+                .as("The resolved configured directory does not match the expected resolved one.")
+                .startsWith(resolvedExpectedPath);
 
-        assertThat(
-                "The configured directory does not match the expected one.",
-                System.getProperty(JAVA_SECURITY_AUTH_LOGIN_CONFIG),
-                startsWith(directory));
+        assertThat(System.getProperty(JAVA_SECURITY_AUTH_LOGIN_CONFIG))
+                .as("The configured directory does not match the expected one.")
+                .startsWith(directory);
     }
 }
