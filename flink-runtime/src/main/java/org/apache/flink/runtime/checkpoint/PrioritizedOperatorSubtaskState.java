@@ -20,6 +20,7 @@ package org.apache.flink.runtime.checkpoint;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.runtime.state.InputChannelStateHandle;
+import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.state.KeyedStateHandle;
 import org.apache.flink.runtime.state.OperatorStateHandle;
 import org.apache.flink.runtime.state.ResultSubpartitionStateHandle;
@@ -31,10 +32,14 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * This class is a wrapper over multiple alternative {@link OperatorSubtaskState} that are (partial)
@@ -286,7 +291,7 @@ public class PrioritizedOperatorSubtaskState {
             }
 
             return new PrioritizedOperatorSubtaskState(
-                    resolvePrioritizedAlternatives(
+                    resolveKeyedStatePrioritizedAlternatives(
                             jobManagerState.getManagedKeyedState(),
                             managedKeyedAlternatives,
                             eqStateApprover(KeyedStateHandle::getKeyGroupRange)),
@@ -362,6 +367,90 @@ public class PrioritizedOperatorSubtaskState {
             // Of course we include the ground truth as last alternative.
             approved.add(jobManagerState);
             return Collections.unmodifiableList(approved);
+        }
+
+        protected <T extends KeyedStateHandle>
+                List<StateObjectCollection<T>> resolveKeyedStatePrioritizedAlternatives(
+                        StateObjectCollection<T> jobManagerState,
+                        List<StateObjectCollection<T>> alternativesByPriority,
+                        BiFunction<T, T, Boolean> approveFun) {
+
+            List<StateObjectCollection<T>> prioritizedAcceptedAlternatives =
+                    resolvePrioritizedAlternatives(
+                            jobManagerState, alternativesByPriority, approveFun);
+
+            if (alternativesByPriority != null
+                    && !alternativesByPriority.isEmpty()
+                    && jobManagerState.hasState()
+                    && prioritizedAcceptedAlternatives.size() == 1) {
+
+                Optional<StateObjectCollection<T>> mergedAlternative =
+                        tryCreateMixedLocalAndRemoteAlternative(
+                                jobManagerState, alternativesByPriority);
+
+                if (mergedAlternative.isPresent()) {
+                    return Arrays.asList(mergedAlternative.get(), jobManagerState);
+                }
+            }
+            return prioritizedAcceptedAlternatives;
+        }
+
+        /**
+         * This method tries to create a "mixed" {@link StateObjectCollection}, based on the JM
+         * state that the subtask got assigned. Whenever possible, the method replaces JM state
+         * handles (remote) with equivalent state handles from the local alternatives. If there are
+         * multiple alternatives for a handle, the handle from the alternative with highest priority
+         * is used.
+         *
+         * @param jobManagerState the state the we got assigned from the JM.
+         * @param alternativesByPriority local state alternatives, ordered by priority.
+         * @return A state collection where all JM state handles for which we could find local
+         *     alternatives are replaced by the alternative with highest priority. Empty optional if
+         *     no state.
+         * @param <T> generic type of the state handles in the collections.
+         */
+        static <T extends KeyedStateHandle>
+                Optional<StateObjectCollection<T>> tryCreateMixedLocalAndRemoteAlternative(
+                        StateObjectCollection<T> jobManagerState,
+                        List<StateObjectCollection<T>> alternativesByPriority) {
+
+            List<T> result = Collections.emptyList();
+
+            // Build hash index over the key-group ranges of the JM state
+            Map<KeyGroupRange, T> keyGroupToHandleMap =
+                    jobManagerState.stream()
+                            .collect(
+                                    Collectors.toMap(
+                                            KeyedStateHandle::getKeyGroupRange,
+                                            Function.identity()));
+
+            for (StateObjectCollection<T> alternative : alternativesByPriority) {
+                for (T stateHandle : alternative) {
+                    // Try to remove the key-group range from the index
+                    if (keyGroupToHandleMap.remove(stateHandle.getKeyGroupRange()) != null) {
+                        // Lazy init result
+                        if (result.isEmpty()) {
+                            result = new ArrayList<>(jobManagerState.size());
+                        }
+                        // If the group was still in the index, replace with higher prio alternative
+                        result.add(stateHandle);
+
+                        // If the index is empty, we are done
+                        if (keyGroupToHandleMap.isEmpty()) {
+                            return Optional.of(new StateObjectCollection<>(result));
+                        }
+                    }
+                }
+            }
+
+            // Nothing useful to return
+            if (result.isEmpty()) {
+                return Optional.empty();
+            }
+
+            // Add all remaining JM handles that we could not replace to the final result
+            result.addAll(keyGroupToHandleMap.values());
+            return Optional.of(new StateObjectCollection<>(result));
         }
     }
 
