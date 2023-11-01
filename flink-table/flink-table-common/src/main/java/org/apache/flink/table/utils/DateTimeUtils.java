@@ -1697,6 +1697,10 @@ public class DateTimeUtils {
         return x;
     }
 
+    public static String dateSub(String dateStr, int days) {
+        return formatDate(parseDate(dateStr, DATE_FORMAT_STRING) - days);
+    }
+
     // --------------------------------------------------------------------------------------------
     // TimeUnit and TimeUnitRange enums
     // --------------------------------------------------------------------------------------------
