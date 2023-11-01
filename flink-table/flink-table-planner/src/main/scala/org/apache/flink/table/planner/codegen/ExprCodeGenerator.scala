@@ -706,9 +706,9 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
       case ARRAY_VALUE_CONSTRUCTOR =>
         generateArray(ctx, resultType, operands)
 
-      // maps
-      case MAP_VALUE_CONSTRUCTOR =>
-        generateMap(ctx, resultType, operands)
+      // maps and multisets
+      case MAP_VALUE_CONSTRUCTOR | MULTISET_VALUE_CONSTRUCTOR =>
+        generateMapOrMultiset(ctx, resultType, operands)
 
       case ITEM =>
         operands.head.resultType.getTypeRoot match {
