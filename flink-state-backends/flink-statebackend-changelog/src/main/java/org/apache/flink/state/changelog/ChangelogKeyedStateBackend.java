@@ -49,6 +49,8 @@ import org.apache.flink.runtime.state.SnapshotResult;
 import org.apache.flink.runtime.state.StateSnapshotTransformer;
 import org.apache.flink.runtime.state.StreamStateHandle;
 import org.apache.flink.runtime.state.TestableKeyedStateBackend;
+import org.apache.flink.runtime.state.VoidNamespace;
+import org.apache.flink.runtime.state.VoidNamespaceSerializer;
 import org.apache.flink.runtime.state.changelog.ChangelogStateBackendHandle;
 import org.apache.flink.runtime.state.changelog.ChangelogStateBackendHandle.ChangelogStateBackendHandleImpl;
 import org.apache.flink.runtime.state.changelog.ChangelogStateHandle;
@@ -335,7 +337,10 @@ public class ChangelogKeyedStateBackend<K>
         checkNotNull(namespace, "Namespace");
 
         if (lastName != null && lastName.equals(stateDescriptor.getName())) {
-            lastState.setCurrentNamespace(namespace);
+            if (namespace != VoidNamespace.INSTANCE
+                    || lastState.getNamespaceSerializer() == VoidNamespaceSerializer.INSTANCE) {
+                lastState.setCurrentNamespace(namespace);
+            }
             return (S) lastState;
         }
 
@@ -343,7 +348,10 @@ public class ChangelogKeyedStateBackend<K>
                 keyValueStatesByName.get(stateDescriptor.getName());
         if (previous != null) {
             lastState = previous;
-            lastState.setCurrentNamespace(namespace);
+            if (namespace != VoidNamespace.INSTANCE
+                    || lastState.getNamespaceSerializer() == VoidNamespaceSerializer.INSTANCE) {
+                lastState.setCurrentNamespace(namespace);
+            }
             lastName = stateDescriptor.getName();
             functionDelegationHelper.addOrUpdate(stateDescriptor);
             return (S) previous;
