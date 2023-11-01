@@ -64,6 +64,8 @@ class CheckpointHandlersTest {
 
     private static final Time TIMEOUT = Time.seconds(10);
 
+    private static final Time AKKA_TIMEOUT = Time.seconds(9);
+
     private static final JobID JOB_ID = new JobID();
 
     private static final Long COMPLETED_CHECKPOINT_ID = 123456L;
@@ -79,7 +81,7 @@ class CheckpointHandlersTest {
 
         checkpointTriggerHandler =
                 new CheckpointHandlers.CheckpointTriggerHandler(
-                        leaderRetriever, TIMEOUT, Collections.emptyMap());
+                        leaderRetriever, TIMEOUT, AKKA_TIMEOUT, Collections.emptyMap());
 
         checkpointStatusHandler =
                 new CheckpointHandlers.CheckpointStatusHandler(
