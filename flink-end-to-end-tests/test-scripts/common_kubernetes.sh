@@ -38,8 +38,8 @@ function setup_kubernetes_for_linux {
     # Download kubectl, which is a requirement for using minikube.
     if ! [ -x "$(command -v kubectl)" ]; then
         echo "Installing kubectl ..."
-        local version=$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
-        curl -Lo kubectl https://storage.googleapis.com/kubernetes-release/release/$version/bin/linux/$arch/kubectl && \
+        local version=$(curl https://storage.googleapis.com/kubernetes-release/release/stable.txt)
+        curl -o kubectl https://storage.googleapis.com/kubernetes-release/release/$version/bin/linux/$arch/kubectl && \
             chmod +x kubectl && sudo mv kubectl /usr/local/bin/
     fi
     # Download minikube when it is not installed beforehand.
@@ -50,7 +50,7 @@ function setup_kubernetes_for_linux {
 
     if ! [ -x "$(command -v minikube)" ]; then
       echo "Installing minikube $MINIKUBE_VERSION ..."
-      curl -Lo minikube https://storage.googleapis.com/minikube/releases/$MINIKUBE_VERSION/minikube-linux-$arch && \
+      curl -o minikube https://storage.googleapis.com/minikube/releases/$MINIKUBE_VERSION/minikube-linux-$arch && \
           chmod +x minikube && sudo mv minikube /usr/bin/minikube
     fi
 
@@ -60,7 +60,7 @@ function setup_kubernetes_for_linux {
     local crictl_version crictl_archive
     crictl_version="v1.24.2"
     crictl_archive="crictl-$crictl_version-linux-${arch}.tar.gz"
-    wget -nv "https://github.com/kubernetes-sigs/cri-tools/releases/download/${crictl_version}/${crictl_archive}"
+    wget "https://github.com/kubernetes-sigs/cri-tools/releases/download/${crictl_version}/${crictl_archive}"
     sudo tar zxvf ${crictl_archive} -C /usr/local/bin
     rm -f ${crictl_archive}
 
@@ -69,13 +69,13 @@ function setup_kubernetes_for_linux {
     cri_dockerd_version="0.2.3"
     cri_dockerd_archive="cri-dockerd-${cri_dockerd_version}.${arch}.tgz"
     cri_dockerd_binary="cri-dockerd"
-    wget -nv "https://github.com/Mirantis/cri-dockerd/releases/download/v${cri_dockerd_version}/${cri_dockerd_archive}"
+    wget "https://github.com/Mirantis/cri-dockerd/releases/download/v${cri_dockerd_version}/${cri_dockerd_archive}"
     tar xzvf $cri_dockerd_archive "cri-dockerd/${cri_dockerd_binary}" --strip-components=1
     sudo install -o root -g root -m 0755 "${cri_dockerd_binary}" "/usr/local/bin/${cri_dockerd_binary}"
     rm ${cri_dockerd_binary}
 
-    wget -nv https://raw.githubusercontent.com/Mirantis/cri-dockerd/v${cri_dockerd_version}/packaging/systemd/cri-docker.service
-    wget -nv https://raw.githubusercontent.com/Mirantis/cri-dockerd/v${cri_dockerd_version}/packaging/systemd/cri-docker.socket
+    wget https://raw.githubusercontent.com/Mirantis/cri-dockerd/v${cri_dockerd_version}/packaging/systemd/cri-docker.service
+    wget https://raw.githubusercontent.com/Mirantis/cri-dockerd/v${cri_dockerd_version}/packaging/systemd/cri-docker.socket
     sudo mv cri-docker.socket cri-docker.service /etc/systemd/system/
     sudo sed -i -e "s,/usr/bin/${cri_dockerd_binary},/usr/local/bin/${cri_dockerd_binary}," /etc/systemd/system/cri-docker.service
 
