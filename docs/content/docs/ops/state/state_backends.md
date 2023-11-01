@@ -55,7 +55,7 @@ that store the values, triggers, etc.
 
 The HashMapStateBackend is encouraged for:
 
-  - Jobs with large state, long windows, large key/value states.
+  - Jobs with not-very-large state, short windows, not-very-large key/value states.
   - All high-availability setups.
 
 It is also recommended to set [managed memory]({{< ref "docs/deployment/memory/mem_setup_tm" >}}#managed-memory) to zero.
