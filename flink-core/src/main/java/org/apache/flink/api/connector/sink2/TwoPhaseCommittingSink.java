@@ -19,8 +19,6 @@
 package org.apache.flink.api.connector.sink2;
 
 import org.apache.flink.annotation.PublicEvolving;
-import org.apache.flink.api.connector.sink2.StatefulSink.StatefulSinkWriter;
-import org.apache.flink.core.io.SimpleVersionedSerializer;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -39,17 +37,8 @@ import java.util.Collection;
  * @param <CommT> The type of the committables.
  */
 @PublicEvolving
-public interface TwoPhaseCommittingSink<InputT, CommT> extends Sink<InputT> {
-
-    /**
-     * Creates a {@link PrecommittingSinkWriter} that creates committables on checkpoint or end of
-     * input.
-     *
-     * @param context the runtime context.
-     * @return A sink writer for the two-phase commit protocol.
-     * @throws IOException for any failure during creation.
-     */
-    PrecommittingSinkWriter<InputT, CommT> createWriter(InitContext context) throws IOException;
+public interface TwoPhaseCommittingSink<InputT, CommT>
+        extends TwoPhaseCommittingSinkWithPreCommitTopology<InputT, CommT, CommT> {
 
     /**
      * Creates a {@link Committer} that permanently makes the previously written data visible
@@ -57,24 +46,23 @@ public interface TwoPhaseCommittingSink<InputT, CommT> extends Sink<InputT> {
      *
      * @return A committer for the two-phase commit protocol.
      * @throws IOException for any failure during creation.
+     * @deprecated Please use {@link #createCommitter(CommitterInitContext)}
      */
-    Committer<CommT> createCommitter() throws IOException;
+    @Deprecated
+    default Committer<CommT> createCommitter() throws IOException {
+        throw new UnsupportedOperationException(
+                "Deprecated, please use createCommitter(CommitterInitContext)");
+    }
 
-    /** Returns the serializer of the committable type. */
-    SimpleVersionedSerializer<CommT> getCommittableSerializer();
-
-    /** A {@link SinkWriter} that performs the first part of a two-phase commit protocol. */
-    @PublicEvolving
-    interface PrecommittingSinkWriter<InputT, CommT> extends SinkWriter<InputT> {
-        /**
-         * Prepares for a commit.
-         *
-         * <p>This method will be called after {@link #flush(boolean)} and before {@link
-         * StatefulSinkWriter#snapshotState(long)}.
-         *
-         * @return The data to commit as the second step of the two-phase commit protocol.
-         * @throws IOException if fail to prepare for a commit.
-         */
-        Collection<CommT> prepareCommit() throws IOException, InterruptedException;
+    /**
+     * Creates a {@link Committer} that permanently makes the previously written data visible
+     * through {@link Committer#commit(Collection)}.
+     *
+     * @param context The context information for the committer initialization.
+     * @return A committer for the two-phase commit protocol.
+     * @throws IOException for any failure during creation.
+     */
+    default Committer<CommT> createCommitter(CommitterInitContext context) throws IOException {
+        return createCommitter();
     }
 }
