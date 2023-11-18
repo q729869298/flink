@@ -124,7 +124,7 @@ class WindowEmitStrategy(
       None
     } else {
       if (fireDelay.toMillis > 0) {
-        Some(ProcessingTimeTriggers.every(fireDelay))
+        Some(ProcessingTimeTriggers.after(fireDelay))
       } else {
         Some(ElementTriggers.every())
       }
