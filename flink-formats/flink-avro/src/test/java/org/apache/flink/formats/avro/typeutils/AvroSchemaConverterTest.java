@@ -282,7 +282,8 @@ class AvroSchemaConverterTest {
                         DataTypes.FIELD(
                                 "f_map",
                                 DataTypes.MAP(DataTypes.STRING().notNull(), DataTypes.INT())),
-                        DataTypes.FIELD("f_array", DataTypes.ARRAY(DataTypes.INT())));
+                        DataTypes.FIELD("f_array", DataTypes.ARRAY(DataTypes.INT())),
+                        DataTypes.FIELD("f_timestamp_ltz", DataTypes.TIMESTAMP_LTZ(3)));
         Schema schema = AvroSchemaConverter.convertToSchema(dataType.getLogicalType());
         DataType converted = AvroSchemaConverter.convertToDataType(schema.toString());
         assertThat(converted).isEqualTo(dataType);
@@ -326,7 +327,8 @@ class AvroSchemaConverterTest {
                                                 .notNull()),
                                 DataTypes.FIELD(
                                         "f_array",
-                                        DataTypes.ARRAY(DataTypes.INT().notNull()).notNull()))
+                                        DataTypes.ARRAY(DataTypes.INT().notNull()).notNull()),
+                                DataTypes.FIELD("f_timestamp_ltz", DataTypes.TIMESTAMP_LTZ(3)))
                         .notNull();
         Schema schema = AvroSchemaConverter.convertToSchema(dataType.getLogicalType());
         DataType converted = AvroSchemaConverter.convertToDataType(schema.toString());
@@ -436,6 +438,13 @@ class AvroSchemaConverterTest {
                         + "      \"items\" : [ \"null\", \"int\" ]\n"
                         + "    } ],\n"
                         + "    \"default\" : null\n"
+                        + "  }, {\n"
+                        + "    \"name\" : \"f_timestamp_ltz\",\n"
+                        + "    \"type\" : [ \"null\", {\n"
+                        + "      \"type\" : \"long\",\n"
+                        + "      \"logicalType\" : \"local-timestamp-millis\"\n"
+                        + "    } ],\n"
+                        + "    \"default\" : null\n"
                         + "  } ]\n"
                         + "}";
         DataType dataType = AvroSchemaConverter.convertToDataType(schemaStr);
@@ -526,6 +535,13 @@ class AvroSchemaConverterTest {
                         + "      \"type\" : \"array\",\n"
                         + "      \"items\" : \"int\"\n"
                         + "    }\n"
+                        + "  } , {\n"
+                        + "    \"name\" : \"f_timestamp_ltz\",\n"
+                        + "    \"type\" : [ \"null\", {\n"
+                        + "      \"type\" : \"long\",\n"
+                        + "      \"logicalType\" : \"local-timestamp-millis\"\n"
+                        + "    } ],\n"
+                        + "    \"default\" : null\n"
                         + "  } ]\n"
                         + "}";
         DataType dataType = AvroSchemaConverter.convertToDataType(schemaStr);
@@ -568,7 +584,8 @@ class AvroSchemaConverterTest {
                             "type_timestamp_millis",
                             "type_timestamp_micros",
                             "type_decimal_bytes",
-                            "type_decimal_fixed"
+                            "type_decimal_fixed",
+                            "type_local_timestamp_millis",
                         },
                         Types.STRING,
                         Types.INT,
@@ -592,7 +609,8 @@ class AvroSchemaConverterTest {
                         Types.SQL_TIMESTAMP,
                         Types.SQL_TIMESTAMP,
                         Types.BIG_DEC,
-                        Types.BIG_DEC);
+                        Types.BIG_DEC,
+                        Types.LOCAL_DATE_TIME);
 
         assertThat(actual).isEqualTo(user);
 
@@ -653,7 +671,10 @@ class AvroSchemaConverterTest {
                                 DataTypes.FIELD(
                                         "type_decimal_bytes", DataTypes.DECIMAL(4, 2).notNull()),
                                 DataTypes.FIELD(
-                                        "type_decimal_fixed", DataTypes.DECIMAL(4, 2).notNull()))
+                                        "type_decimal_fixed", DataTypes.DECIMAL(4, 2).notNull()),
+                                DataTypes.FIELD(
+                                        "type_local_timestamp_millis",
+                                        DataTypes.TIMESTAMP_LTZ(3).notNull()))
                         .notNull();
 
         assertThat(actual).isEqualTo(user);

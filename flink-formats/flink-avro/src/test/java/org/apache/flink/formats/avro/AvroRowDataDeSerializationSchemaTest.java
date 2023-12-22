@@ -48,6 +48,7 @@ import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -277,6 +278,7 @@ class AvroRowDataDeSerializationSchemaTest {
         record.setTypeTimestampMillis(timestamp);
         record.setTypeDate(LocalDate.parse("2014-03-01"));
         record.setTypeTimeMillis(LocalTime.parse("12:12:12"));
+        record.setTypeLocalTimestampMillis(LocalDateTime.parse("2022-12-24T20:40:56.978"));
         SpecificDatumWriter<LogicalTimeRecord> datumWriter =
                 new SpecificDatumWriter<>(LogicalTimeRecord.class);
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
@@ -289,7 +291,8 @@ class AvroRowDataDeSerializationSchemaTest {
                 ROW(
                                 FIELD("type_timestamp_millis", TIMESTAMP(3).notNull()),
                                 FIELD("type_date", DATE().notNull()),
-                                FIELD("type_time_millis", TIME(3).notNull()))
+                                FIELD("type_time_millis", TIME(3).notNull()),
+                                FIELD("type_local_timestamp_millis", TIMESTAMP(3).notNull()))
                         .notNull();
         AvroRowDataSerializationSchema serializationSchema =
                 createSerializationSchema(dataType, encoding);
