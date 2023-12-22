@@ -35,6 +35,7 @@ import org.apache.flink.table.types.logical.RowType;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonCreator;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonGetter;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonIgnore;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonInclude;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonProperty;
@@ -59,6 +60,8 @@ public class DynamicTableSourceSpec extends DynamicTableSpecBase {
 
     private DynamicTableSource tableSource;
 
+    private @JsonIgnore String digest;
+
     @JsonCreator
     public DynamicTableSourceSpec(
             @JsonProperty(FIELD_NAME_CATALOG_TABLE) ContextResolvedTable contextResolvedTable,
@@ -66,6 +69,14 @@ public class DynamicTableSourceSpec extends DynamicTableSpecBase {
                     List<SourceAbilitySpec> sourceAbilities) {
         this.contextResolvedTable = contextResolvedTable;
         this.sourceAbilities = sourceAbilities;
+    }
+
+    public void setDigest(String digest) {
+        this.digest = digest;
+    }
+
+    public String getDigest() {
+        return digest;
     }
 
     private DynamicTableSource getTableSource(FlinkContext context, FlinkTypeFactory typeFactory) {
@@ -170,12 +181,13 @@ public class DynamicTableSourceSpec extends DynamicTableSpecBase {
         DynamicTableSourceSpec that = (DynamicTableSourceSpec) o;
         return Objects.equals(contextResolvedTable, that.contextResolvedTable)
                 && Objects.equals(sourceAbilities, that.sourceAbilities)
-                && Objects.equals(tableSource, that.tableSource);
+                && Objects.equals(tableSource, that.tableSource)
+                && Objects.equals(digest, that.digest);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(contextResolvedTable, sourceAbilities, tableSource);
+        return Objects.hash(contextResolvedTable, sourceAbilities, tableSource, digest);
     }
 
     @Override
@@ -187,6 +199,8 @@ public class DynamicTableSourceSpec extends DynamicTableSpecBase {
                 + sourceAbilities
                 + ", tableSource="
                 + tableSource
+                + ", digest="
+                + digest
                 + '}';
     }
 }

@@ -87,6 +87,7 @@ class BatchPhysicalDynamicFilteringTableSourceScan(
       tableSourceTable.contextResolvedTable,
       util.Arrays.asList(tableSourceTable.abilitySpecs: _*))
     tableSourceSpec.setTableSource(tableSourceTable.tableSource)
+    tableSourceSpec.setDigest(getDigest())
 
     new BatchExecTableSourceScan(
       unwrapTableConfig(this),
