@@ -30,6 +30,8 @@ import org.apache.flink.streaming.api.CheckpointingMode;
 
 import java.time.Duration;
 
+import static org.apache.flink.configuration.ClusterOptions.THREAD_DUMP_LOG_LEVEL;
+import static org.apache.flink.configuration.ClusterOptions.THREAD_DUMP_STACKTRACE_MAX_DEPTH;
 import static org.apache.flink.configuration.ConfigOptions.key;
 import static org.apache.flink.configuration.description.LinkElement.link;
 
@@ -314,4 +316,23 @@ public class ExecutionCheckpointingOptions {
                             "Defines the maximum number of subtasks that share the same channel state file. "
                                     + "It can reduce the number of small files when enable unaligned checkpoint. "
                                     + "Each subtask will create a new channel state file when this is configured to 1.");
+
+    public static final ConfigOption<Boolean> ENABLE_THREAD_DUMP_WHEN_CHECKPOINT_TIMEOUT =
+            key("execution.checkpointing.thread-dump-when-checkpoint-expired.enabled")
+                    .booleanType()
+                    .defaultValue(true)
+                    .withDescription(
+                            Description.builder()
+                                    .text(
+                                            "When a checkpoint is notified expired, the task manager could "
+                                                    + "produce a thread dump to log for debugging purpose. "
+                                                    + "This flag enables this thread dump.")
+                                    .linebreak()
+                                    .text(
+                                            "The log level of this thread dump can be specified by %s, "
+                                                    + "and the stack length of thread dump can be configured by %s.",
+                                            TextElement.code(THREAD_DUMP_LOG_LEVEL.key()),
+                                            TextElement.code(
+                                                    THREAD_DUMP_STACKTRACE_MAX_DEPTH.key()))
+                                    .build());
 }

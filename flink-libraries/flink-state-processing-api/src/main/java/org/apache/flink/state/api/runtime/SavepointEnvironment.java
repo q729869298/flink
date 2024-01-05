@@ -57,6 +57,7 @@ import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.query.KvStateRegistry;
 import org.apache.flink.runtime.query.TaskKvStateRegistry;
 import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
+import org.apache.flink.runtime.state.CheckpointExpiredThreadDumper;
 import org.apache.flink.runtime.state.TaskStateManager;
 import org.apache.flink.runtime.taskexecutor.GlobalAggregateManager;
 import org.apache.flink.runtime.taskmanager.TaskManagerActions;
@@ -113,6 +114,8 @@ public class SavepointEnvironment implements Environment {
 
     private final ChannelStateWriteRequestExecutorFactory channelStateExecutorFactory;
 
+    private final CheckpointExpiredThreadDumper threadDumper;
+
     private SavepointEnvironment(
             RuntimeContext ctx,
             ExecutionConfig executionConfig,
@@ -142,6 +145,7 @@ public class SavepointEnvironment implements Environment {
 
         this.userCodeClassLoader = UserCodeClassLoaderRuntimeContextAdapter.from(ctx);
         this.channelStateExecutorFactory = new ChannelStateWriteRequestExecutorFactory(jobID);
+        this.threadDumper = new CheckpointExpiredThreadDumper();
     }
 
     @Override
@@ -318,6 +322,11 @@ public class SavepointEnvironment implements Environment {
     @Override
     public ChannelStateWriteRequestExecutorFactory getChannelStateExecutorFactory() {
         return channelStateExecutorFactory;
+    }
+
+    @Override
+    public CheckpointExpiredThreadDumper getCheckpointExpiredThreadDumper() {
+        return threadDumper;
     }
 
     @Override

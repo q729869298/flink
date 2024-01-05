@@ -48,6 +48,7 @@ import org.apache.flink.runtime.memory.SharedResources;
 import org.apache.flink.runtime.metrics.groups.TaskMetricGroup;
 import org.apache.flink.runtime.query.KvStateRegistry;
 import org.apache.flink.runtime.query.TaskKvStateRegistry;
+import org.apache.flink.runtime.state.CheckpointExpiredThreadDumper;
 import org.apache.flink.runtime.state.CheckpointStorageAccess;
 import org.apache.flink.runtime.state.TaskStateManager;
 import org.apache.flink.runtime.taskexecutor.GlobalAggregateManager;
@@ -140,6 +141,8 @@ public class MockEnvironment implements Environment, AutoCloseable {
 
     private final ChannelStateWriteRequestExecutorFactory channelStateExecutorFactory;
 
+    private final CheckpointExpiredThreadDumper checkpointExpiredThreadDumper;
+
     public static MockEnvironmentBuilder builder() {
         return new MockEnvironmentBuilder();
     }
@@ -202,6 +205,7 @@ public class MockEnvironment implements Environment, AutoCloseable {
 
         this.asyncOperationsThreadPool = Executors.newDirectExecutorService();
         this.channelStateExecutorFactory = channelStateExecutorFactory;
+        this.checkpointExpiredThreadDumper = new CheckpointExpiredThreadDumper();
     }
 
     public IteratorWrappingTestSingleInputGate<Record> addInput(
@@ -456,6 +460,11 @@ public class MockEnvironment implements Environment, AutoCloseable {
     @Override
     public ChannelStateWriteRequestExecutorFactory getChannelStateExecutorFactory() {
         return channelStateExecutorFactory;
+    }
+
+    @Override
+    public CheckpointExpiredThreadDumper getCheckpointExpiredThreadDumper() {
+        return checkpointExpiredThreadDumper;
     }
 
     public void setExpectedExternalFailureCause(Class<? extends Throwable> expectedThrowableClass) {

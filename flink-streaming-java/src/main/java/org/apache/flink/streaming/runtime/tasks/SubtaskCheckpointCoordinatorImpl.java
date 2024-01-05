@@ -531,6 +531,13 @@ class SubtaskCheckpointCoordinatorImpl implements SubtaskCheckpointCoordinator {
     }
 
     @Override
+    public boolean isCheckpointRegistered(long checkpointId) {
+        synchronized (lock) {
+            return !closed && checkpoints.containsKey(checkpointId);
+        }
+    }
+
+    @Override
     public void close() throws IOException {
         cancelAlignmentTimer();
         cancel();

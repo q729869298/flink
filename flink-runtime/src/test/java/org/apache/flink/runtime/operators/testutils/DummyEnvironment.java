@@ -45,6 +45,7 @@ import org.apache.flink.runtime.metrics.groups.TaskMetricGroup;
 import org.apache.flink.runtime.metrics.groups.UnregisteredMetricGroups;
 import org.apache.flink.runtime.query.KvStateRegistry;
 import org.apache.flink.runtime.query.TaskKvStateRegistry;
+import org.apache.flink.runtime.state.CheckpointExpiredThreadDumper;
 import org.apache.flink.runtime.state.TaskStateManager;
 import org.apache.flink.runtime.state.TestTaskStateManager;
 import org.apache.flink.runtime.taskexecutor.GlobalAggregateManager;
@@ -77,6 +78,9 @@ public class DummyEnvironment implements Environment {
     private final Configuration taskConfiguration = new Configuration();
     private final ChannelStateWriteRequestExecutorFactory channelStateExecutorFactory =
             new ChannelStateWriteRequestExecutorFactory(jobId);
+
+    private final CheckpointExpiredThreadDumper checkpointExpiredThreadDumper =
+            new CheckpointExpiredThreadDumper();
 
     public DummyEnvironment() {
         this("Test Job", 1, 0, 1);
@@ -281,5 +285,10 @@ public class DummyEnvironment implements Environment {
     @Override
     public ChannelStateWriteRequestExecutorFactory getChannelStateExecutorFactory() {
         return channelStateExecutorFactory;
+    }
+
+    @Override
+    public CheckpointExpiredThreadDumper getCheckpointExpiredThreadDumper() {
+        return checkpointExpiredThreadDumper;
     }
 }
