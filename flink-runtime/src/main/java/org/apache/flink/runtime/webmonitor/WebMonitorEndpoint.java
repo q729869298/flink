@@ -1002,7 +1002,7 @@ public class WebMonitorEndpoint<T extends RestfulGateway> extends RestServerEndp
 
         // TaskManager log and stdout file handler
 
-        final Time cacheEntryDuration = Time.milliseconds(restConfiguration.getRefreshInterval());
+        final Time cacheEntryDuration = Time.milliseconds(restConfiguration.getCacheTimeToLive());
 
         final TaskManagerLogFileHandler taskManagerLogFileHandler =
                 new TaskManagerLogFileHandler(
@@ -1101,7 +1101,7 @@ public class WebMonitorEndpoint<T extends RestfulGateway> extends RestServerEndp
     }
 
     private void startExecutionGraphCacheCleanupTask() {
-        final long cleanupInterval = 2 * restConfiguration.getRefreshInterval();
+        final long cleanupInterval = 2 * restConfiguration.getCacheTimeToLive();
         executionGraphCleanupTask =
                 executor.scheduleWithFixedDelay(
                         executionGraphCache::cleanup,
