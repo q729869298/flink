@@ -41,7 +41,6 @@ import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
 import org.apache.flink.runtime.jobgraph.JobResourceRequirements;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
-import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobmaster.JobMasterGateway;
 import org.apache.flink.runtime.jobmaster.JobMasterId;
 import org.apache.flink.runtime.jobmaster.SerializedInputSplit;
@@ -49,9 +48,9 @@ import org.apache.flink.runtime.jobmaster.TaskManagerRegistrationInformation;
 import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.messages.checkpoint.DeclineCheckpoint;
 import org.apache.flink.runtime.messages.webmonitor.JobDetails;
-import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
+import org.apache.flink.runtime.operators.coordination.CoordinationRequestMessage;
 import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
-import org.apache.flink.runtime.operators.coordination.OperatorEvent;
+import org.apache.flink.runtime.operators.coordination.OperatorEventMessage;
 import org.apache.flink.runtime.query.KvStateLocation;
 import org.apache.flink.runtime.registration.RegistrationResponse;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerId;
@@ -61,6 +60,7 @@ import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.taskexecutor.TaskExecutorToJobManagerHeartbeatPayload;
 import org.apache.flink.runtime.taskexecutor.slot.SlotOffer;
 import org.apache.flink.runtime.taskmanager.TaskExecutionState;
+import org.apache.flink.types.Either;
 import org.apache.flink.util.SerializedValue;
 import org.apache.flink.util.function.TriConsumer;
 import org.apache.flink.util.function.TriFunction;
@@ -69,12 +69,15 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static org.apache.flink.runtime.checkpoint.TaskStateSnapshot.deserializeTaskStateSnapshot;
 
@@ -88,7 +91,7 @@ public class TestingJobMasterGateway implements JobMasterGateway {
     @Nonnull private final Supplier<CompletableFuture<Acknowledge>> cancelFunction;
 
     @Nonnull
-    private final Function<TaskExecutionState, CompletableFuture<Acknowledge>>
+    private final Function<TaskExecutionState, Either<Acknowledge, Throwable>>
             updateTaskExecutionStateFunction;
 
     @Nonnull
@@ -177,18 +180,11 @@ public class TestingJobMasterGateway implements JobMasterGateway {
     @Nonnull TriFunction<String, Object, byte[], CompletableFuture<Object>> updateAggregateFunction;
 
     @Nonnull
-    private final TriFunction<
-                    ExecutionAttemptID,
-                    OperatorID,
-                    SerializedValue<OperatorEvent>,
-                    CompletableFuture<Acknowledge>>
+    private final Function<OperatorEventMessage, Either<Acknowledge, Throwable>>
             operatorEventSender;
 
     @Nonnull
-    private final BiFunction<
-                    OperatorID,
-                    SerializedValue<CoordinationRequest>,
-                    CompletableFuture<CoordinationResponse>>
+    private final Function<CoordinationRequestMessage, CompletableFuture<CoordinationResponse>>
             deliverCoordinationRequestFunction;
 
     private final Consumer<Collection<ResourceRequirement>> notifyNotEnoughResourcesConsumer;
@@ -206,7 +202,7 @@ public class TestingJobMasterGateway implements JobMasterGateway {
             @Nonnull String hostname,
             @Nonnull Supplier<CompletableFuture<Acknowledge>> cancelFunction,
             @Nonnull
-                    Function<TaskExecutionState, CompletableFuture<Acknowledge>>
+                    Function<TaskExecutionState, Either<Acknowledge, Throwable>>
                             updateTaskExecutionStateFunction,
             @Nonnull
                     BiFunction<
@@ -292,17 +288,10 @@ public class TestingJobMasterGateway implements JobMasterGateway {
                     TriFunction<String, Object, byte[], CompletableFuture<Object>>
                             updateAggregateFunction,
             @Nonnull
-                    TriFunction<
-                                    ExecutionAttemptID,
-                                    OperatorID,
-                                    SerializedValue<OperatorEvent>,
-                                    CompletableFuture<Acknowledge>>
+                    Function<OperatorEventMessage, Either<Acknowledge, Throwable>>
                             operatorEventSender,
             @Nonnull
-                    BiFunction<
-                                    OperatorID,
-                                    SerializedValue<CoordinationRequest>,
-                                    CompletableFuture<CoordinationResponse>>
+                    Function<CoordinationRequestMessage, CompletableFuture<CoordinationResponse>>
                             deliverCoordinationRequestFunction,
             @Nonnull Consumer<Collection<ResourceRequirement>> notifyNotEnoughResourcesConsumer,
             @Nonnull
@@ -354,9 +343,12 @@ public class TestingJobMasterGateway implements JobMasterGateway {
     }
 
     @Override
-    public CompletableFuture<Acknowledge> updateTaskExecutionState(
-            TaskExecutionState taskExecutionState) {
-        return updateTaskExecutionStateFunction.apply(taskExecutionState);
+    public CompletableFuture<List<Either<Acknowledge, Throwable>>> updateTaskExecutionStates(
+            List<TaskExecutionState> taskExecutionStates) {
+        return CompletableFuture.completedFuture(
+                taskExecutionStates.stream()
+                        .map(updateTaskExecutionStateFunction)
+                        .collect(Collectors.toList()));
     }
 
     @Override
@@ -550,23 +542,9 @@ public class TestingJobMasterGateway implements JobMasterGateway {
     }
 
     @Override
-    public CompletableFuture<Acknowledge> sendOperatorEventToCoordinator(
-            ExecutionAttemptID task, OperatorID operatorID, SerializedValue<OperatorEvent> event) {
-        return operatorEventSender.apply(task, operatorID, event);
-    }
-
-    @Override
-    public CompletableFuture<CoordinationResponse> sendRequestToCoordinator(
-            OperatorID operatorID, SerializedValue<CoordinationRequest> request) {
-        return deliverCoordinationRequestFunction.apply(operatorID, request);
-    }
-
-    @Override
     public CompletableFuture<CoordinationResponse> deliverCoordinationRequestToCoordinator(
-            OperatorID operatorId,
-            SerializedValue<CoordinationRequest> serializedRequest,
-            Time timeout) {
-        return deliverCoordinationRequestFunction.apply(operatorId, serializedRequest);
+            CoordinationRequestMessage coordinationRequestMessage, Time timeout) {
+        return deliverCoordinationRequestFunction.apply(coordinationRequestMessage);
     }
 
     @Override
@@ -592,5 +570,21 @@ public class TestingJobMasterGateway implements JobMasterGateway {
     }
 
     @Override
-    public void notifyEndOfData(ExecutionAttemptID executionAttempt) {}
+    public void notifyEndOfData(List<ExecutionAttemptID> executionAttempts) {}
+
+    @Override
+    public CompletableFuture<List<Either<Acknowledge, Throwable>>> sendOperatorEventsToCoordinators(
+            List<OperatorEventMessage> operatorEvents) {
+        List<Either<Acknowledge, Throwable>> results = new ArrayList<>();
+        for (OperatorEventMessage operatorEvent : operatorEvents) {
+            results.add(operatorEventSender.apply(operatorEvent));
+        }
+        return CompletableFuture.completedFuture(results);
+    }
+
+    @Override
+    public CompletableFuture<CoordinationResponse> sendRequestToCoordinator(
+            CoordinationRequestMessage coordinationRequest) {
+        return deliverCoordinationRequestFunction.apply(coordinationRequest);
+    }
 }
