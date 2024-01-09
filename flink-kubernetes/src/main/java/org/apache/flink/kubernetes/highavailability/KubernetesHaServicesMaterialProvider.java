@@ -25,14 +25,11 @@ import org.apache.flink.kubernetes.configuration.KubernetesLeaderElectionConfigu
 import org.apache.flink.kubernetes.kubeclient.FlinkKubeClient;
 import org.apache.flink.kubernetes.kubeclient.KubernetesConfigMapSharedWatcher;
 import org.apache.flink.kubernetes.utils.KubernetesUtils;
-import org.apache.flink.runtime.blob.BlobStoreService;
 import org.apache.flink.runtime.checkpoint.CheckpointRecoveryFactory;
-import org.apache.flink.runtime.highavailability.AbstractHaServices;
-import org.apache.flink.runtime.highavailability.FileSystemJobResultStore;
 import org.apache.flink.runtime.jobmanager.JobGraphStore;
 import org.apache.flink.runtime.leaderelection.LeaderElectionDriverFactory;
-import org.apache.flink.runtime.leaderretrieval.DefaultLeaderRetrievalService;
-import org.apache.flink.runtime.leaderretrieval.LeaderRetrievalService;
+import org.apache.flink.runtime.leaderretrieval.LeaderRetrievalDriverFactory;
+import org.apache.flink.runtime.leaderservice.LeaderServiceMaterialGenerator;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.ExecutorUtils;
 import org.apache.flink.util.concurrent.ExecutorThreadFactory;
@@ -50,10 +47,10 @@ import static org.apache.flink.kubernetes.utils.Constants.NAME_SEPARATOR;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /** Kubernetes HA services that use a single leader election service per JobManager. */
-public class KubernetesLeaderElectionHaServices extends AbstractHaServices {
+public class KubernetesHaServicesMaterialProvider implements LeaderServiceMaterialGenerator {
 
     private static final Logger LOG =
-            LoggerFactory.getLogger(KubernetesLeaderElectionHaServices.class);
+            LoggerFactory.getLogger(KubernetesHaServicesMaterialProvider.class);
 
     private final String clusterId;
 
@@ -64,11 +61,12 @@ public class KubernetesLeaderElectionHaServices extends AbstractHaServices {
 
     private final String lockIdentity;
 
-    KubernetesLeaderElectionHaServices(
-            FlinkKubeClient kubeClient,
-            Executor ioExecutor,
-            Configuration configuration,
-            BlobStoreService blobStoreService)
+    private final Executor ioExecutor;
+
+    private final Configuration configuration;
+
+    KubernetesHaServicesMaterialProvider(
+            FlinkKubeClient kubeClient, Executor ioExecutor, Configuration configuration)
             throws Exception {
         this(
                 kubeClient,
@@ -79,32 +77,20 @@ public class KubernetesLeaderElectionHaServices extends AbstractHaServices {
                 ioExecutor,
                 configuration.get(KubernetesConfigOptions.CLUSTER_ID),
                 UUID.randomUUID().toString(),
-                configuration,
-                blobStoreService);
+                configuration);
     }
 
-    private KubernetesLeaderElectionHaServices(
+    private KubernetesHaServicesMaterialProvider(
             FlinkKubeClient kubeClient,
             KubernetesConfigMapSharedWatcher configMapSharedWatcher,
             ExecutorService watchExecutorService,
             Executor ioExecutor,
             String clusterId,
             String lockIdentity,
-            Configuration configuration,
-            BlobStoreService blobStoreService)
+            Configuration configuration)
             throws Exception {
-        super(
-                configuration,
-                createDriverFactory(
-                        kubeClient,
-                        configMapSharedWatcher,
-                        watchExecutorService,
-                        clusterId,
-                        lockIdentity,
-                        configuration),
-                ioExecutor,
-                blobStoreService,
-                FileSystemJobResultStore.fromConfiguration(configuration, ioExecutor));
+        this.configuration = configuration;
+        this.ioExecutor = ioExecutor;
 
         this.kubeClient = checkNotNull(kubeClient);
         this.clusterId = checkNotNull(clusterId);
@@ -130,18 +116,7 @@ public class KubernetesLeaderElectionHaServices extends AbstractHaServices {
                 watchExecutorService);
     }
 
-    @Override
-    protected LeaderRetrievalService createLeaderRetrievalService(String componentId) {
-        return new DefaultLeaderRetrievalService(
-                new KubernetesLeaderRetrievalDriverFactory(
-                        configMapSharedWatcher,
-                        watchExecutorService,
-                        getClusterConfigMap(),
-                        componentId));
-    }
-
-    @Override
-    protected CheckpointRecoveryFactory createCheckpointRecoveryFactory() {
+    public CheckpointRecoveryFactory createCheckpointRecoveryFactory() {
         return KubernetesCheckpointRecoveryFactory.withoutLeadershipValidation(
                 kubeClient, configuration, ioExecutor, clusterId, this::getJobSpecificConfigMap);
     }
@@ -150,8 +125,7 @@ public class KubernetesLeaderElectionHaServices extends AbstractHaServices {
         return clusterId + NAME_SEPARATOR + jobID.toString() + NAME_SEPARATOR + "config-map";
     }
 
-    @Override
-    protected JobGraphStore createJobGraphStore() throws Exception {
+    public JobGraphStore createJobGraphStore() throws Exception {
         return KubernetesUtils.createJobGraphStore(
                 configuration, kubeClient, getClusterConfigMap(), lockIdentity);
     }
@@ -162,21 +136,6 @@ public class KubernetesLeaderElectionHaServices extends AbstractHaServices {
 
     private static String getClusterConfigMap(String clusterId) {
         return clusterId + NAME_SEPARATOR + "cluster-config-map";
-    }
-
-    @Override
-    public void internalClose() throws Exception {
-        Exception exception = null;
-        try {
-            closeK8sServices();
-        } catch (Exception e) {
-            exception = e;
-        }
-
-        kubeClient.close();
-        ExecutorUtils.gracefulShutdown(5, TimeUnit.SECONDS, this.watchExecutorService);
-
-        ExceptionUtils.tryRethrowException(exception);
     }
 
     private void closeK8sServices() {
@@ -190,7 +149,59 @@ public class KubernetesLeaderElectionHaServices extends AbstractHaServices {
     }
 
     @Override
-    public void internalCleanup() throws Exception {
+    public String getLeaderPathForResourceManager() {
+        return "resourcemanager";
+    }
+
+    @Override
+    public String getLeaderPathForDispatcher() {
+        return "dispatcher";
+    }
+
+    @Override
+    public String getLeaderPathForJobManager(JobID jobID) {
+        return "job-" + jobID.toString();
+    }
+
+    @Override
+    public String getLeaderPathForRestServer() {
+        return "restserver";
+    }
+
+    @Override
+    public LeaderElectionDriverFactory createLeaderElectionDriverFactory() {
+        return createDriverFactory(
+                kubeClient,
+                configMapSharedWatcher,
+                watchExecutorService,
+                clusterId,
+                lockIdentity,
+                configuration);
+    }
+
+    @Override
+    public LeaderRetrievalDriverFactory createLeaderRetrievalDriverFactory(String componentId) {
+        return new KubernetesLeaderRetrievalDriverFactory(
+                configMapSharedWatcher, watchExecutorService, getClusterConfigMap(), componentId);
+    }
+
+    @Override
+    public void closeServices() throws Exception {
+        Exception exception = null;
+        try {
+            closeK8sServices();
+        } catch (Exception e) {
+            exception = e;
+        }
+
+        kubeClient.close();
+        ExecutorUtils.gracefulShutdown(5, TimeUnit.SECONDS, this.watchExecutorService);
+
+        ExceptionUtils.tryRethrowException(exception);
+    }
+
+    @Override
+    public void cleanupServices() throws Exception {
         Exception exception = null;
         // in order to clean up, we first need to stop the services that rely on the config maps
         try {
@@ -205,28 +216,8 @@ public class KubernetesLeaderElectionHaServices extends AbstractHaServices {
     }
 
     @Override
-    public void internalCleanupJobData(JobID jobID) throws Exception {
+    public void cleanupJobData(JobID jobID) throws Exception {
         kubeClient.deleteConfigMap(getJobSpecificConfigMap(jobID)).get();
         // need to delete job specific leader address from leader config map
-    }
-
-    @Override
-    protected String getLeaderPathForResourceManager() {
-        return "resourcemanager";
-    }
-
-    @Override
-    protected String getLeaderPathForDispatcher() {
-        return "dispatcher";
-    }
-
-    @Override
-    protected String getLeaderPathForJobManager(JobID jobID) {
-        return "job-" + jobID.toString();
-    }
-
-    @Override
-    protected String getLeaderPathForRestServer() {
-        return "restserver";
     }
 }

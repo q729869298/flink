@@ -68,10 +68,13 @@ public enum JobMasterServiceLeadershipRunnerFactory implements JobManagerRunnerF
         final JobMasterConfiguration jobMasterConfiguration =
                 JobMasterConfiguration.fromConfiguration(configuration);
 
-        final JobResultStore jobResultStore = highAvailabilityServices.getJobResultStore();
+        final JobResultStore jobResultStore =
+                highAvailabilityServices.getPersistentServices().getJobResultStore();
 
         final LeaderElection jobManagerLeaderElection =
-                highAvailabilityServices.getJobManagerLeaderElection(jobGraph.getJobID());
+                highAvailabilityServices
+                        .getLeaderServices()
+                        .getJobMasterLeaderElection(jobGraph.getJobID());
 
         final SlotPoolServiceSchedulerFactory slotPoolServiceSchedulerFactory =
                 DefaultSlotPoolServiceSchedulerFactory.fromConfiguration(

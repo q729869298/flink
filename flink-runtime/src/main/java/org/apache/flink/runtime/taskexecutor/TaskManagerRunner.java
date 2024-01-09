@@ -237,7 +237,7 @@ public class TaskManagerRunner implements FatalErrorHandler {
                     BlobUtils.createBlobCacheService(
                             configuration,
                             Reference.borrowed(workingDirectory.unwrap().getBlobStorageDirectory()),
-                            highAvailabilityServices.createBlobStore(),
+                            highAvailabilityServices.getPersistentServices().getBlobStore(),
                             null);
 
             final ExternalResourceInfoProvider externalResourceInfoProvider =
@@ -730,7 +730,7 @@ public class TaskManagerRunner implements FatalErrorHandler {
 
         final InetAddress taskManagerAddress =
                 LeaderRetrievalUtils.findConnectingAddress(
-                        haServices.getResourceManagerLeaderRetriever(),
+                        haServices.getLeaderServices().getResourceManagerLeaderRetriever(),
                         lookupTimeout,
                         rpcSystemUtils);
 

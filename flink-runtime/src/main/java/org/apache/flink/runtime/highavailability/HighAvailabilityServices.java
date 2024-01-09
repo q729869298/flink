@@ -19,16 +19,12 @@
 package org.apache.flink.runtime.highavailability;
 
 import org.apache.flink.api.common.JobID;
-import org.apache.flink.runtime.blob.BlobStore;
-import org.apache.flink.runtime.checkpoint.CheckpointRecoveryFactory;
 import org.apache.flink.runtime.dispatcher.cleanup.GloballyCleanableResource;
-import org.apache.flink.runtime.jobmanager.JobGraphStore;
-import org.apache.flink.runtime.leaderelection.LeaderElection;
-import org.apache.flink.runtime.leaderretrieval.LeaderRetrievalService;
+import org.apache.flink.runtime.leaderservice.LeaderServices;
+import org.apache.flink.runtime.persistentservice.PersistentServices;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.concurrent.FutureUtils;
 
-import java.io.IOException;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -48,8 +44,7 @@ import java.util.concurrent.Executor;
  *   <li>Naming of RPC endpoints
  * </ul>
  */
-public interface HighAvailabilityServices
-        extends ClientHighAvailabilityServices, GloballyCleanableResource {
+public interface HighAvailabilityServices extends GloballyCleanableResource, AutoCloseable {
 
     // ------------------------------------------------------------------------
     //  Constants
@@ -72,125 +67,14 @@ public interface HighAvailabilityServices
     //  Services
     // ------------------------------------------------------------------------
 
-    /** Gets the leader retriever for the cluster's resource manager. */
-    LeaderRetrievalService getResourceManagerLeaderRetriever();
-
     /**
-     * Gets the leader retriever for the dispatcher. This leader retrieval service is not always
-     * accessible.
+     * Gets the {@link LeaderServices} for the retriever and election services of all the
+     * components.
      */
-    LeaderRetrievalService getDispatcherLeaderRetriever();
+    LeaderServices getLeaderServices();
 
-    /**
-     * Gets the leader retriever for the job JobMaster which is responsible for the given job.
-     *
-     * @param jobID The identifier of the job.
-     * @return Leader retrieval service to retrieve the job manager for the given job
-     * @deprecated This method should only be used by the legacy code where the JobManager acts as
-     *     the master.
-     */
-    @Deprecated
-    LeaderRetrievalService getJobManagerLeaderRetriever(JobID jobID);
-
-    /**
-     * Gets the leader retriever for the job JobMaster which is responsible for the given job.
-     *
-     * @param jobID The identifier of the job.
-     * @param defaultJobManagerAddress JobManager address which will be returned by a static leader
-     *     retrieval service.
-     * @return Leader retrieval service to retrieve the job manager for the given job
-     */
-    LeaderRetrievalService getJobManagerLeaderRetriever(
-            JobID jobID, String defaultJobManagerAddress);
-
-    /**
-     * This retriever should no longer be used on the cluster side. The web monitor retriever is
-     * only required on the client-side and we have a dedicated high-availability services for the
-     * client, named {@link ClientHighAvailabilityServices}. See also FLINK-13750.
-     *
-     * @return the leader retriever for web monitor
-     * @deprecated just use {@link #getClusterRestEndpointLeaderRetriever()} instead of this method.
-     */
-    @Deprecated
-    default LeaderRetrievalService getWebMonitorLeaderRetriever() {
-        throw new UnsupportedOperationException(
-                "getWebMonitorLeaderRetriever should no longer be used. Instead use "
-                        + "#getClusterRestEndpointLeaderRetriever to instantiate the cluster "
-                        + "rest endpoint leader retriever. If you called this method, then "
-                        + "make sure that #getClusterRestEndpointLeaderRetriever has been "
-                        + "implemented by your HighAvailabilityServices implementation.");
-    }
-
-    /** Gets the {@link LeaderElection} for the cluster's resource manager. */
-    LeaderElection getResourceManagerLeaderElection();
-
-    /** Gets the {@link LeaderElection} for the cluster's dispatcher. */
-    LeaderElection getDispatcherLeaderElection();
-
-    /** Gets the {@link LeaderElection} for the job with the given {@link JobID}. */
-    LeaderElection getJobManagerLeaderElection(JobID jobID);
-
-    /**
-     * Gets the {@link LeaderElection} for the cluster's rest endpoint.
-     *
-     * @deprecated Use {@link #getClusterRestEndpointLeaderElection()} instead.
-     */
-    @Deprecated
-    default LeaderElection getWebMonitorLeaderElection() {
-        throw new UnsupportedOperationException(
-                "getWebMonitorLeaderElectionService should no longer be used. Instead use "
-                        + "#getClusterRestEndpointLeaderElectionService to instantiate the cluster "
-                        + "rest endpoint's leader election service. If you called this method, then "
-                        + "make sure that #getClusterRestEndpointLeaderElectionService has been "
-                        + "implemented by your HighAvailabilityServices implementation.");
-    }
-
-    /**
-     * Gets the checkpoint recovery factory for the job manager.
-     *
-     * @return Checkpoint recovery factory
-     */
-    CheckpointRecoveryFactory getCheckpointRecoveryFactory() throws Exception;
-
-    /**
-     * Gets the submitted job graph store for the job manager.
-     *
-     * @return Submitted job graph store
-     * @throws Exception if the submitted job graph store could not be created
-     */
-    JobGraphStore getJobGraphStore() throws Exception;
-
-    /**
-     * Gets the store that holds information about the state of finished jobs.
-     *
-     * @return Store of finished job results
-     * @throws Exception if job result store could not be created
-     */
-    JobResultStore getJobResultStore() throws Exception;
-
-    /**
-     * Creates the BLOB store in which BLOBs are stored in a highly-available fashion.
-     *
-     * @return Blob store
-     * @throws IOException if the blob store could not be created
-     */
-    BlobStore createBlobStore() throws IOException;
-
-    /** Gets the {@link LeaderElection} for the cluster's rest endpoint. */
-    default LeaderElection getClusterRestEndpointLeaderElection() {
-        // for backwards compatibility we delegate to getWebMonitorLeaderElectionService
-        // all implementations of this interface should override
-        // getClusterRestEndpointLeaderElectionService, though
-        return getWebMonitorLeaderElection();
-    }
-
-    @Override
-    default LeaderRetrievalService getClusterRestEndpointLeaderRetriever() {
-        // for backwards compatibility we delegate to getWebMonitorLeaderRetriever
-        // all implementations of this interface should override
-        // getClusterRestEndpointLeaderRetriever, though
-        return getWebMonitorLeaderRetriever();
-    }
+    /** Gets the {@link PersistentServices} for the job metadata. */
+    PersistentServices getPersistentServices();
 
     // ------------------------------------------------------------------------
     //  Shutdown and Cleanup

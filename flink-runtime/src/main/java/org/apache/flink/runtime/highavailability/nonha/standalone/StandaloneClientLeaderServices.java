@@ -28,27 +28,26 @@ import static org.apache.flink.runtime.highavailability.HighAvailabilityServices
 import static org.apache.flink.util.Preconditions.checkState;
 
 /**
- * Non-HA implementation for {@link org.apache.flink.runtime.leaderservice.ClientLeaderServices}.
- * The address to web monitor is pre-configured.
+ * Non-HA implementation for {@link ClientLeaderServices}. The address to rest endpoint is
+ * pre-configured.
  */
-public class StandaloneClientHAServices implements ClientLeaderServices {
-
+public class StandaloneClientLeaderServices implements ClientLeaderServices {
     private final Object lock = new Object();
-    private final String webMonitorAddress;
+    private final String restEndpointAddress;
 
     @GuardedBy("lock")
     private boolean running;
 
-    public StandaloneClientHAServices(String webMonitorAddress) {
-        this.webMonitorAddress = webMonitorAddress;
+    public StandaloneClientLeaderServices(String restEndpointAddress) {
+        this.restEndpointAddress = restEndpointAddress;
         this.running = true;
     }
 
     @Override
     public LeaderRetrievalService getRestEndpointLeaderRetriever() {
         synchronized (lock) {
-            checkState(running, "ClientHaService has already been closed.");
-            return new StandaloneLeaderRetrievalService(webMonitorAddress, DEFAULT_LEADER_ID);
+            checkState(running, "StandaloneClientLeaderServices has already been closed.");
+            return new StandaloneLeaderRetrievalService(restEndpointAddress, DEFAULT_LEADER_ID);
         }
     }
 

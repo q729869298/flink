@@ -184,8 +184,8 @@ public class DispatcherTest extends AbstractDispatcherTest {
                         .setHighAvailabilityServices(haServices)
                         .setHeartbeatServices(heartbeatServices)
                         .setJobManagerRunnerFactory(jobManagerRunnerFactory)
-                        .setJobGraphWriter(haServices.getJobGraphStore())
-                        .setJobResultStore(haServices.getJobResultStore())
+                        .setJobGraphWriter(haServices.getPersistentServices().getJobGraphStore())
+                        .setJobResultStore(haServices.getPersistentServices().getJobResultStore())
                         .build(rpcService);
         dispatcher.start();
         return dispatcher;
@@ -226,7 +226,11 @@ public class DispatcherTest extends AbstractDispatcherTest {
         final JobResult jobResult =
                 TestingJobResultStore.createJobResult(
                         jobGraph.getJobID(), ApplicationStatus.SUCCEEDED);
-        haServices.getJobResultStore().createDirtyResultAsync(new JobResultEntry(jobResult)).get();
+        haServices
+                .getPersistentServices()
+                .getJobResultStore()
+                .createDirtyResultAsync(new JobResultEntry(jobResult))
+                .get();
         assertDuplicateJobSubmission();
     }
 
@@ -235,8 +239,16 @@ public class DispatcherTest extends AbstractDispatcherTest {
         final JobResult jobResult =
                 TestingJobResultStore.createJobResult(
                         jobGraph.getJobID(), ApplicationStatus.SUCCEEDED);
-        haServices.getJobResultStore().createDirtyResultAsync(new JobResultEntry(jobResult)).get();
-        haServices.getJobResultStore().markResultAsCleanAsync(jobGraph.getJobID()).get();
+        haServices
+                .getPersistentServices()
+                .getJobResultStore()
+                .createDirtyResultAsync(new JobResultEntry(jobResult))
+                .get();
+        haServices
+                .getPersistentServices()
+                .getJobResultStore()
+                .markResultAsCleanAsync(jobGraph.getJobID())
+                .get();
 
         assertDuplicateJobSubmission();
     }
@@ -1676,8 +1688,10 @@ public class DispatcherTest extends AbstractDispatcherTest {
                             jobGraph.getCheckpointingSettings(),
                             initializationTimestamp,
                             jobMasterServiceFactory),
-                    highAvailabilityServices.getJobManagerLeaderElection(jobGraph.getJobID()),
-                    highAvailabilityServices.getJobResultStore(),
+                    highAvailabilityServices
+                            .getLeaderServices()
+                            .getJobMasterLeaderElection(jobGraph.getJobID()),
+                    highAvailabilityServices.getPersistentServices().getJobResultStore(),
                     jobManagerServices
                             .getLibraryCacheManager()
                             .registerClassLoaderLease(jobGraph.getJobID()),
@@ -1749,8 +1763,10 @@ public class DispatcherTest extends AbstractDispatcherTest {
                                                 jobMasterServiceFutures.offer(result));
                                         return result;
                                     })),
-                    highAvailabilityServices.getJobManagerLeaderElection(jobGraph.getJobID()),
-                    highAvailabilityServices.getJobResultStore(),
+                    highAvailabilityServices
+                            .getLeaderServices()
+                            .getJobMasterLeaderElection(jobGraph.getJobID()),
+                    highAvailabilityServices.getPersistentServices().getJobResultStore(),
                     jobManagerServices
                             .getLibraryCacheManager()
                             .registerClassLoaderLease(jobGraph.getJobID()),
@@ -1801,8 +1817,10 @@ public class DispatcherTest extends AbstractDispatcherTest {
                             jobGraph.getCheckpointingSettings(),
                             initializationTimestamp,
                             new TestingJobMasterServiceFactory()),
-                    highAvailabilityServices.getJobManagerLeaderElection(jobGraph.getJobID()),
-                    highAvailabilityServices.getJobResultStore(),
+                    highAvailabilityServices
+                            .getLeaderServices()
+                            .getJobMasterLeaderElection(jobGraph.getJobID()),
+                    highAvailabilityServices.getPersistentServices().getJobResultStore(),
                     jobManagerServices
                             .getLibraryCacheManager()
                             .registerClassLoaderLease(jobGraph.getJobID()),

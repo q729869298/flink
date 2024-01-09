@@ -16,23 +16,21 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.highavailability;
+package org.apache.flink.runtime.leaderservice;
 
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.runtime.rpc.FatalErrorHandler;
+import org.apache.flink.runtime.leaderretrieval.LeaderRetrievalService;
 
-/** Factory interface for {@link ClientHighAvailabilityServices}. */
-public interface ClientHighAvailabilityServicesFactory {
+/**
+ * {@code ClientLeaderServices} provides services those are required on client-side. At the moment
+ * only the REST endpoint leader retriever is required because all communication between the client
+ * and cluster happens via the REST endpoint.
+ */
+public interface ClientLeaderServices extends AutoCloseable {
 
     /**
-     * Creates a {@link ClientHighAvailabilityServices} instance.
+     * Get the leader retriever for the cluster's rest endpoint.
      *
-     * @param configuration Flink configuration
-     * @param fatalErrorHandler {@link FatalErrorHandler} fatalErrorHandler to handle unexpected
-     *     errors
-     * @return instance of {@link ClientHighAvailabilityServices}
-     * @throws Exception when HA services can not be created.
+     * @return the leader retriever for cluster's rest endpoint.
      */
-    ClientHighAvailabilityServices create(
-            Configuration configuration, FatalErrorHandler fatalErrorHandler) throws Exception;
+    LeaderRetrievalService getRestEndpointLeaderRetriever();
 }

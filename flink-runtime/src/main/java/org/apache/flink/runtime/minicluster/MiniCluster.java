@@ -57,9 +57,10 @@ import org.apache.flink.runtime.externalresource.ExternalResourceInfoProvider;
 import org.apache.flink.runtime.heartbeat.HeartbeatServices;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServicesFactory;
+import org.apache.flink.runtime.highavailability.HighAvailabilityServicesImpl;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServicesUtils;
-import org.apache.flink.runtime.highavailability.nonha.embedded.EmbeddedHaServices;
 import org.apache.flink.runtime.highavailability.nonha.embedded.EmbeddedHaServicesWithLeadershipControl;
+import org.apache.flink.runtime.highavailability.nonha.embedded.EmbeddedLeaderServices;
 import org.apache.flink.runtime.highavailability.nonha.embedded.HaLeadershipControl;
 import org.apache.flink.runtime.io.network.partition.ClusterPartitionManager;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
@@ -82,6 +83,7 @@ import org.apache.flink.runtime.metrics.groups.ProcessMetricGroup;
 import org.apache.flink.runtime.metrics.util.MetricUtils;
 import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
 import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
+import org.apache.flink.runtime.persistentservice.EmbeddedPersistentServices;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerGateway;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerId;
 import org.apache.flink.runtime.resourcemanager.ResourceOverview;
@@ -443,7 +445,7 @@ public class MiniCluster implements AutoCloseableAsync {
                         BlobUtils.createBlobServer(
                                 configuration,
                                 Reference.borrowed(workingDirectory.getBlobStorageDirectory()),
-                                haServices.createBlobStore());
+                                haServices.getPersistentServices().getBlobStore());
                 blobServer.start();
 
                 heartbeatServices = HeartbeatServices.fromConfiguration(configuration);
@@ -452,7 +454,7 @@ public class MiniCluster implements AutoCloseableAsync {
                         BlobUtils.createBlobCacheService(
                                 configuration,
                                 Reference.borrowed(workingDirectory.getBlobStorageDirectory()),
-                                haServices.createBlobStore(),
+                                haServices.getPersistentServices().getBlobStore(),
                                 new InetSocketAddress(
                                         InetAddress.getLocalHost(), blobServer.getPort()));
 
@@ -467,10 +469,12 @@ public class MiniCluster implements AutoCloseableAsync {
                         dispatcherResourceManagerComponentRpcServiceFactory,
                         metricQueryServiceRetriever);
 
-                resourceManagerLeaderRetriever = haServices.getResourceManagerLeaderRetriever();
-                dispatcherLeaderRetriever = haServices.getDispatcherLeaderRetriever();
+                resourceManagerLeaderRetriever =
+                        haServices.getLeaderServices().getResourceManagerLeaderRetriever();
+                dispatcherLeaderRetriever =
+                        haServices.getLeaderServices().getDispatcherLeaderRetriever();
                 clusterRestEndpointLeaderRetrievalService =
-                        haServices.getClusterRestEndpointLeaderRetriever();
+                        haServices.getLeaderServices().getRestEndpointLeaderRetriever();
 
                 dispatcherGatewayRetriever =
                         new RpcGatewayRetriever<>(
@@ -607,7 +611,9 @@ public class MiniCluster implements AutoCloseableAsync {
             // therefore, SingletonHighAvailabilityServicesFactory is utilized here
             return new SingletonHighAvailabilityServicesFactory(
                     (config, embeddedLeaderElectionExecutor) ->
-                            new EmbeddedHaServices(embeddedLeaderElectionExecutor));
+                            new HighAvailabilityServicesImpl(
+                                    new EmbeddedLeaderServices(embeddedLeaderElectionExecutor),
+                                    new EmbeddedPersistentServices()));
         } else {
             return new RegularHighAvailabilityServicesFactory();
         }

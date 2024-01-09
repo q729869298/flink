@@ -21,15 +21,17 @@ package org.apache.flink.runtime.leaderretrieval;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.HighAvailabilityOptions;
 import org.apache.flink.core.testutils.EachCallbackWrapper;
-import org.apache.flink.runtime.blob.VoidBlobStore;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
-import org.apache.flink.runtime.highavailability.zookeeper.ZooKeeperLeaderElectionHaServices;
+import org.apache.flink.runtime.highavailability.HighAvailabilityServicesImpl;
+import org.apache.flink.runtime.highavailability.zookeeper.ZooKeeperHaServicesMaterialProvider;
 import org.apache.flink.runtime.jobmaster.JobMaster;
 import org.apache.flink.runtime.leaderelection.LeaderElection;
 import org.apache.flink.runtime.leaderelection.LeaderInformation;
 import org.apache.flink.runtime.leaderelection.TestingContender;
 import org.apache.flink.runtime.leaderelection.TestingLeaderElectionListener;
 import org.apache.flink.runtime.leaderelection.ZooKeeperLeaderElectionDriver;
+import org.apache.flink.runtime.leaderservice.DefaultLeaderServices;
+import org.apache.flink.runtime.persistentservice.DefaultPersistentServices;
 import org.apache.flink.runtime.rpc.AddressResolution;
 import org.apache.flink.runtime.rpc.RpcSystem;
 import org.apache.flink.runtime.util.LeaderRetrievalUtils;
@@ -39,10 +41,12 @@ import org.apache.flink.runtime.zookeeper.ZooKeeperExtension;
 import org.apache.flink.testutils.TestingUtils;
 import org.apache.flink.testutils.executor.TestExecutorExtension;
 
+import org.junit.Rule;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.rules.TemporaryFolder;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -61,6 +65,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ZooKeeperLeaderRetrievalTest {
 
     private static final RpcSystem RPC_SYSTEM = RpcSystem.load();
+
+    @Rule public TemporaryFolder temporaryFolder = new TemporaryFolder();
 
     @RegisterExtension
     private static final TestExecutorExtension<ScheduledExecutorService> EXECUTOR_RESOURCE =
@@ -86,15 +92,30 @@ class ZooKeeperLeaderRetrievalTest {
         config.setString(HighAvailabilityOptions.HA_MODE, "zookeeper");
         config.setString(
                 HighAvailabilityOptions.HA_ZOOKEEPER_QUORUM, zooKeeperExtension.getConnectString());
+        temporaryFolder.create();
+        config.setString(
+                HighAvailabilityOptions.HA_STORAGE_PATH,
+                temporaryFolder.newFolder().getAbsolutePath());
 
-        highAvailabilityServices =
-                new ZooKeeperLeaderElectionHaServices(
+        ZooKeeperHaServicesMaterialProvider zooKeeperHaServicesMaterialProvider =
+                new ZooKeeperHaServicesMaterialProvider(
                         ZooKeeperUtils.startCuratorFramework(
                                 config,
                                 testingFatalErrorHandlerResource.getTestingFatalErrorHandler()),
                         config,
-                        EXECUTOR_RESOURCE.getExecutor(),
-                        new VoidBlobStore());
+                        EXECUTOR_RESOURCE.getExecutor());
+
+        highAvailabilityServices =
+                new HighAvailabilityServicesImpl(
+                        new DefaultLeaderServices(
+                                zooKeeperHaServicesMaterialProvider,
+                                config.get(HighAvailabilityOptions.HA_JOB_RECOVERY_ENABLE)),
+                        new DefaultPersistentServices(
+                                config,
+                                EXECUTOR_RESOURCE.getExecutor(),
+                                zooKeeperHaServicesMaterialProvider
+                                        ::createCheckpointRecoveryFactory,
+                                zooKeeperHaServicesMaterialProvider::createJobGraphStore));
     }
 
     @AfterEach
@@ -171,17 +192,21 @@ class ZooKeeperLeaderRetrievalTest {
                 FindConnectingAddress findConnectingAddress =
                         new FindConnectingAddress(
                                 timeout,
-                                highAvailabilityServices.getJobManagerLeaderRetriever(
-                                        HighAvailabilityServices.DEFAULT_JOB_ID,
-                                        "unused-default-address"));
+                                highAvailabilityServices
+                                        .getLeaderServices()
+                                        .getJobMasterLeaderRetriever(
+                                                HighAvailabilityServices.DEFAULT_JOB_ID,
+                                                "unused-default-address"));
 
                 thread = new Thread(findConnectingAddress);
 
                 thread.start();
 
                 leaderElection =
-                        highAvailabilityServices.getJobManagerLeaderElection(
-                                HighAvailabilityServices.DEFAULT_JOB_ID);
+                        highAvailabilityServices
+                                .getLeaderServices()
+                                .getJobMasterLeaderElection(
+                                        HighAvailabilityServices.DEFAULT_JOB_ID);
                 TestingContender correctLeaderAddressContender =
                         new TestingContender(correctAddress, leaderElection);
 
@@ -226,8 +251,10 @@ class ZooKeeperLeaderRetrievalTest {
         Duration timeout = Duration.ofSeconds(1L);
 
         LeaderRetrievalService leaderRetrievalService =
-                highAvailabilityServices.getJobManagerLeaderRetriever(
-                        HighAvailabilityServices.DEFAULT_JOB_ID, "unused-default-address");
+                highAvailabilityServices
+                        .getLeaderServices()
+                        .getJobMasterLeaderRetriever(
+                                HighAvailabilityServices.DEFAULT_JOB_ID, "unused-default-address");
         InetAddress result =
                 LeaderRetrievalUtils.findConnectingAddress(
                         leaderRetrievalService, timeout, RPC_SYSTEM);

@@ -16,13 +16,13 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.highavailability.nonha;
+package org.apache.flink.runtime.persistentservice;
 
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.runtime.blob.BlobStore;
 import org.apache.flink.runtime.blob.VoidBlobStore;
 import org.apache.flink.runtime.checkpoint.CheckpointRecoveryFactory;
 import org.apache.flink.runtime.checkpoint.StandaloneCheckpointRecoveryFactory;
-import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
 import org.apache.flink.runtime.highavailability.JobResultStore;
 import org.apache.flink.runtime.highavailability.nonha.embedded.EmbeddedJobResultStore;
 import org.apache.flink.runtime.jobmanager.JobGraphStore;
@@ -35,91 +35,91 @@ import java.io.IOException;
 import static org.apache.flink.util.Preconditions.checkState;
 
 /**
- * Abstract base class for non high-availability services.
+ * An implementation of the {@link PersistentServices} for the non-high-availability case where all
+ * participants (ResourceManager, JobManagers, TaskManagers) run in the same process.
  *
- * <p>This class returns the standalone variants for the checkpoint recovery factory, the submitted
- * job graph store, the running jobs registry and the blob store.
+ * <p>This implementation has no dependencies on any external services. It stores checkpoints and
+ * metadata simply on the heap or on a local file system and therefore in a storage without
+ * guarantees.
  */
-public abstract class AbstractNonHaServices implements HighAvailabilityServices {
-    protected final Object lock = new Object();
+public class EmbeddedPersistentServices implements PersistentServices {
+    private final Object lock = new Object();
 
-    private final JobResultStore jobResultStore;
+    private JobResultStore jobResultStore = new EmbeddedJobResultStore();
 
-    private final VoidBlobStore voidBlobStore;
+    private final VoidBlobStore voidBlobStore = new VoidBlobStore();
 
-    private boolean shutdown;
+    private final JobGraphStore jobGraphStore = new StandaloneJobGraphStore();
 
-    public AbstractNonHaServices() {
-        this.jobResultStore = new EmbeddedJobResultStore();
-        this.voidBlobStore = new VoidBlobStore();
+    private CheckpointRecoveryFactory checkpointRecoveryFactory;
 
-        shutdown = false;
+    private boolean closed = false;
+
+    public EmbeddedPersistentServices() {
+        this.checkpointRecoveryFactory = new StandaloneCheckpointRecoveryFactory();
     }
 
-    // ----------------------------------------------------------------------
-    // HighAvailabilityServices method implementations
-    // ----------------------------------------------------------------------
+    @VisibleForTesting
+    public EmbeddedPersistentServices(CheckpointRecoveryFactory checkpointRecoveryFactory) {
+        this.checkpointRecoveryFactory = checkpointRecoveryFactory;
+    }
+
+    @VisibleForTesting
+    public EmbeddedPersistentServices(JobResultStore jobResultStore) {
+        this.jobResultStore = jobResultStore;
+        this.checkpointRecoveryFactory = new StandaloneCheckpointRecoveryFactory();
+    }
 
     @Override
-    public CheckpointRecoveryFactory getCheckpointRecoveryFactory() {
+    public CheckpointRecoveryFactory getCheckpointRecoveryFactory() throws Exception {
         synchronized (lock) {
-            checkNotShutdown();
+            checkNotClose();
 
-            return new StandaloneCheckpointRecoveryFactory();
+            return checkpointRecoveryFactory;
         }
     }
 
     @Override
     public JobGraphStore getJobGraphStore() throws Exception {
         synchronized (lock) {
-            checkNotShutdown();
+            checkNotClose();
 
-            return new StandaloneJobGraphStore();
+            return jobGraphStore;
         }
     }
 
     @Override
     public JobResultStore getJobResultStore() throws Exception {
         synchronized (lock) {
-            checkNotShutdown();
+            checkNotClose();
 
             return jobResultStore;
         }
     }
 
     @Override
-    public BlobStore createBlobStore() throws IOException {
+    public BlobStore getBlobStore() throws IOException {
         synchronized (lock) {
-            checkNotShutdown();
+            checkNotClose();
 
             return voidBlobStore;
         }
     }
 
     @Override
+    public void cleanup() throws Exception {}
+
+    @Override
     public void close() throws Exception {
         synchronized (lock) {
-            if (!shutdown) {
-                shutdown = true;
+            if (!closed) {
+                closed = true;
             }
         }
     }
 
-    @Override
-    public void cleanupAllData() throws Exception {
-        // this stores no data, do nothing here
-    }
-
-    // ----------------------------------------------------------------------
-    // Helper methods
-    // ----------------------------------------------------------------------
-
     @GuardedBy("lock")
-    protected void checkNotShutdown() {
-        checkState(!shutdown, "high availability services are shut down");
-    }
-
-    protected boolean isShutDown() {
-        return shutdown;
+    protected void checkNotClose() {
+        checkState(!closed, "embedded persistent services are shut down");
     }
 }
