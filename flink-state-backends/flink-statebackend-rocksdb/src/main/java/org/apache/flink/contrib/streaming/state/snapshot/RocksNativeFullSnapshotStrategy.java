@@ -21,6 +21,7 @@ package org.apache.flink.contrib.streaming.state.snapshot;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.contrib.streaming.state.RocksDBKeyedStateBackend;
 import org.apache.flink.contrib.streaming.state.RocksDBKeyedStateBackend.RocksDbKvStateInfo;
+import org.apache.flink.contrib.streaming.state.RocksDBStateFileVerifier;
 import org.apache.flink.contrib.streaming.state.RocksDBStateUploader;
 import org.apache.flink.core.fs.CloseableRegistry;
 import org.apache.flink.runtime.checkpoint.CheckpointOptions;
@@ -42,6 +43,7 @@ import org.rocksdb.RocksDB;
 
 import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -53,6 +55,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
+
+import static org.apache.flink.contrib.streaming.state.snapshot.RocksSnapshotUtil.SST_FILE_SUFFIX;
 
 /**
  * Snapshot strategy for {@link RocksDBKeyedStateBackend} based on RocksDB's native checkpoints and
@@ -70,6 +75,8 @@ public class RocksNativeFullSnapshotStrategy<K>
     /** The help class used to upload state files. */
     private final RocksDBStateUploader stateUploader;
 
+    private final RocksDBStateFileVerifier stateFileVerifier;
+
     public RocksNativeFullSnapshotStrategy(
             @Nonnull RocksDB db,
             @Nonnull ResourceGuard rocksDBResourceGuard,
@@ -80,7 +87,8 @@ public class RocksNativeFullSnapshotStrategy<K>
             @Nonnull LocalRecoveryConfig localRecoveryConfig,
             @Nonnull File instanceBasePath,
             @Nonnull UUID backendUID,
-            @Nonnull RocksDBStateUploader rocksDBStateUploader) {
+            @Nonnull RocksDBStateUploader rocksDBStateUploader,
+            @Nullable RocksDBStateFileVerifier stateFileVerifier) {
         super(
                 DESCRIPTION,
                 db,
@@ -93,6 +101,7 @@ public class RocksNativeFullSnapshotStrategy<K>
                 instanceBasePath,
                 backendUID);
         this.stateUploader = rocksDBStateUploader;
+        this.stateFileVerifier = stateFileVerifier;
     }
 
     @Override
@@ -137,6 +146,9 @@ public class RocksNativeFullSnapshotStrategy<K>
     @Override
     public void close() {
         stateUploader.close();
+        if (stateFileVerifier != null) {
+            stateFileVerifier.close();
+        }
     }
 
     /** Encapsulates the process to perform a full snapshot of a RocksDBKeyedStateBackend. */
@@ -233,6 +245,14 @@ public class RocksNativeFullSnapshotStrategy<K>
             Path[] files = localBackupDirectory.listDirectory();
             long uploadedSize = 0;
             if (files != null) {
+
+                if (stateFileVerifier != null) {
+                    stateFileVerifier.verifySstFilesChecksum(
+                            Arrays.stream(files)
+                                    .filter(file -> file.endsWith(SST_FILE_SUFFIX))
+                                    .collect(Collectors.toList()));
+                }
+
                 // all sst files are private in full snapshot
                 List<HandleAndLocalPath> uploadedFiles =
                         stateUploader.uploadFilesToCheckpointFs(

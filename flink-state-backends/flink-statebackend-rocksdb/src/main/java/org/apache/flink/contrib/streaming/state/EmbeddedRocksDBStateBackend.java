@@ -73,6 +73,7 @@ import static org.apache.flink.configuration.description.TextElement.text;
 import static org.apache.flink.contrib.streaming.state.RocksDBConfigurableOptions.RESTORE_OVERLAP_FRACTION_THRESHOLD;
 import static org.apache.flink.contrib.streaming.state.RocksDBConfigurableOptions.WRITE_BATCH_SIZE;
 import static org.apache.flink.contrib.streaming.state.RocksDBOptions.CHECKPOINT_TRANSFER_THREAD_NUM;
+import static org.apache.flink.contrib.streaming.state.RocksDBOptions.CHECKPOINT_VERIFY_CHECKSUM_ENABLED;
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -132,6 +133,12 @@ public class EmbeddedRocksDBStateBackend extends AbstractManagedMemoryStateBacke
 
     /** Thread number used to transfer (download and upload) state, default value: 1. */
     private int numberOfTransferThreads;
+
+    /**
+     * Whether to verify the Checksum of the incremental sst file during Checkpoint in
+     * RocksDBStateBackend.
+     */
+    private TernaryBoolean enableVerifySstFileChecksum;
 
     /** The configuration for memory settings (pool sizes, etc.). */
     private final RocksDBMemoryConfiguration memoryConfiguration;
@@ -196,6 +203,7 @@ public class EmbeddedRocksDBStateBackend extends AbstractManagedMemoryStateBacke
     public EmbeddedRocksDBStateBackend(TernaryBoolean enableIncrementalCheckpointing) {
         this.enableIncrementalCheckpointing = enableIncrementalCheckpointing;
         this.numberOfTransferThreads = UNDEFINED_NUMBER_OF_TRANSFER_THREADS;
+        this.enableVerifySstFileChecksum = TernaryBoolean.UNDEFINED;
         this.nativeMetricOptions = new RocksDBNativeMetricOptions();
         this.memoryConfiguration = new RocksDBMemoryConfiguration();
         this.writeBatchSize = UNDEFINED_WRITE_BATCH_SIZE;
@@ -223,6 +231,10 @@ public class EmbeddedRocksDBStateBackend extends AbstractManagedMemoryStateBacke
         } else {
             this.numberOfTransferThreads = original.numberOfTransferThreads;
         }
+
+        this.enableVerifySstFileChecksum =
+                original.enableVerifySstFileChecksum.resolveUndefined(
+                        config.get(CHECKPOINT_VERIFY_CHECKSUM_ENABLED));
 
         if (original.writeBatchSize == UNDEFINED_WRITE_BATCH_SIZE) {
             this.writeBatchSize = config.get(WRITE_BATCH_SIZE).getBytes();
@@ -463,6 +475,7 @@ public class EmbeddedRocksDBStateBackend extends AbstractManagedMemoryStateBacke
                                 parameters.getCancelStreamRegistry())
                         .setEnableIncrementalCheckpointing(isIncrementalCheckpointsEnabled())
                         .setNumberOfTransferingThreads(getNumberOfTransferThreads())
+                        .setEnableSstFileChecksum(getEnableSstFileChecksum())
                         .setNativeMetricOptions(
                                 resourceContainer.getMemoryWatcherOptions(nativeMetricOptions))
                         .setWriteBatchSize(getWriteBatchSize())
@@ -761,6 +774,12 @@ public class EmbeddedRocksDBStateBackend extends AbstractManagedMemoryStateBacke
         return numberOfTransferThreads == UNDEFINED_NUMBER_OF_TRANSFER_THREADS
                 ? CHECKPOINT_TRANSFER_THREAD_NUM.defaultValue()
                 : numberOfTransferThreads;
+    }
+
+    /** Whether to verify the Checksum of the incremental sst file during Checkpoint. */
+    public boolean getEnableSstFileChecksum() {
+        return enableVerifySstFileChecksum.getOrDefault(
+                CHECKPOINT_VERIFY_CHECKSUM_ENABLED.defaultValue());
     }
 
     /**
