@@ -763,6 +763,9 @@ public abstract class SchedulerBase implements SchedulerNG, CheckpointScheduling
         // only notifies FINISHED and FAILED states which are needed at the moment.
         // can be refined in FLINK-14233 after the actions are factored out from ExecutionGraph.
         switch (taskExecutionState.getExecutionState()) {
+            case RUNNING:
+                onTaskRunning(execution);
+                break;
             case FINISHED:
                 onTaskFinished(execution, taskExecutionState.getIOMetrics());
                 break;
@@ -771,6 +774,8 @@ public abstract class SchedulerBase implements SchedulerNG, CheckpointScheduling
                 break;
         }
     }
+
+    protected abstract void onTaskRunning(Execution execution);
 
     protected abstract void onTaskFinished(final Execution execution, final IOMetrics ioMetrics);
 
@@ -1084,20 +1089,21 @@ public abstract class SchedulerBase implements SchedulerNG, CheckpointScheduling
                 && jobGraph.getCheckpointingSettings()
                         .getCheckpointCoordinatorConfiguration()
                         .isEnableCheckpointsAfterTasksFinish()) {
-            vertexEndOfDataListener.recordTaskEndOfData(executionAttemptID);
-            if (vertexEndOfDataListener.areAllTasksOfJobVertexEndOfData(
-                    executionAttemptID.getJobVertexId())) {
+            boolean areAllTasksOfJobVertexEndOfData =
+                    vertexEndOfDataListener.recordTaskEndOfData(executionAttemptID);
+            if (!areAllTasksOfJobVertexEndOfData) {
+                return;
+            }
+            CheckpointCoordinator checkpointCoordinator = executionGraph.getCheckpointCoordinator();
+            if (checkpointCoordinator != null
+                    && checkpointCoordinator.isPeriodicCheckpointingStarted()) {
                 List<OperatorIDPair> operatorIDPairs =
                         executionGraph
                                 .getJobVertex(executionAttemptID.getJobVertexId())
                                 .getOperatorIDs();
-                CheckpointCoordinator checkpointCoordinator =
-                        executionGraph.getCheckpointCoordinator();
-                if (checkpointCoordinator != null) {
-                    for (OperatorIDPair operatorIDPair : operatorIDPairs) {
-                        checkpointCoordinator.setIsProcessingBacklog(
-                                operatorIDPair.getGeneratedOperatorID(), false);
-                    }
+                for (OperatorIDPair operatorIDPair : operatorIDPairs) {
+                    checkpointCoordinator.setIsProcessingBacklog(
+                            operatorIDPair.getGeneratedOperatorID(), false);
                 }
             }
             if (vertexEndOfDataListener.areAllTasksEndOfData()) {

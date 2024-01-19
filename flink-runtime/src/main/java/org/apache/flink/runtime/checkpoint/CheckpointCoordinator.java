@@ -2022,6 +2022,10 @@ public class CheckpointCoordinator {
     // --------------------------------------------------------------------------------------------
 
     public void startCheckpointScheduler() {
+        startCheckpointScheduler(true);
+    }
+
+    public void startCheckpointScheduler(boolean withRandomDelay) {
         synchronized (lock) {
             if (shutdown) {
                 throw new IllegalArgumentException("Checkpoint coordinator is shut down");
@@ -2034,7 +2038,11 @@ public class CheckpointCoordinator {
             stopCheckpointScheduler();
 
             periodicScheduling = true;
-            scheduleTriggerWithDelay(clock.relativeTimeMillis(), getRandomInitDelay());
+            if (withRandomDelay) {
+                scheduleTriggerWithDelay(clock.relativeTimeMillis(), getRandomInitDelay());
+            } else {
+                scheduleTriggerWithDelay(clock.relativeTimeMillis(), 0);
+            }
         }
     }
 
@@ -2124,14 +2132,15 @@ public class CheckpointCoordinator {
     //  job status listener that schedules / cancels periodic checkpoints
     // ------------------------------------------------------------------------
 
-    public JobStatusListener createActivatorDeactivator() {
+    public JobStatusListener createActivatorDeactivator(
+            Map<JobVertexID, ExecutionJobVertex> tasks) {
         synchronized (lock) {
             if (shutdown) {
                 throw new IllegalArgumentException("Checkpoint coordinator is shut down");
             }
 
             if (jobStatusListener == null) {
-                jobStatusListener = new CheckpointCoordinatorDeActivator(this);
+                jobStatusListener = new CheckpointCoordinatorDeActivator(this, tasks);
             }
 
             return jobStatusListener;
