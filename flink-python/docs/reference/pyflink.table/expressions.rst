@@ -149,6 +149,8 @@ arithmetic functions
     Expression.bin
     Expression.hex
     Expression.truncate
+    Expression.bit_and
+    Expression.bit_or
 
 string functions
 ----------------

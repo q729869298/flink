@@ -1013,35 +1013,6 @@ public class SqlFunctionUtils {
         }
     }
 
-    public static Byte bitAnd(Byte a, Byte b) {
-        if (a == null || b == null) {
-            return 0;
-        }
-        return (byte) (a & b);
-    }
-
-    public static Short bitAnd(Short a, Short b) {
-        if (a == null || b == null) {
-            return 0;
-        }
-        return (short) (a & b);
-    }
-
-    public static Integer bitAnd(Integer a, Integer b) {
-        if (a == null || b == null) {
-            return 0;
-        }
-
-        return a & b;
-    }
-
-    public static Long bitAnd(Long a, Long b) {
-        if (a == null || b == null) {
-            return 0L;
-        }
-        return a & b;
-    }
-
     public static Byte bitNot(Byte a) {
         if (a == null) {
             a = 0;
@@ -1068,54 +1039,6 @@ public class SqlFunctionUtils {
             a = 0L;
         }
         return ~a;
-    }
-
-    public static Byte bitOr(Byte a, Byte b) {
-        if (a == null || b == null) {
-            if (a == null) {
-                a = 0;
-            }
-            if (b == null) {
-                b = 0;
-            }
-        }
-        return (byte) (a | b);
-    }
-
-    public static Short bitOr(Short a, Short b) {
-        if (a == null || b == null) {
-            if (a == null) {
-                a = 0;
-            }
-            if (b == null) {
-                b = 0;
-            }
-        }
-        return (short) (a | b);
-    }
-
-    public static Integer bitOr(Integer a, Integer b) {
-        if (a == null || b == null) {
-            if (a == null) {
-                a = 0;
-            }
-            if (b == null) {
-                b = 0;
-            }
-        }
-        return a | b;
-    }
-
-    public static Long bitOr(Long a, Long b) {
-        if (a == null || b == null) {
-            if (a == null) {
-                a = 0L;
-            }
-            if (b == null) {
-                b = 0L;
-            }
-        }
-        return a | b;
     }
 
     public static Byte bitXor(Byte a, Byte b) {
