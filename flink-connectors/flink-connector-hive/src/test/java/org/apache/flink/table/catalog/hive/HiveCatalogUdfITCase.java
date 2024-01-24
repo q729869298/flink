@@ -21,7 +21,6 @@ package org.apache.flink.table.catalog.hive;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.Schema;
@@ -40,6 +39,7 @@ import org.apache.flink.table.functions.hive.util.TestHiveUDTF;
 import org.apache.flink.table.planner.runtime.utils.BatchTestBase;
 import org.apache.flink.table.planner.runtime.utils.TestingRetractSink;
 import org.apache.flink.table.planner.utils.JavaScalaConversionUtil;
+import org.apache.flink.table.planner.utils.RowToTuple2;
 import org.apache.flink.test.util.AbstractTestBase;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CollectionUtil;
@@ -225,9 +225,9 @@ public class HiveCatalogUdfITCase extends AbstractTestBase {
             StreamTableEnvironment streamTEnv = (StreamTableEnvironment) tEnv;
             TestingRetractSink sink = new TestingRetractSink();
             streamTEnv
-                    .toRetractStream(tEnv.sqlQuery(selectSql), Row.class)
-                    .map(new JavaToScala())
-                    .addSink((SinkFunction) sink);
+                    .toChangelogStream(tEnv.sqlQuery(selectSql))
+                    .map(new RowToTuple2())
+                    .addSink(sink);
             env.execute("");
             results = JavaScalaConversionUtil.toJava(sink.getRetractResults());
         }

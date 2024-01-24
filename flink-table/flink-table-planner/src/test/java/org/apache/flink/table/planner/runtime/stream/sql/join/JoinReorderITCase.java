@@ -18,9 +18,7 @@
 
 package org.apache.flink.table.planner.runtime.stream.sql.join;
 
-import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.Table;
 import org.apache.flink.table.api.TableEnvironment;
@@ -29,14 +27,12 @@ import org.apache.flink.table.planner.runtime.utils.JoinReorderITCaseBase;
 import org.apache.flink.table.planner.runtime.utils.StreamTestSink;
 import org.apache.flink.table.planner.runtime.utils.TestingRetractSink;
 import org.apache.flink.table.planner.utils.JavaScalaConversionUtil;
-import org.apache.flink.types.Row;
+import org.apache.flink.table.planner.utils.RowToTuple2;
 
 import org.junit.jupiter.api.AfterEach;
 
 import java.util.ArrayList;
 import java.util.List;
-
-import scala.Tuple2;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -63,10 +59,7 @@ public class JoinReorderITCase extends JoinReorderITCaseBase {
         StreamTableEnvironment streamTableEnvironment = (StreamTableEnvironment) tEnv;
         Table table = streamTableEnvironment.sqlQuery(query);
         TestingRetractSink sink = new TestingRetractSink();
-        streamTableEnvironment
-                .toRetractStream(table, Row.class)
-                .map(JavaScalaConversionUtil::toScala, TypeInformation.of(Tuple2.class))
-                .addSink((SinkFunction) sink);
+        streamTableEnvironment.toChangelogStream(table).map(new RowToTuple2()).addSink(sink);
         try {
             env.execute();
         } catch (Exception e) {

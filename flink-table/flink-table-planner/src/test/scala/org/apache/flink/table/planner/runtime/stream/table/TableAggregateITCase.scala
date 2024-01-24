@@ -25,9 +25,8 @@ import org.apache.flink.table.planner.runtime.utils.{JavaUserDefinedTableAggFunc
 import org.apache.flink.table.planner.runtime.utils.JavaUserDefinedAggFunctions.OverloadedDoubleMaxFunction
 import org.apache.flink.table.planner.runtime.utils.StreamingWithStateTestBase.StateBackendMode
 import org.apache.flink.table.planner.runtime.utils.TestData.tupleData3
-import org.apache.flink.table.planner.utils.{TableAggSum, Top3, Top3Accum, Top3WithMapView, Top3WithRetractInput}
+import org.apache.flink.table.planner.utils._
 import org.apache.flink.testutils.junit.extensions.parameterized.ParameterizedTestExtension
-import org.apache.flink.types.Row
 
 import org.assertj.core.api.Assertions.{assertThat, assertThatThrownBy}
 import org.junit.jupiter.api.{BeforeEach, TestTemplate}
@@ -140,7 +139,7 @@ class TableAggregateITCase(mode: StateBackendMode) extends StreamingWithStateTes
       .as("category", "v1", "v2")
 
     val sink = new TestingRetractSink()
-    resultTable.toRetractStream[Row].addSink(sink).setParallelism(1)
+    resultTable.toChangelogStream.map(new RowToTuple2).addSink(sink).setParallelism(1)
     env.execute()
 
     val expected = List(
@@ -174,7 +173,7 @@ class TableAggregateITCase(mode: StateBackendMode) extends StreamingWithStateTes
       .as("v1", "v2")
 
     val sink = new TestingRetractSink()
-    resultTable.toRetractStream[Row].addSink(sink).setParallelism(1)
+    resultTable.toChangelogStream.map(new RowToTuple2).addSink(sink).setParallelism(1)
     env.execute()
 
     val expected = List(
@@ -199,7 +198,7 @@ class TableAggregateITCase(mode: StateBackendMode) extends StreamingWithStateTes
       .select('category, 'v1.max)
 
     val sink = new TestingRetractSink()
-    resultTable.toRetractStream[Row].addSink(sink).setParallelism(1)
+    resultTable.toChangelogStream.map(new RowToTuple2).addSink(sink).setParallelism(1)
     env.execute()
 
     val expected = List(
@@ -225,7 +224,7 @@ class TableAggregateITCase(mode: StateBackendMode) extends StreamingWithStateTes
       .as("category", "v1", "v2")
 
     val sink = new TestingRetractSink()
-    resultTable.toRetractStream[Row].addSink(sink).setParallelism(1)
+    resultTable.toChangelogStream.map(new RowToTuple2).addSink(sink).setParallelism(1)
     env.execute()
 
     val expected = List(
@@ -260,7 +259,7 @@ class TableAggregateITCase(mode: StateBackendMode) extends StreamingWithStateTes
       .select('v1, 'v2)
 
     val sink = new TestingRetractSink()
-    resultTable.toRetractStream[Row].addSink(sink).setParallelism(1)
+    resultTable.toChangelogStream.map(new RowToTuple2).addSink(sink).setParallelism(1)
     env.execute()
 
     val expected = List(
@@ -280,7 +279,7 @@ class TableAggregateITCase(mode: StateBackendMode) extends StreamingWithStateTes
       .select('b, 'sum)
 
     val sink = new TestingRetractSink()
-    resultTable.toRetractStream[Row].addSink(sink).setParallelism(1)
+    resultTable.toChangelogStream.map(new RowToTuple2).addSink(sink).setParallelism(1)
     env.execute()
 
     val expected = List(
@@ -311,7 +310,8 @@ class TableAggregateITCase(mode: StateBackendMode) extends StreamingWithStateTes
           .select('b, 'a.sum.as('a))
           .flatAggregate(top3('a).as('v1, 'v2))
           .select('v1, 'v2)
-          .toRetractStream[Row]
+          .toChangelogStream
+          .map(new RowToTuple2)
 
         env.execute()
       })
@@ -331,7 +331,8 @@ class TableAggregateITCase(mode: StateBackendMode) extends StreamingWithStateTes
       .groupBy('b)
       .flatAggregate(call(classOf[OverloadedDoubleMaxFunction], 'a).as('max))
       .select('b, 'max)
-      .toRetractStream[Row]
+      .toChangelogStream
+      .map(new RowToTuple2)
       .addSink(sink1)
       .setParallelism(1)
 
@@ -341,7 +342,8 @@ class TableAggregateITCase(mode: StateBackendMode) extends StreamingWithStateTes
       .groupBy('b)
       .flatAggregate(call(classOf[OverloadedDoubleMaxFunction], 'a).as('max))
       .select('b, 'max)
-      .toRetractStream[Row]
+      .toChangelogStream
+      .map(new RowToTuple2)
       .addSink(sink2)
       .setParallelism(1)
 
