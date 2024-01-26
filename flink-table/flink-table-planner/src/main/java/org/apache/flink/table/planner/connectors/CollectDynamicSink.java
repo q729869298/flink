@@ -32,6 +32,7 @@ import org.apache.flink.streaming.api.operators.collect.CollectResultIterator;
 import org.apache.flink.streaming.api.operators.collect.CollectSinkOperator;
 import org.apache.flink.streaming.api.operators.collect.CollectSinkOperatorFactory;
 import org.apache.flink.streaming.api.operators.collect.CollectStreamSink;
+import org.apache.flink.streaming.api.operators.util.CollectRetryStrategyFactory;
 import org.apache.flink.table.api.TableResult;
 import org.apache.flink.table.api.internal.ResultProvider;
 import org.apache.flink.table.catalog.ObjectIdentifier;
@@ -48,10 +49,12 @@ import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.utils.print.RowDataToStringConverter;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CloseableIterator;
+import org.apache.flink.util.concurrent.RetryStrategy;
 
 import java.time.Duration;
 import java.time.ZoneId;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /** Table sink for {@link TableResult#collect()}. */
 @Internal
@@ -132,6 +135,9 @@ public final class CollectDynamicSink implements DynamicTableSink {
                                 .getConfiguration()
                                 .get(AkkaOptions.ASK_TIMEOUT_DURATION)
                                 .toMillis();
+                final Supplier<RetryStrategy> collectRetryStrategySupplier =
+                        CollectRetryStrategyFactory.INSTANCE.createRetryStrategySupplier(
+                                inputStream.getExecutionEnvironment().getConfiguration());
 
                 iterator =
                         new CollectResultIterator<>(
@@ -139,6 +145,7 @@ public final class CollectDynamicSink implements DynamicTableSink {
                                 externalSerializer,
                                 accumulatorName,
                                 checkpointConfig,
+                                collectRetryStrategySupplier,
                                 resultFetchTimeout);
                 converter = context.createDataStructureConverter(consumedDataType);
                 converter.open(RuntimeConverter.Context.create(classLoader));

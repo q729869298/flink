@@ -20,6 +20,7 @@ package org.apache.flink.runtime.rest;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.time.Time;
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.ConfigConstants;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.RestOptions;
@@ -137,12 +138,16 @@ public class RestClient implements AutoCloseableAsync {
 
     private final String urlPrefix;
 
+    private final boolean connectionReuse;
+
     // Used to track unresolved request futures in case they need to be resolved when the client is
     // closed
     private final Collection<CompletableFuture<Channel>> responseChannelFutures =
             ConcurrentHashMap.newKeySet();
 
     private final List<OutboundChannelHandlerFactory> outboundChannelHandlerFactories;
+
+    private ConcurrentHashMap<Tuple2<String, Integer>, CompletableFuture<Channel>> reusingChannels;
 
     /**
      * Creates a new RestClient for the provided root URL. If the protocol of the URL is "https",
@@ -188,7 +193,9 @@ public class RestClient implements AutoCloseableAsync {
         Preconditions.checkNotNull(configuration);
         this.executor = Preconditions.checkNotNull(executor);
         this.terminationFuture = new CompletableFuture<>();
+        this.connectionReuse = configuration.get(RestOptions.CONNECTION_REUSE);
         outboundChannelHandlerFactories = new ArrayList<>();
+
         ServiceLoader<OutboundChannelHandlerFactory> loader =
                 ServiceLoader.load(OutboundChannelHandlerFactory.class);
         final Iterator<OutboundChannelHandlerFactory> factories = loader.iterator();
@@ -282,6 +289,10 @@ public class RestClient implements AutoCloseableAsync {
                 .group(group)
                 .channel(NioSocketChannel.class)
                 .handler(initializer);
+
+        if (connectionReuse) {
+            reusingChannels = new ConcurrentHashMap<>();
+        }
 
         LOG.debug("Rest client endpoint started.");
     }
@@ -461,6 +472,15 @@ public class RestClient implements AutoCloseableAsync {
         ByteBuf payload =
                 Unpooled.wrappedBuffer(sw.toString().getBytes(ConfigConstants.DEFAULT_CHARSET));
 
+        if (connectionReuse) {
+            messageHeaders
+                    .getCustomHeaders()
+                    .add(
+                            new HttpHeader(
+                                    HttpHeaderNames.CONNECTION.toString(),
+                                    HttpHeaderValues.KEEP_ALIVE.toString()));
+        }
+
         Request httpRequest =
                 createRequest(
                         targetAddress + ':' + targetPort,
@@ -578,20 +598,16 @@ public class RestClient implements AutoCloseableAsync {
                     new IllegalStateException("RestClient is already closed"));
         }
 
-        final CompletableFuture<Channel> channelFuture = new CompletableFuture<>();
-        responseChannelFutures.add(channelFuture);
+        final CompletableFuture<Channel> channelFuture;
+        if (connectionReuse) {
+            channelFuture =
+                    reusingChannels.computeIfAbsent(
+                            Tuple2.of(targetAddress, targetPort),
+                            tuple -> connect(targetAddress, targetPort));
 
-        final ChannelFuture connectFuture = bootstrap.connect(targetAddress, targetPort);
-        connectFuture.addListener(
-                (ChannelFuture future) -> {
-                    responseChannelFutures.remove(channelFuture);
-
-                    if (future.isSuccess()) {
-                        channelFuture.complete(future.channel());
-                    } else {
-                        channelFuture.completeExceptionally(future.cause());
-                    }
-                });
+        } else {
+            channelFuture = connect(targetAddress, targetPort);
+        }
 
         return channelFuture
                 .thenComposeAsync(
@@ -618,6 +634,10 @@ public class RestClient implements AutoCloseableAsync {
                             } finally {
                                 if (!success) {
                                     channel.close();
+                                    if (reusingChannels != null) {
+                                        reusingChannels.remove(
+                                                Tuple2.of(targetAddress, targetPort));
+                                    }
                                 }
                             }
 
@@ -627,6 +647,26 @@ public class RestClient implements AutoCloseableAsync {
                 .thenComposeAsync(
                         (JsonResponse rawResponse) -> parseResponse(rawResponse, responseType),
                         executor);
+    }
+
+    private CompletableFuture<Channel> connect(String targetAddress, int targetPort) {
+
+        final CompletableFuture<Channel> channelFuture = new CompletableFuture<>();
+        responseChannelFutures.add(channelFuture);
+
+        final ChannelFuture connectFuture = bootstrap.connect(targetAddress, targetPort);
+        connectFuture.addListener(
+                (ChannelFuture future) -> {
+                    responseChannelFutures.remove(channelFuture);
+
+                    if (future.isSuccess()) {
+                        channelFuture.complete(future.channel());
+                    } else {
+                        channelFuture.completeExceptionally(future.cause());
+                    }
+                });
+
+        return channelFuture;
     }
 
     private static <P extends ResponseBody> CompletableFuture<P> parseResponse(
