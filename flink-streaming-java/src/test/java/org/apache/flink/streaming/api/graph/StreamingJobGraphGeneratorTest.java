@@ -490,6 +490,31 @@ class StreamingJobGraphGeneratorTest {
         assertThat(printConfig.isChainEnd()).isTrue();
     }
 
+    /** Verifies that the max parallelism of chained operator maintained. */
+    @Test
+    public void testChainedMaxParallelism() throws Exception {
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+
+        // set parallelism to 2 to avoid chaining with source in case when available processors is
+        // 1.
+        env.setParallelism(2);
+
+        // fromElements -> CHAIN(Map -> Filter -> Print)
+        env.fromElements(1, 2, 3)
+                .map((MapFunction<Integer, Integer>) value -> value)
+                .filter((FilterFunction<Integer>) value -> true)
+                .setMaxParallelism(200)
+                .print();
+        JobGraph jobGraph = StreamingJobGraphGenerator.createJobGraph(env.getStreamGraph());
+
+        List<JobVertex> verticesSorted = jobGraph.getVerticesSortedTopologicallyFromSources();
+        JobVertex sourceVertex = verticesSorted.get(0);
+        JobVertex mapFilterPrintVertex = verticesSorted.get(1);
+
+        assertEquals(sourceVertex.getMaxParallelism(), -1);
+        assertEquals(mapFilterPrintVertex.getMaxParallelism(), 200);
+    }
+
     @Test
     void testOperatorCoordinatorAddedToJobVertex() {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();

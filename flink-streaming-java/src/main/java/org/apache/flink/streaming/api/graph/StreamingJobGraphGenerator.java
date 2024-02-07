@@ -186,6 +186,8 @@ public class StreamingJobGraphGenerator {
 
     private final Map<Integer, InputOutputFormatContainer> chainedInputOutputFormats;
 
+    private final Map<Integer, Integer> chainedMaxParallelism;
+
     private final StreamGraphHasher defaultStreamGraphHasher;
     private final List<StreamGraphHasher> legacyStreamGraphHashers;
 
@@ -226,6 +228,7 @@ public class StreamingJobGraphGenerator {
         this.chainedMinResources = new HashMap<>();
         this.chainedPreferredResources = new HashMap<>();
         this.chainedInputOutputFormats = new HashMap<>();
+        this.chainedMaxParallelism = new HashMap<>();
         this.physicalEdgesInOrder = new ArrayList<>();
         this.serializationExecutor = Preconditions.checkNotNull(serializationExecutor);
         this.chainInfos = new HashMap<>();
@@ -715,6 +718,11 @@ public class StreamingJobGraphGenerator {
             chainedPreferredResources.put(
                     currentNodeId,
                     createChainedPreferredResources(currentNodeId, chainableOutputs));
+            chainedMaxParallelism.put(
+                    startNodeId,
+                    Math.max(
+                            chainedMaxParallelism.getOrDefault(currentNodeId, -1),
+                            currentNode.getMaxParallelism()));
 
             OperatorID currentOperatorId =
                     chainInfo.addNodeToChain(
@@ -1026,7 +1034,7 @@ public class StreamingJobGraphGenerator {
             parallelism = jobVertex.getParallelism();
         }
 
-        jobVertex.setMaxParallelism(streamNode.getMaxParallelism());
+        jobVertex.setMaxParallelism(chainedMaxParallelism.get(streamNodeId));
 
         if (LOG.isDebugEnabled()) {
             LOG.debug("Parallelism set: {} for {}", parallelism, streamNodeId);
