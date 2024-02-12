@@ -476,7 +476,12 @@ object GenerateUtils {
         expr
     }
     // hide the generated code as it will be executed only once
-    GeneratedExpression(inputExpr.resultTerm, inputExpr.nullTerm, "", inputExpr.resultType)
+    GeneratedExpression(
+      inputExpr.resultTerm,
+      inputExpr.nullTerm,
+      "",
+      inputExpr.resultType,
+      exprReuseCode = inputExpr.code)
   }
 
   def generateNullableInputFieldAccess(

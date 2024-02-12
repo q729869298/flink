@@ -34,21 +34,28 @@ import org.apache.flink.table.planner.utils.JavaScalaConversionUtil;
 import org.apache.flink.table.runtime.operators.TableStreamOperator;
 import org.apache.flink.table.types.logical.RowType;
 
+import org.apache.calcite.rex.RexLocalRef;
 import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.rex.RexProgram;
 
 import javax.annotation.Nullable;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /** Batch {@link ExecNode} for Calc. */
 public class BatchExecCalc extends CommonExecCalc implements BatchExecNode<RowData> {
 
+    private RexProgram calcProgram;
+
     public BatchExecCalc(
             ReadableConfig tableConfig,
-            List<RexNode> projection,
-            @Nullable RexNode condition,
+            List<RexNode> expression,
+            List<RexLocalRef> projection,
+            @Nullable RexLocalRef condition,
+            RexProgram calcProgram,
             InputProperty inputProperty,
             RowType outputType,
             String description) {
@@ -56,6 +63,7 @@ public class BatchExecCalc extends CommonExecCalc implements BatchExecNode<RowDa
                 ExecNodeContext.newNodeId(),
                 ExecNodeContext.newContext(BatchExecCalc.class),
                 ExecNodeContext.newPersistedConfig(BatchExecCalc.class, tableConfig),
+                expression,
                 projection,
                 condition,
                 TableStreamOperator.class,
@@ -63,6 +71,8 @@ public class BatchExecCalc extends CommonExecCalc implements BatchExecNode<RowDa
                 Collections.singletonList(inputProperty),
                 outputType,
                 description);
+
+        this.calcProgram = calcProgram;
     }
 
     public boolean supportFusionCodegen() {
@@ -72,6 +82,17 @@ public class BatchExecCalc extends CommonExecCalc implements BatchExecNode<RowDa
     @Override
     protected OpFusionCodegenSpecGenerator translateToFusionCodegenSpecInternal(
             PlannerBase planner, ExecNodeConfig config, CodeGeneratorContext parentCtx) {
+
+        List<RexNode> projs =
+                calcProgram.getProjectList().stream()
+                        .map(n -> calcProgram.expandLocalRef(n))
+                        .collect(Collectors.toList());
+
+        RexNode cnd =
+                calcProgram.getCondition() != null
+                        ? calcProgram.expandLocalRef(calcProgram.getCondition())
+                        : null;
+
         OpFusionCodegenSpecGenerator input =
                 getInputEdges().get(0).translateToFusionCodegenSpec(planner, parentCtx);
         OpFusionCodegenSpecGenerator calcGenerator =
@@ -84,8 +105,8 @@ public class BatchExecCalc extends CommonExecCalc implements BatchExecNode<RowDa
                                         config,
                                         planner.getFlinkContext().getClassLoader(),
                                         parentCtx),
-                                JavaScalaConversionUtil.toScala(projection),
-                                JavaScalaConversionUtil.toScala(Optional.ofNullable(condition))));
+                                JavaScalaConversionUtil.toScala(projs),
+                                JavaScalaConversionUtil.toScala(Optional.ofNullable(cnd))));
         input.addOutput(1, calcGenerator);
         return calcGenerator;
     }

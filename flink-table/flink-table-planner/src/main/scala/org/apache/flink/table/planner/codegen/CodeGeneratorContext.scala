@@ -35,12 +35,15 @@ import org.apache.flink.table.types.logical.LogicalTypeRoot._
 import org.apache.flink.table.utils.DateTimeUtils
 import org.apache.flink.util.InstantiationUtil
 
+import org.apache.calcite.rex.{RexLocalRef, RexNode}
+
 import java.time.ZoneId
 import java.util.TimeZone
 import java.util.concurrent.atomic.AtomicLong
 import java.util.function.{Supplier => JSupplier}
 
 import scala.collection.mutable
+import scala.collection.mutable.ListBuffer
 
 /**
  * The context for code generator, maintaining various reusable statements that could be insert into
@@ -59,6 +62,20 @@ class CodeGeneratorContext(
 
   def this(tableConfig: ReadableConfig, classLoader: ClassLoader) =
     this(tableConfig, classLoader, null)
+
+//  val orderedExpressions: ListBuffer[GeneratedExpression] = ListBuffer[GeneratedExpression]()
+
+//  var currentOrder = 0
+
+//  def addToOrder(expr: GeneratedExpression): GeneratedExpression = {
+//    if (orderedExpressions.size == currentOrder) {
+//      orderedExpressions += expr
+//    } else {
+//      orderedExpressions(currentOrder) = expr
+//    }
+//
+//    expr
+//  }
 
   // holding a list of objects that could be used passed into generated class
   val references: mutable.ArrayBuffer[AnyRef] = new mutable.ArrayBuffer[AnyRef]()
@@ -121,6 +138,13 @@ class CodeGeneratorContext(
   private val reusableConstructorStatements: mutable.LinkedHashSet[(String, String)] =
     mutable.LinkedHashSet[(String, String)]()
 
+  // mapping between RexNode and GeneratedExpressions
+  private val reusableExpr: mutable.Map[RexNode, GeneratedExpression] =
+    mutable.Map[RexNode, GeneratedExpression]()
+
+  // list of all expressions
+  private val allExpressions: mutable.MutableList[RexNode] = mutable.MutableList[RexNode]()
+
   // set of inner class definition statements that will be added only once
   private val reusableInnerClassDefinitionStatements: mutable.Map[String, String] =
     mutable.Map[String, String]()
@@ -167,6 +191,25 @@ class CodeGeneratorContext(
   // Getter
   // ---------------------------------------------------------------------------------
 
+  def getReusableExpr(idx: Int): RexNode = {
+    allExpressions(idx)
+  }
+  def getReusableRexNodeExpr(rexNode: RexNode): Option[GeneratedExpression] = {
+    if (allExpressions.isEmpty) {
+      return None
+    }
+    val nonLocalRefNode = rexNode match {
+      case localRef: RexLocalRef => allExpressions(localRef.getIndex)
+      case _ => rexNode
+    }
+
+    if (reusableExpr.contains(nonLocalRefNode)) {
+      Some(reusableExpr(nonLocalRefNode))
+    } else {
+      None
+    }
+  }
+
   def getReusableInputUnboxingExprs(inputTerm: String, index: Int): Option[GeneratedExpression] =
     reusableInputUnboxingExprs.get((inputTerm, index))
 
@@ -180,8 +223,16 @@ class CodeGeneratorContext(
    * @param comment
    *   The comment to add for class header
    */
+
   def addReusableHeaderComment(comment: String): Unit = {
     reusableHeaderComments.add(comment)
+  }
+
+  def addReusableExpr(op: RexNode, generatedExpression: GeneratedExpression): Unit = {
+    reusableExpr(op) = generatedExpression
+  }
+  def initExpressions(expr: Seq[RexNode]): Unit = {
+    expr.foreach(e => allExpressions += e)
   }
 
   // ---------------------------------------------------------------------------------
