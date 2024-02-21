@@ -29,8 +29,11 @@ public class PbFormatContext {
     private final PbFormatConfig pbFormatConfig;
     private final List<String> splitMethodStack = new ArrayList<>();
 
-    public PbFormatContext(PbFormatConfig pbFormatConfig) {
+    private final ClassLoader classLoader;
+
+    public PbFormatContext(PbFormatConfig pbFormatConfig, ClassLoader classLoader) {
         this.pbFormatConfig = pbFormatConfig;
+        this.classLoader = classLoader;
     }
 
     private String createSplitMethod(
@@ -72,5 +75,9 @@ public class PbFormatContext {
 
     public PbFormatConfig getPbFormatConfig() {
         return pbFormatConfig;
+    }
+
+    public ClassLoader getClassLoader() {
+        return classLoader;
     }
 }
