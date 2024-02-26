@@ -22,6 +22,7 @@ package org.apache.flink.runtime.scheduler;
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.core.failure.FailureEnricher;
 import org.apache.flink.core.failure.FailureEnricher.Context;
 import org.apache.flink.runtime.checkpoint.CheckpointRecoveryFactory;
@@ -115,7 +116,7 @@ public class DefaultScheduler extends SchedulerBase implements SchedulerOperatio
             final Executor ioExecutor,
             final Configuration jobMasterConfiguration,
             final Consumer<ComponentMainThreadExecutor> startUpAction,
-            final ScheduledExecutor delayExecutor,
+            final ScheduledExecutor futureExecutor,
             final ClassLoader userCodeLoader,
             final CheckpointsCleaner checkpointsCleaner,
             final CheckpointRecoveryFactory checkpointRecoveryFactory,
@@ -154,7 +155,7 @@ public class DefaultScheduler extends SchedulerBase implements SchedulerOperatio
 
         this.log = log;
 
-        this.delayExecutor = checkNotNull(delayExecutor);
+        this.delayExecutor = checkNotNull(futureExecutor);
         this.userCodeLoader = checkNotNull(userCodeLoader);
         this.executionOperations = checkNotNull(executionOperations);
         this.shuffleMaster = checkNotNull(shuffleMaster);
@@ -207,7 +208,9 @@ public class DefaultScheduler extends SchedulerBase implements SchedulerOperatio
                         executionVertexVersioner,
                         rpcTimeout,
                         this::startReserveAllocation,
-                        mainThreadExecutor);
+                        mainThreadExecutor,
+                        futureExecutor,
+                        createExecutionDeployerFactory(jobMasterConfiguration));
     }
 
     // ------------------------------------------------------------------------
@@ -469,6 +472,18 @@ public class DefaultScheduler extends SchedulerBase implements SchedulerOperatio
                         .collect(Collectors.toList());
 
         executionDeployer.allocateSlotsAndDeploy(executionsToDeploy, requiredVersionByVertex);
+    }
+
+    private ExecutionDeployExecutor.Factory createExecutionDeployerFactory(
+            Configuration configuration) {
+        switch (configuration.get(JobManagerOptions.TASK_DEPLOYMENT_MODE)) {
+            case BATCH:
+                return new BatchExecutionDeployExecutor.Factory();
+            case SINGLE:
+                return new DefaultExecutionDeployExecutor.Factory();
+            default:
+                throw new UnsupportedOperationException("Not support taskDeploymentMode");
+        }
     }
 
     private void startReserveAllocation(

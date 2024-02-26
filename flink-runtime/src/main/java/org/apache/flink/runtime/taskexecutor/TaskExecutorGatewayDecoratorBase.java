@@ -47,6 +47,7 @@ import org.apache.flink.util.SerializedValue;
 
 import java.time.Duration;
 import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -94,9 +95,9 @@ public class TaskExecutorGatewayDecoratorBase implements TaskExecutorGateway {
     }
 
     @Override
-    public CompletableFuture<Acknowledge> submitTask(
-            TaskDeploymentDescriptor tdd, JobMasterId jobMasterId, Time timeout) {
-        return originalGateway.submitTask(tdd, jobMasterId, timeout);
+    public CompletableFuture<List<SerializableOptional<Throwable>>> submitTasks(
+            List<TaskDeploymentDescriptor> tdds, JobMasterId jobMasterId, Time timeout) {
+        return originalGateway.submitTasks(tdds, jobMasterId, timeout);
     }
 
     @Override

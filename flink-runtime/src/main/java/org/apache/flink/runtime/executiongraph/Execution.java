@@ -44,6 +44,7 @@ import org.apache.flink.runtime.jobmaster.LogicalSlot;
 import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.coordination.TaskNotRunningException;
+import org.apache.flink.runtime.scheduler.ClusterDatasetCorruptedException;
 import org.apache.flink.runtime.scheduler.strategy.ConsumerVertexGroup;
 import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
 import org.apache.flink.runtime.shuffle.PartitionDescriptor;
@@ -52,6 +53,7 @@ import org.apache.flink.runtime.shuffle.ShuffleDescriptor;
 import org.apache.flink.runtime.shuffle.ShuffleMaster;
 import org.apache.flink.runtime.taskexecutor.TaskExecutorOperatorEventGateway;
 import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
+import org.apache.flink.types.SerializableOptional;
 import org.apache.flink.util.CollectionUtil;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FlinkException;
@@ -63,6 +65,7 @@ import org.slf4j.Logger;
 
 import javax.annotation.Nullable;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -87,6 +90,7 @@ import static org.apache.flink.runtime.execution.ExecutionState.FINISHED;
 import static org.apache.flink.runtime.execution.ExecutionState.INITIALIZING;
 import static org.apache.flink.runtime.execution.ExecutionState.RUNNING;
 import static org.apache.flink.runtime.execution.ExecutionState.SCHEDULED;
+import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 import static org.apache.flink.util.Preconditions.checkState;
 
@@ -504,11 +508,13 @@ public class Execution
     }
 
     /**
-     * Deploys the execution to the previously assigned resource.
+     * Use deploy function to deploy the execution to the previously assigned resource.
      *
+     * @param deployFunction function to deploy task.
      * @throws JobException if the execution cannot be deployed to the assigned resource
      */
-    public void deploy() throws JobException {
+    public void deploy(Function<Execution, CompletableFuture<Acknowledge>> deployFunction)
+            throws JobException {
         assertRunningInJobMasterMainThread();
 
         final LogicalSlot slot = assignedResource;
@@ -569,20 +575,6 @@ public class Execution
                     getAssignedResourceLocation(),
                     slot.getAllocationId());
 
-            final TaskDeploymentDescriptor deployment =
-                    vertex.getExecutionGraphAccessor()
-                            .getTaskDeploymentDescriptorFactory()
-                            .createDeploymentDescriptor(
-                                    this,
-                                    slot.getAllocationId(),
-                                    taskRestore,
-                                    producedPartitions.values());
-
-            // null taskRestore to let it be GC'ed
-            taskRestore = null;
-
-            final TaskManagerGateway taskManagerGateway = slot.getTaskManagerGateway();
-
             final ComponentMainThreadExecutor jobMasterMainThreadExecutor =
                     vertex.getExecutionGraphAccessor().getJobMasterMainThreadExecutor();
 
@@ -590,9 +582,8 @@ public class Execution
             // We run the submission in the future executor so that the serialization of large TDDs
             // does not block
             // the main thread and sync back to the main thread once submission is completed.
-            CompletableFuture.supplyAsync(
-                            () -> taskManagerGateway.submitTask(deployment, rpcTimeout), executor)
-                    .thenCompose(Function.identity())
+            deployFunction
+                    .apply(this)
                     .whenCompleteAsync(
                             (ack, failure) -> {
                                 if (failure == null) {
@@ -624,9 +615,66 @@ public class Execution
                             },
                             jobMasterMainThreadExecutor);
 
+            // null taskRestore to let it be GC'ed
+            taskRestore = null;
         } catch (Throwable t) {
             markFailed(t);
         }
+    }
+
+    public TaskDeploymentDescriptor getDeploymentDescriptor()
+            throws IOException, ClusterDatasetCorruptedException {
+        checkNotNull(assignedResource);
+
+        return vertex.getExecutionGraphAccessor()
+                .getTaskDeploymentDescriptorFactory()
+                .createDeploymentDescriptor(
+                        this,
+                        assignedResource.getAllocationId(),
+                        taskRestore,
+                        producedPartitions.values());
+    }
+
+    private Function<Execution, CompletableFuture<Acknowledge>> deployInternal() {
+        return execution -> {
+            try {
+                final TaskDeploymentDescriptor deploymentDescriptor =
+                        execution.getDeploymentDescriptor();
+                return CompletableFuture.supplyAsync(
+                                () ->
+                                        execution
+                                                .getAssignedResource()
+                                                .getTaskManagerGateway()
+                                                .submitTasks(
+                                                        Collections.singletonList(
+                                                                deploymentDescriptor),
+                                                        rpcTimeout),
+                                executor)
+                        .thenCompose(Function.identity())
+                        .thenCompose(
+                                taskDeployResults -> {
+                                    checkArgument(taskDeployResults.size() == 1);
+                                    final SerializableOptional<Throwable> throwable =
+                                            taskDeployResults.get(0);
+                                    if (throwable.isPresent()) {
+                                        return FutureUtils.completedExceptionally(throwable.get());
+                                    } else {
+                                        return CompletableFuture.completedFuture(Acknowledge.get());
+                                    }
+                                });
+            } catch (Exception e) {
+                return FutureUtils.completedExceptionally(e);
+            }
+        };
+    }
+
+    /**
+     * Deploys the execution to the previously assigned resource.
+     *
+     * @throws JobException if the execution cannot be deployed to the assigned resource
+     */
+    public void deploy() throws JobException {
+        deploy(deployInternal());
     }
 
     public void cancel() {

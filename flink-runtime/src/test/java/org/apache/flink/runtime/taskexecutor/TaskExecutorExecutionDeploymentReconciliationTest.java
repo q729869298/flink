@@ -65,6 +65,8 @@ import org.apache.flink.util.Reference;
 import org.apache.flink.util.concurrent.Executors;
 import org.apache.flink.util.concurrent.FutureUtils;
 
+import org.apache.flink.shaded.guava31.com.google.common.collect.Lists;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -193,8 +195,10 @@ class TaskExecutorExecutionDeploymentReconciliationTest {
             assertThat(deployedExecutionsQueue.take()).isEmpty();
 
             taskExecutorGateway
-                    .submitTask(
-                            taskDeploymentDescriptor, jobMasterGateway.getFencingToken(), timeout)
+                    .submitTasks(
+                            Lists.newArrayList(taskDeploymentDescriptor),
+                            jobMasterGateway.getFencingToken(),
+                            timeout)
                     .get();
 
             TestingInvokable.sync.awaitBlocker();

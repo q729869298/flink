@@ -22,7 +22,10 @@ import org.apache.flink.api.common.time.Time;
 import org.apache.flink.runtime.deployment.TaskDeploymentDescriptor;
 import org.apache.flink.runtime.executiongraph.utils.SimpleAckingTaskManagerGateway;
 import org.apache.flink.runtime.messages.Acknowledge;
+import org.apache.flink.types.SerializableOptional;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -51,10 +54,19 @@ class InteractionsCountingTaskManagerGateway extends SimpleAckingTaskManagerGate
     }
 
     @Override
-    public CompletableFuture<Acknowledge> submitTask(TaskDeploymentDescriptor tdd, Time timeout) {
-        submitTaskCount.incrementAndGet();
-        submitLatch.countDown();
-        return CompletableFuture.completedFuture(Acknowledge.get());
+    public CompletableFuture<List<SerializableOptional<Throwable>>> submitTasks(
+            List<TaskDeploymentDescriptor> taskDeploymentDescriptors, Time timeout) {
+
+        List<SerializableOptional<Throwable>> results =
+                new ArrayList<>(taskDeploymentDescriptors.size());
+
+        for (int i = 0; i < taskDeploymentDescriptors.size(); i++) {
+            results.add(SerializableOptional.ofNullable(null));
+            submitTaskCount.incrementAndGet();
+            submitLatch.countDown();
+        }
+
+        return CompletableFuture.completedFuture(results);
     }
 
     void resetCounts() {

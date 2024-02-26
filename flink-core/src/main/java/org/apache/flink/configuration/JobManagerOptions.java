@@ -595,6 +595,23 @@ public class JobManagerOptions {
                                             code(SchedulerExecutionMode.REACTIVE.name()))
                                     .build());
 
+    /** Enum for controlling Task deployment mode. */
+    public enum TaskDeploymentMode {
+        SINGLE,
+        BATCH
+    }
+
+    @Documentation.Section({Documentation.Sections.ALL_JOB_MANAGER})
+    public static final ConfigOption<TaskDeploymentMode> TASK_DEPLOYMENT_MODE =
+            key("jobmanager.execution.deploy-mode")
+                    .enumType(TaskDeploymentMode.class)
+                    .defaultValue(TaskDeploymentMode.BATCH)
+                    .withDescription(
+                            Description.builder()
+                                    .text(
+                                            "Execution deployment mode determines how jobmaster deploys tasks to taskmanager.")
+                                    .build());
+
     /**
      * Config parameter controlling whether partitions should already be released during the job
      * execution.

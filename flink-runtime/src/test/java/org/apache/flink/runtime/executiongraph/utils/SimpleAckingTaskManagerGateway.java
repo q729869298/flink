@@ -30,16 +30,20 @@ import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobmanager.slots.TaskManagerGateway;
 import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
+import org.apache.flink.types.SerializableOptional;
 import org.apache.flink.util.SerializedValue;
 import org.apache.flink.util.function.TriConsumer;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * A TaskManagerGateway that simply acks the basic operations (deploy, cancel, update) and does not
@@ -49,7 +53,18 @@ public class SimpleAckingTaskManagerGateway implements TaskManagerGateway {
 
     private final String address = UUID.randomUUID().toString();
 
-    private Consumer<TaskDeploymentDescriptor> submitConsumer = ignore -> {};
+    private Function<
+                    List<TaskDeploymentDescriptor>,
+                    CompletableFuture<List<SerializableOptional<Throwable>>>>
+            batchSubmitFunction =
+                    tdds ->
+                            CompletableFuture.completedFuture(
+                                    tdds.stream()
+                                            .map(
+                                                    ignore ->
+                                                            SerializableOptional.ofNullable(
+                                                                    (Throwable) null))
+                                            .collect(Collectors.toList()));
 
     private Consumer<ExecutionAttemptID> cancelConsumer = ignore -> {};
 
@@ -64,10 +79,6 @@ public class SimpleAckingTaskManagerGateway implements TaskManagerGateway {
 
     private TriConsumer<ExecutionAttemptID, Iterable<PartitionInfo>, Time>
             updatePartitionsConsumer = (ignore1, ignore2, ignore3) -> {};
-
-    public void setSubmitConsumer(Consumer<TaskDeploymentDescriptor> submitConsumer) {
-        this.submitConsumer = submitConsumer;
-    }
 
     public void setCancelConsumer(Consumer<ExecutionAttemptID> cancelConsumer) {
         this.cancelConsumer = cancelConsumer;
@@ -93,15 +104,24 @@ public class SimpleAckingTaskManagerGateway implements TaskManagerGateway {
         this.updatePartitionsConsumer = updatePartitionsConsumer;
     }
 
+    public SimpleAckingTaskManagerGateway setBatchSubmitFunction(
+            Function<
+                            List<TaskDeploymentDescriptor>,
+                            CompletableFuture<List<SerializableOptional<Throwable>>>>
+                    batchSubmitFunction) {
+        this.batchSubmitFunction = batchSubmitFunction;
+        return this;
+    }
+
     @Override
     public String getAddress() {
         return address;
     }
 
     @Override
-    public CompletableFuture<Acknowledge> submitTask(TaskDeploymentDescriptor tdd, Time timeout) {
-        submitConsumer.accept(tdd);
-        return CompletableFuture.completedFuture(Acknowledge.get());
+    public CompletableFuture<List<SerializableOptional<Throwable>>> submitTasks(
+            List<TaskDeploymentDescriptor> tdds, Time timeout) {
+        return batchSubmitFunction.apply(tdds);
     }
 
     @Override

@@ -31,8 +31,10 @@ import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.rpc.RpcTimeout;
 import org.apache.flink.runtime.taskexecutor.TaskExecutorOperatorEventGateway;
+import org.apache.flink.types.SerializableOptional;
 import org.apache.flink.util.SerializedValue;
 
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -47,13 +49,14 @@ public interface TaskManagerGateway extends TaskExecutorOperatorEventGateway {
     String getAddress();
 
     /**
-     * Submit a task to the task manager.
+     * Submit list of tasks to the task manager.
      *
-     * @param tdd describing the task to submit
+     * @param tdds descriptor list of tasks to submit
      * @param timeout of the submit operation
-     * @return Future acknowledge of the successful operation
+     * @return Future deploying result of each submit operation.
      */
-    CompletableFuture<Acknowledge> submitTask(TaskDeploymentDescriptor tdd, Time timeout);
+    CompletableFuture<List<SerializableOptional<Throwable>>> submitTasks(
+            List<TaskDeploymentDescriptor> tdds, Time timeout);
 
     /**
      * Cancel the given task.

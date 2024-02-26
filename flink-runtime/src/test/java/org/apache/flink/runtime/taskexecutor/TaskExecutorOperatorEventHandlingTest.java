@@ -45,6 +45,8 @@ import org.apache.flink.testutils.executor.TestExecutorExtension;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.SerializedValue;
 
+import org.apache.flink.shaded.guava31.com.google.common.collect.Lists;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -183,7 +185,9 @@ class TaskExecutorOperatorEventHandlingTest {
                 .allocateSlot(0, jobId, tdd.getAllocationId(), Duration.ofSeconds(60));
 
         final TaskExecutorGateway tmGateway = env.getTaskExecutorGateway();
-        tmGateway.submitTask(tdd, env.getJobMasterId(), Time.seconds(10)).get();
+        tmGateway
+                .submitTasks(Lists.newArrayList(tdd), env.getJobMasterId(), Time.seconds(10))
+                .get();
         taskRunningFuture.get();
 
         return env;
