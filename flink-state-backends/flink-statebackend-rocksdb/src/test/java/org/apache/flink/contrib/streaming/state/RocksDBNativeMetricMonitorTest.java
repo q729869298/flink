@@ -28,9 +28,11 @@ import org.apache.flink.runtime.metrics.groups.UnregisteredMetricGroups;
 import org.apache.flink.runtime.metrics.scope.ScopeFormats;
 import org.apache.flink.traces.SpanBuilder;
 
+import org.junit.Assert;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.rocksdb.ColumnFamilyHandle;
+import org.rocksdb.HistogramData;
 import org.rocksdb.RocksDBException;
 
 import java.math.BigInteger;
@@ -46,7 +48,8 @@ class RocksDBNativeMetricMonitorTest {
 
     private static final String COLUMN_FAMILY_NAME = "column-family";
 
-    @RegisterExtension public RocksDBExtension rocksDBExtension = new RocksDBExtension(true);
+    @RegisterExtension
+    public RocksDBExtension rocksDBExtension = new RocksDBExtension(true);
 
     @Test
     void testMetricMonitorLifecycle() throws Throwable {
@@ -69,6 +72,7 @@ class RocksDBNativeMetricMonitorTest {
         // have overhead.
         options.enableSizeAllMemTables();
         options.enableNativeStatistics(RocksDBNativeMetricOptions.MONITOR_BYTES_WRITTEN);
+        options.enableNativeHistogramStatistics(RocksDBNativeMetricOptions.MONITOR_DB_WRITE);
 
         RocksDBNativeMetricMonitor monitor =
                 new RocksDBNativeMetricMonitor(
@@ -103,6 +107,13 @@ class RocksDBNativeMetricMonitorTest {
             view.setValue(0L);
         }
 
+        for (RocksDBNativeMetricMonitor.RocksDBNativeHistogramStatisticsMetricView view :
+                registry.statisticsHistogramMetrics) {
+            view.update();
+            Assert.assertNotEquals(0L, view.getStatistics().getQuantile(0.5), 0);
+            view.setValue(new HistogramData(1, 1, 1, 1, 1));
+        }
+
         // After the monitor is closed no metric should be accessing RocksDB anymore.
         // If they do, then this test will likely fail with a segmentation fault.
         monitor.close();
@@ -121,6 +132,12 @@ class RocksDBNativeMetricMonitorTest {
                 registry.statisticsMetrics) {
             view.update();
             assertThat(view.getValue()).isZero();
+        }
+
+        for (RocksDBNativeMetricMonitor.RocksDBNativeHistogramStatisticsMetricView view :
+                registry.statisticsHistogramMetrics) {
+            view.update();
+            Assert.assertEquals(1.0, view.getStatistics().getQuantile(0.5), 0);
         }
     }
 
@@ -173,6 +190,7 @@ class RocksDBNativeMetricMonitorTest {
         RocksDBNativeMetricOptions options = new RocksDBNativeMetricOptions();
         options.enableSizeAllMemTables();
         options.enableNativeStatistics(RocksDBNativeMetricOptions.MONITOR_BLOCK_CACHE_HIT);
+        options.enableNativeHistogramStatistics(RocksDBNativeMetricOptions.MONITOR_DB_WRITE);
 
         RocksDBNativeMetricMonitor monitor =
                 new RocksDBNativeMetricMonitor(
@@ -203,6 +221,17 @@ class RocksDBNativeMetricMonitorTest {
                     .withFailMessage("Closed gauge still queried RocksDB")
                     .isZero();
         }
+
+        for (RocksDBNativeMetricMonitor.RocksDBNativeHistogramStatisticsMetricView view :
+                registry.statisticsHistogramMetrics) {
+            view.close();
+            view.update();
+            Assert.assertEquals(
+                    "Closed gauge still queried RocksDB",
+                    0.0,
+                    view.getStatistics().getQuantile(0.5),
+                    0.0);
+        }
     }
 
     static class SimpleMetricRegistry implements MetricRegistry {
@@ -210,6 +239,9 @@ class RocksDBNativeMetricMonitorTest {
                 new ArrayList<>();
 
         List<RocksDBNativeMetricMonitor.RocksDBNativeStatisticsMetricView> statisticsMetrics =
+                new ArrayList<>();
+
+        List<RocksDBNativeMetricMonitor.RocksDBNativeHistogramStatisticsMetricView> statisticsHistogramMetrics =
                 new ArrayList<>();
 
         @Override
@@ -234,11 +266,16 @@ class RocksDBNativeMetricMonitorTest {
                     instanceof RocksDBNativeMetricMonitor.RocksDBNativeStatisticsMetricView) {
                 statisticsMetrics.add(
                         (RocksDBNativeMetricMonitor.RocksDBNativeStatisticsMetricView) metric);
+            } else if (metric
+                    instanceof RocksDBNativeMetricMonitor.RocksDBNativeHistogramStatisticsMetricView) {
+                statisticsHistogramMetrics.add(
+                        (RocksDBNativeMetricMonitor.RocksDBNativeHistogramStatisticsMetricView) metric);
             }
         }
 
         @Override
-        public void unregister(Metric metric, String metricName, AbstractMetricGroup group) {}
+        public void unregister(Metric metric, String metricName, AbstractMetricGroup group) {
+        }
 
         @Override
         public ScopeFormats getScopeFormats() {
