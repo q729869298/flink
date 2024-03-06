@@ -28,6 +28,7 @@ import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 import org.apache.flink.runtime.executiongraph.JobInformation;
 import org.apache.flink.runtime.executiongraph.TaskInformation;
 import org.apache.flink.runtime.util.GroupCache;
+import org.apache.flink.util.CompressedSerializedValue;
 import org.apache.flink.util.InstantiationUtil;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.SerializedValue;
@@ -72,30 +73,26 @@ public final class TaskDeploymentDescriptor implements Serializable {
         /** The serialized value. */
         public SerializedValue<T> serializedValue;
 
+        /** The raw value. */
+        public T rawValue;
+
         @SuppressWarnings("unused")
         public NonOffloaded() {}
+
+        public NonOffloaded(T rawValue) {
+            this.rawValue = Preconditions.checkNotNull(rawValue);
+        }
 
         public NonOffloaded(SerializedValue<T> serializedValue) {
             this.serializedValue = Preconditions.checkNotNull(serializedValue);
         }
-    }
 
-    /**
-     * The raw value that is not offloaded to the {@link org.apache.flink.runtime.blob.BlobServer}.
-     *
-     * @param <T> type of the raw value
-     */
-    public static class NonOffloadedRaw<T> extends MaybeOffloaded<T> {
-        private static final long serialVersionUID = 1L;
+        public void compressAndSerialize() throws IOException {
 
-        /** The raw value. */
-        public T value;
-
-        @SuppressWarnings("unused")
-        public NonOffloadedRaw() {}
-
-        public NonOffloadedRaw(T value) {
-            this.value = Preconditions.checkNotNull(value);
+            if (rawValue != null) {
+                this.serializedValue = CompressedSerializedValue.fromObject(rawValue);
+                this.rawValue = null;
+            }
         }
     }
 
@@ -333,6 +330,12 @@ public final class TaskDeploymentDescriptor implements Serializable {
         for (InputGateDeploymentDescriptor inputGate : inputGates) {
             inputGate.tryLoadAndDeserializeShuffleDescriptors(
                     blobService, jobId, shuffleDescriptorsCache);
+        }
+    }
+
+    public void compressAndSerializeShuffleDescriptors() throws IOException {
+        for (InputGateDeploymentDescriptor inputGate : inputGates) {
+            inputGate.compressAndSerializeShuffleDescriptors();
         }
     }
 
