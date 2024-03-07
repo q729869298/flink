@@ -353,7 +353,8 @@ public class StreamTaskStateInitializerImplTest {
                                 KeyContext keyContext,
                                 ProcessingTimeService processingTimeService,
                                 Iterable<KeyGroupStatePartitionStreamProvider> rawKeyedStates,
-                                StreamTaskCancellationContext cancellationContext)
+                                StreamTaskCancellationContext cancellationContext,
+                                MetricGroup metricGroup)
                                 throws Exception {
                             return null;
                         }

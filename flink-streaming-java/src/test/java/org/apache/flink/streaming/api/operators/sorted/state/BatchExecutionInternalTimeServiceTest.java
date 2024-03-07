@@ -100,7 +100,8 @@ public class BatchExecutionInternalTimeServiceTest extends TestLogger {
                 new DummyKeyContext(),
                 new TestProcessingTimeService(),
                 Collections.emptyList(),
-                StreamTaskCancellationContext.alwaysRunning());
+                StreamTaskCancellationContext.alwaysRunning(),
+                new UnregisteredMetricsGroup());
     }
 
     @Test
@@ -145,7 +146,8 @@ public class BatchExecutionInternalTimeServiceTest extends TestLogger {
                         new DummyKeyContext(),
                         new TestProcessingTimeService(),
                         Collections.emptyList(),
-                        StreamTaskCancellationContext.alwaysRunning());
+                        StreamTaskCancellationContext.alwaysRunning(),
+                        new UnregisteredMetricsGroup());
 
         List<Long> timers = new ArrayList<>();
         InternalTimerService<VoidNamespace> timerService =
@@ -181,7 +183,8 @@ public class BatchExecutionInternalTimeServiceTest extends TestLogger {
                         new DummyKeyContext(),
                         new TestProcessingTimeService(),
                         Collections.emptyList(),
-                        StreamTaskCancellationContext.alwaysRunning());
+                        StreamTaskCancellationContext.alwaysRunning(),
+                        new UnregisteredMetricsGroup());
 
         List<Long> timers = new ArrayList<>();
         InternalTimerService<VoidNamespace> timerService =
@@ -210,7 +213,8 @@ public class BatchExecutionInternalTimeServiceTest extends TestLogger {
                         new DummyKeyContext(),
                         new TestProcessingTimeService(),
                         Collections.emptyList(),
-                        StreamTaskCancellationContext.alwaysRunning());
+                        StreamTaskCancellationContext.alwaysRunning(),
+                        new UnregisteredMetricsGroup());
 
         List<Long> timers = new ArrayList<>();
         TriggerWithTimerServiceAccess<Integer, VoidNamespace> eventTimeTrigger =
@@ -257,7 +261,8 @@ public class BatchExecutionInternalTimeServiceTest extends TestLogger {
                         new DummyKeyContext(),
                         processingTimeService,
                         Collections.emptyList(),
-                        StreamTaskCancellationContext.alwaysRunning());
+                        StreamTaskCancellationContext.alwaysRunning(),
+                        new UnregisteredMetricsGroup());
 
         List<Long> timers = new ArrayList<>();
         InternalTimerService<VoidNamespace> timerService =
@@ -292,7 +297,8 @@ public class BatchExecutionInternalTimeServiceTest extends TestLogger {
                         new DummyKeyContext(),
                         processingTimeService,
                         Collections.emptyList(),
-                        StreamTaskCancellationContext.alwaysRunning());
+                        StreamTaskCancellationContext.alwaysRunning(),
+                        new UnregisteredMetricsGroup());
 
         List<Long> timers = new ArrayList<>();
         TriggerWithTimerServiceAccess<Integer, VoidNamespace> trigger =
@@ -332,7 +338,8 @@ public class BatchExecutionInternalTimeServiceTest extends TestLogger {
                         new DummyKeyContext(),
                         processingTimeService,
                         Collections.emptyList(),
-                        StreamTaskCancellationContext.alwaysRunning());
+                        StreamTaskCancellationContext.alwaysRunning(),
+                        new UnregisteredMetricsGroup());
 
         List<Long> timers = new ArrayList<>();
         TriggerWithTimerServiceAccess<Integer, VoidNamespace> trigger =
