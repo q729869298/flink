@@ -314,7 +314,8 @@ public class OperatorCoordinatorHolder
                         (success, failure) -> {
                             if (failure != null) {
                                 result.completeExceptionally(failure);
-                            } else if (closeGateways(checkpointId)) {
+                            } else if (checkpointId == OperatorCoordinator.NO_CHECKPOINT
+                                    || closeGateways(checkpointId)) {
                                 completeCheckpointOnceEventsAreDone(checkpointId, result, success);
                             } else {
                                 // if we cannot close the gateway, this means the checkpoint
@@ -437,9 +438,8 @@ public class OperatorCoordinatorHolder
         final SubtaskGatewayImpl gateway =
                 new SubtaskGatewayImpl(sta, mainThreadExecutor, unconfirmedEvents);
 
-        // When concurrent execution attempts is supported, the checkpoint must have been disabled.
-        // Thus, we don't need to maintain subtaskGatewayMap
-        if (!context.isConcurrentExecutionAttemptsSupported()) {
+        // We don't need to maintain subtaskGatewayMap when checkpoint coordinator is null.
+        if (context.getCheckpointCoordinator() != null) {
             subtaskGatewayMap.put(gateway.getSubtask(), gateway);
         }
 

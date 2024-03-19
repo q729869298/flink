@@ -22,6 +22,8 @@ import org.apache.flink.api.common.JobID;
 import org.apache.flink.configuration.MemorySize;
 
 import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -108,4 +110,33 @@ public interface ShuffleMaster<T extends ShuffleDescriptor> extends AutoCloseabl
             TaskInputsOutputsDescriptor taskInputsOutputsDescriptor) {
         return MemorySize.ZERO;
     }
+
+    /**
+     * Get all partitions and their metrics, the metrics mainly includes the meta information of
+     * partition(partition bytes, etc).
+     *
+     * @param jobId ID of the target job
+     * @return All partitions belong to the target job and their metrics
+     */
+    default CompletableFuture<Collection<PartitionWithMetrics>> getAllPartitionWithMetrics(
+            JobID jobId) {
+        return CompletableFuture.completedFuture(Collections.emptyList());
+    }
+
+    /**
+     * Whether the shuffle master supports taking snapshot in batch scenarios, which will be used
+     * when enable Job Recovery. If it returns true, we will call {@link #snapshotState} to take
+     * snapshot, and call {@link #restoreState} to restore the state of shuffle master.
+     */
+    default boolean supportsBatchSnapshot() {
+        return false;
+    }
+
+    /** Triggers a snapshot of the shuffle master's state. */
+    default void snapshotState(
+            CompletableFuture<ShuffleMasterSnapshot> snapshotFuture,
+            ShuffleMasterSnapshotContext context) {}
+
+    /** Restores the state of the shuffle master from the provided snapshots. */
+    default void restoreState(List<ShuffleMasterSnapshot> snapshots) {}
 }
