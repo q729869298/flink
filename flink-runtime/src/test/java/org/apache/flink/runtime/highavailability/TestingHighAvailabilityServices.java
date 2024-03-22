@@ -29,6 +29,8 @@ import org.apache.flink.runtime.leaderretrieval.LeaderRetrievalService;
 import org.apache.flink.util.concurrent.FutureUtils;
 
 import java.io.IOException;
+import java.util.ArrayDeque;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
@@ -40,20 +42,15 @@ import java.util.function.Function;
  */
 public class TestingHighAvailabilityServices implements HighAvailabilityServices {
 
-    private volatile LeaderRetrievalService resourceManagerLeaderRetriever;
+    private volatile Queue<LeaderRetrievalService> resourceManagerLeaderRetrievers =
+            new ArrayDeque<>();
 
     private volatile LeaderRetrievalService dispatcherLeaderRetriever;
 
     private volatile LeaderRetrievalService clusterRestEndpointLeaderRetriever;
 
-    private volatile Function<JobID, LeaderRetrievalService> jobMasterLeaderRetrieverFunction =
-            ignored -> null;
-
     private volatile Function<JobID, LeaderElection> jobMasterLeaderElectionServiceFunction =
             ignored -> null;
-
-    private final ConcurrentHashMap<JobID, LeaderRetrievalService> jobMasterLeaderRetrievers =
-            new ConcurrentHashMap<>();
 
     private final ConcurrentHashMap<JobID, LeaderElection> jobMasterLeaderElections =
             new ConcurrentHashMap<>();
@@ -82,7 +79,7 @@ public class TestingHighAvailabilityServices implements HighAvailabilityServices
 
     public void setResourceManagerLeaderRetriever(
             LeaderRetrievalService resourceManagerLeaderRetriever) {
-        this.resourceManagerLeaderRetriever = resourceManagerLeaderRetriever;
+        this.resourceManagerLeaderRetrievers.add(resourceManagerLeaderRetriever);
     }
 
     public void setDispatcherLeaderRetriever(LeaderRetrievalService dispatcherLeaderRetriever) {
@@ -92,11 +89,6 @@ public class TestingHighAvailabilityServices implements HighAvailabilityServices
     public void setClusterRestEndpointLeaderRetriever(
             final LeaderRetrievalService clusterRestEndpointLeaderRetriever) {
         this.clusterRestEndpointLeaderRetriever = clusterRestEndpointLeaderRetriever;
-    }
-
-    public void setJobMasterLeaderRetriever(
-            JobID jobID, LeaderRetrievalService jobMasterLeaderRetriever) {
-        this.jobMasterLeaderRetrievers.put(jobID, jobMasterLeaderRetriever);
     }
 
     public void setJobMasterLeaderElection(JobID jobID, LeaderElection leaderElection) {
@@ -133,11 +125,6 @@ public class TestingHighAvailabilityServices implements HighAvailabilityServices
         this.jobMasterLeaderElectionServiceFunction = jobMasterLeaderElectionServiceFunction;
     }
 
-    public void setJobMasterLeaderRetrieverFunction(
-            Function<JobID, LeaderRetrievalService> jobMasterLeaderRetrieverFunction) {
-        this.jobMasterLeaderRetrieverFunction = jobMasterLeaderRetrieverFunction;
-    }
-
     public void setCloseFuture(CompletableFuture<Void> closeFuture) {
         this.closeFuture = closeFuture;
     }
@@ -156,7 +143,7 @@ public class TestingHighAvailabilityServices implements HighAvailabilityServices
 
     @Override
     public LeaderRetrievalService getResourceManagerLeaderRetriever() {
-        LeaderRetrievalService service = this.resourceManagerLeaderRetriever;
+        LeaderRetrievalService service = this.resourceManagerLeaderRetrievers.poll();
         if (service != null) {
             return service;
         } else {
@@ -172,23 +159,6 @@ public class TestingHighAvailabilityServices implements HighAvailabilityServices
         } else {
             throw new IllegalStateException("ResourceManagerLeaderRetriever has not been set");
         }
-    }
-
-    @Override
-    public LeaderRetrievalService getJobManagerLeaderRetriever(JobID jobID) {
-        LeaderRetrievalService service =
-                jobMasterLeaderRetrievers.computeIfAbsent(jobID, jobMasterLeaderRetrieverFunction);
-        if (service != null) {
-            return service;
-        } else {
-            throw new IllegalStateException("JobMasterLeaderRetriever has not been set");
-        }
-    }
-
-    @Override
-    public LeaderRetrievalService getJobManagerLeaderRetriever(
-            JobID jobID, String defaultJobManagerAddress) {
-        return getJobManagerLeaderRetriever(jobID);
     }
 
     @Override
