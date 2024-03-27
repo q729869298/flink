@@ -18,7 +18,6 @@
 
 package org.apache.flink.runtime.leaderelection;
 
-import org.apache.flink.core.testutils.FlinkAssertions;
 import org.apache.flink.core.testutils.OneShotLatch;
 import org.apache.flink.runtime.concurrent.ManuallyTriggeredScheduledExecutorService;
 import org.apache.flink.runtime.util.TestingFatalErrorHandlerExtension;
@@ -34,6 +33,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -41,6 +41,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
+import static org.apache.flink.core.testutils.FlinkAssertions.assertThatFuture;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -59,17 +60,15 @@ class DefaultLeaderElectionServiceTest {
             {
                 runTestWithSynchronousEventHandling(
                         () -> {
-                            // grant leadership
                             final UUID leaderSessionID = UUID.randomUUID();
                             grantLeadership(leaderSessionID);
 
                             applyToBothContenderContexts(
                                     ctx -> {
                                         ctx.contender.waitForLeader();
+                                        ctx.assertLeadership(
+                                                storedLeaderInformation, leaderSessionID);
                                         assertThat(ctx.contender.getLeaderSessionID())
-                                                .isEqualTo(
-                                                        leaderElectionService.getLeaderSessionID(
-                                                                ctx.componentId))
                                                 .isEqualTo(leaderSessionID);
 
                                         final LeaderInformation
@@ -85,29 +84,20 @@ class DefaultLeaderElectionServiceTest {
                                                 .hasValue(expectedLeaderInformationInHaBackend);
                                     });
 
+                            final LeaderInformationRegister newLeaderInformation =
+                                    LeaderInformationRegister.empty();
+                            storedLeaderInformation.set(newLeaderInformation);
                             revokeLeadership();
 
                             applyToBothContenderContexts(
                                     ctx -> {
                                         ctx.contender.waitForRevokeLeader();
                                         assertThat(ctx.contender.getLeaderSessionID()).isNull();
-                                        assertThat(
-                                                        leaderElectionService.getLeaderSessionID(
-                                                                ctx.componentId))
-                                                .isNull();
 
-                                        final LeaderInformation
-                                                expectedLeaderInformationInHaBackend =
-                                                        LeaderInformation.known(
-                                                                leaderSessionID, ctx.address);
-
-                                        assertThat(
-                                                        storedLeaderInformation
-                                                                .get()
-                                                                .forComponentId(ctx.componentId))
+                                        assertThat(storedLeaderInformation.get())
                                                 .as(
                                                         "External storage is not touched by the leader session because the leadership is already lost.")
-                                                .hasValue(expectedLeaderInformationInHaBackend);
+                                                .isSameAs(newLeaderInformation);
                                     });
                         });
             }
@@ -218,7 +208,7 @@ class DefaultLeaderElectionServiceTest {
             closeThread.join();
             grantThread.join();
 
-            FlinkAssertions.assertThatFuture(driverCloseTriggered).eventuallySucceeds();
+            assertThatFuture(driverCloseTriggered).eventuallySucceeds();
         }
     }
 
@@ -523,15 +513,6 @@ class DefaultLeaderElectionServiceTest {
                                     ctx -> {
                                         assertThat(ctx.contender.getLeaderSessionID())
                                                 .isEqualTo(leaderSessionID);
-                                        assertThat(
-                                                        leaderElectionService.getLeaderSessionID(
-                                                                ctx.componentId))
-                                                .isEqualTo(leaderSessionID);
-
-                                        assertThat(
-                                                        leaderElectionService.getLeaderSessionID(
-                                                                ctx.componentId))
-                                                .isEqualTo(leaderSessionID);
 
                                         assertThat(
                                                         storedLeaderInformation
@@ -547,12 +528,7 @@ class DefaultLeaderElectionServiceTest {
                                                 .as(
                                                         "The LeaderContender should have been informed about the leadership loss.")
                                                 .isNull();
-                                        assertThat(
-                                                        leaderElectionService.getLeaderSessionID(
-                                                                ctx.componentId))
-                                                .as(
-                                                        "The LeaderElectionService should have its internal state cleaned.")
-                                                .isNull();
+                                        ctx.assertNoLeadership(storedLeaderInformation);
                                     });
 
                             assertThat(storedLeaderInformation.get().getRegisteredComponentIds())
@@ -702,147 +678,6 @@ class DefaultLeaderElectionServiceTest {
     }
 
     @Test
-    void testHasLeadershipWithLeadershipButNoGrantEventProcessed() throws Exception {
-        new Context() {
-            {
-                runTestWithManuallyTriggeredEvents(
-                        executorService -> {
-                            final UUID expectedSessionID = UUID.randomUUID();
-                            grantLeadership(expectedSessionID);
-
-                            applyToBothContenderContexts(
-                                    ctx -> {
-                                        assertThat(
-                                                        leaderElectionService.hasLeadership(
-                                                                ctx.componentId, expectedSessionID))
-                                                .isFalse();
-                                        assertThat(
-                                                        leaderElectionService.hasLeadership(
-                                                                ctx.componentId, UUID.randomUUID()))
-                                                .isFalse();
-                                    });
-                        });
-            }
-        };
-    }
-
-    @Test
-    void testHasLeadershipWithLeadershipAndGrantEventProcessed() throws Exception {
-        new Context() {
-            {
-                runTestWithManuallyTriggeredEvents(
-                        executorService -> {
-                            final UUID expectedSessionID = UUID.randomUUID();
-                            grantLeadership(expectedSessionID);
-
-                            applyToBothContenderContexts(
-                                    ctx -> assertThat(ctx.contender.getLeaderSessionID()).isNull());
-
-                            executorService.trigger();
-
-                            applyToBothContenderContexts(
-                                    ctx -> {
-                                        assertThat(ctx.contender.getLeaderSessionID())
-                                                .isEqualTo(expectedSessionID);
-
-                                        assertThat(
-                                                        leaderElectionService.hasLeadership(
-                                                                ctx.componentId, expectedSessionID))
-                                                .isTrue();
-                                        assertThat(
-                                                        leaderElectionService.hasLeadership(
-                                                                ctx.componentId, UUID.randomUUID()))
-                                                .isFalse();
-                                    });
-                        });
-            }
-        };
-    }
-
-    @Test
-    void testHasLeadershipWithLeadershipLostButNoRevokeEventProcessed() throws Exception {
-        new Context() {
-            {
-                runTestWithManuallyTriggeredEvents(
-                        executorService -> {
-                            final UUID expectedSessionID = UUID.randomUUID();
-                            grantLeadership(expectedSessionID);
-                            executorService.trigger();
-
-                            revokeLeadership();
-
-                            applyToBothContenderContexts(
-                                    ctx -> {
-                                        assertThat(
-                                                        leaderElectionService.hasLeadership(
-                                                                ctx.componentId, expectedSessionID))
-                                                .as(
-                                                        "No operation should be handled anymore after the HA backend "
-                                                                + "indicated leadership loss even if the onRevokeLeadership wasn't "
-                                                                + "processed, yet, because some other process could have picked up "
-                                                                + "the leadership in the meantime already based on the HA "
-                                                                + "backend's decision.")
-                                                .isFalse();
-                                        assertThat(
-                                                        leaderElectionService.hasLeadership(
-                                                                ctx.componentId, UUID.randomUUID()))
-                                                .isFalse();
-                                    });
-                        });
-            }
-        };
-    }
-
-    @Test
-    void testHasLeadershipWithLeadershipLostAndRevokeEventProcessed() throws Exception {
-        new Context() {
-            {
-                runTestWithSynchronousEventHandling(
-                        () -> {
-                            final UUID expectedSessionID = UUID.randomUUID();
-                            grantLeadership(expectedSessionID);
-                            revokeLeadership();
-
-                            applyToBothContenderContexts(
-                                    ctx -> {
-                                        assertThat(
-                                                        leaderElectionService.hasLeadership(
-                                                                ctx.componentId, expectedSessionID))
-                                                .isFalse();
-                                        assertThat(
-                                                        leaderElectionService.hasLeadership(
-                                                                ctx.componentId, UUID.randomUUID()))
-                                                .isFalse();
-                                    });
-                        });
-            }
-        };
-    }
-
-    @Test
-    void testHasLeadershipAfterLeaderElectionClose() throws Exception {
-        new Context() {
-            {
-                runTestWithSynchronousEventHandling(
-                        () -> {
-                            final UUID expectedSessionID = UUID.randomUUID();
-                            grantLeadership(expectedSessionID);
-
-                            applyToBothContenderContexts(
-                                    ctx -> {
-                                        ctx.leaderElection.close();
-
-                                        assertThat(
-                                                        leaderElectionService.hasLeadership(
-                                                                ctx.componentId, expectedSessionID))
-                                                .isFalse();
-                                    });
-                        });
-            }
-        };
-    }
-
-    @Test
     void testLeaderInformationChangedIfNotBeingLeader() throws Exception {
         final AtomicReference<LeaderInformationRegister> storedLeaderInformation =
                 new AtomicReference<>();
@@ -872,7 +707,9 @@ class DefaultLeaderElectionServiceTest {
 
     @Test
     void testOnGrantLeadershipIsIgnoredAfterLeaderElectionClose() throws Exception {
-        new Context() {
+        final AtomicReference<LeaderInformationRegister> storedLeaderInformation =
+                new AtomicReference<>(LeaderInformationRegister.empty());
+        new Context(storedLeaderInformation) {
             {
                 runTestWithSynchronousEventHandling(
                         () -> {
@@ -881,12 +718,9 @@ class DefaultLeaderElectionServiceTest {
 
                             applyToBothContenderContexts(
                                     ctx -> {
-                                        assertThat(
-                                                        leaderElectionService.getLeaderSessionID(
-                                                                ctx.componentId))
-                                                .as(
-                                                        "The grant event shouldn't have been processed by the LeaderElectionService.")
-                                                .isNull();
+                                        ctx.assertNoLeadership(
+                                                storedLeaderInformation,
+                                                "The grant event shouldn't have been processed by the LeaderElectionService.");
                                         assertThat(ctx.contender.getLeaderSessionID())
                                                 .as(
                                                         "The grant event shouldn't have been forwarded to the contender.")
@@ -990,10 +824,8 @@ class DefaultLeaderElectionServiceTest {
             {
                 runTestWithSynchronousEventHandling(
                         () -> {
-                            grantLeadership();
-                            final UUID oldSessionId =
-                                    leaderElectionService.getLeaderSessionID(
-                                            contenderContext0.componentId);
+                            final UUID oldSessionId = UUID.randomUUID();
+                            grantLeadership(oldSessionId);
 
                             applyToBothContenderContexts(
                                     ctx -> {
@@ -1028,22 +860,16 @@ class DefaultLeaderElectionServiceTest {
 
                             applyToBothContenderContexts(
                                     ctx -> {
-                                        final LeaderInformation expectedLeaderInformation =
-                                                LeaderInformation.known(
-                                                        currentLeaderSessionId, ctx.address);
-                                        assertThat(
-                                                        storedLeaderInformation
-                                                                .get()
-                                                                .forComponentId(ctx.componentId))
-                                                .hasValue(expectedLeaderInformation);
+                                        ctx.assertLeadership(
+                                                storedLeaderInformation, currentLeaderSessionId);
 
-                                        // Old confirm call should be ignored.
+                                        final UUID outdatedSessionID = UUID.randomUUID();
                                         ctx.leaderElection.confirmLeadership(
-                                                UUID.randomUUID(), ctx.address);
-                                        assertThat(
-                                                        leaderElectionService.getLeaderSessionID(
-                                                                ctx.componentId))
-                                                .isEqualTo(currentLeaderSessionId);
+                                                outdatedSessionID, ctx.address);
+                                        ctx.assertLeadership(
+                                                storedLeaderInformation,
+                                                currentLeaderSessionId,
+                                                "The out-dated confirm call should have been ignored.");
                                     });
 
                             assertThat(storedLeaderInformation.get())
@@ -1057,26 +883,34 @@ class DefaultLeaderElectionServiceTest {
 
     @Test
     void testOldConfirmationWhileHavingLeadershipLost() throws Exception {
-        new Context() {
+        final AtomicReference<LeaderInformationRegister> storedLeaderInformation =
+                new AtomicReference<>();
+        new Context(storedLeaderInformation) {
             {
                 runTestWithSynchronousEventHandling(
                         () -> {
                             final UUID currentLeaderSessionId = UUID.randomUUID();
                             grantLeadership(currentLeaderSessionId);
 
+                            final LeaderInformationRegister externallyChangedLeaderInformation =
+                                    LeaderInformationRegister.empty();
+                            storedLeaderInformation.set(externallyChangedLeaderInformation);
                             revokeLeadership();
 
                             applyToBothContenderContexts(
                                     ctx -> {
-                                        // Old confirm call should be ignored.
                                         ctx.leaderElection.confirmLeadership(
                                                 currentLeaderSessionId, ctx.address);
 
-                                        assertThat(
-                                                        leaderElectionService.getLeaderSessionID(
-                                                                ctx.componentId))
-                                                .isNull();
+                                        ctx.assertNoLeadership(
+                                                storedLeaderInformation,
+                                                "The out-dated confirm call should have been ignored.");
                                     });
+
+                            assertThat(storedLeaderInformation.get())
+                                    .as(
+                                            "The leader information in the external storage shouldn't have been updated.")
+                                    .isSameAs(externallyChangedLeaderInformation);
                         });
             }
         };
@@ -1138,21 +972,277 @@ class DefaultLeaderElectionServiceTest {
     }
 
     @Test
+    void testRunAsyncIfLeader() throws Exception {
+        new Context() {
+            {
+                runTestWithSynchronousEventHandling(
+                        () -> {
+                            final UUID sessionId = UUID.randomUUID();
+                            grantLeadership(sessionId);
+
+                            applyToBothContenderContexts(
+                                    ctx -> {
+                                        final CompletableFuture<Void> runAsyncExecutedFuture =
+                                                new CompletableFuture<>();
+                                        final CompletableFuture<Void> asyncOperationFuture =
+                                                ctx.leaderElection.runAsyncIfLeader(
+                                                        sessionId,
+                                                        () -> runAsyncExecutedFuture.complete(null),
+                                                        "Test: runAsync executed while having leadership");
+
+                                        assertThatFuture(asyncOperationFuture).eventuallySucceeds();
+                                        assertThat(runAsyncExecutedFuture).isDone();
+                                    });
+                        });
+            }
+        };
+    }
+
+    @Test
+    void testRunAsyncFailsIfLeader() throws Exception {
+        new Context() {
+            {
+                runTestWithSynchronousEventHandling(
+                        () -> {
+                            final UUID sessionId = UUID.randomUUID();
+                            grantLeadership(sessionId);
+
+                            applyToBothContenderContexts(
+                                    ctx -> {
+                                        final RuntimeException expectedException =
+                                                new RuntimeException("Expected exception");
+                                        final CompletableFuture<Void> asyncOperationFuture =
+                                                ctx.leaderElection.runAsyncIfLeader(
+                                                        sessionId,
+                                                        () -> {
+                                                            throw expectedException;
+                                                        },
+                                                        "Test: runAsync callback fails while having leadership");
+
+                                        assertThatFuture(asyncOperationFuture)
+                                                .eventuallyFails()
+                                                .withThrowableOfType(ExecutionException.class)
+                                                .withCause(expectedException);
+                                    });
+                        });
+            }
+        };
+    }
+
+    @Test
+    void testRunAsyncIfLeaderWithOutdatedSessionID() throws Exception {
+        new Context() {
+            {
+                runTestWithSynchronousEventHandling(
+                        () -> {
+                            grantLeadership();
+
+                            final UUID outdatedSessionId = UUID.randomUUID();
+                            applyToBothContenderContexts(
+                                    ctx -> {
+                                        final CompletableFuture<Void> runAsyncExecutedFuture =
+                                                new CompletableFuture<>();
+                                        final CompletableFuture<Void> asyncOperationFuture =
+                                                ctx.leaderElection.runAsyncIfLeader(
+                                                        outdatedSessionId,
+                                                        () -> runAsyncExecutedFuture.complete(null),
+                                                        "Test: runAsync executed while having leadership");
+
+                                        assertThatFuture(asyncOperationFuture)
+                                                .eventuallyFailsWith(ExecutionException.class)
+                                                .withCauseInstanceOf(LeadershipLostException.class);
+                                        assertThat(runAsyncExecutedFuture)
+                                                .as("The callback should not have been executed.")
+                                                .isNotDone();
+                                    });
+                        });
+            }
+        };
+    }
+
+    @Test
+    void testRunAsyncIfNotLeader() throws Exception {
+        new Context() {
+            {
+                runTestWithSynchronousEventHandling(
+                        () ->
+                                applyToBothContenderContexts(
+                                        ctx -> {
+                                            final CompletableFuture<Void> runAsyncExecutedFuture =
+                                                    new CompletableFuture<>();
+                                            final CompletableFuture<Void> asyncOperationFuture =
+                                                    ctx.leaderElection.runAsyncIfLeader(
+                                                            UUID.randomUUID(),
+                                                            () ->
+                                                                    runAsyncExecutedFuture.complete(
+                                                                            null),
+                                                            "Test: runAsync executed while having not leadership");
+
+                                            assertThatFuture(asyncOperationFuture)
+                                                    .eventuallyFailsWith(ExecutionException.class)
+                                                    .withCauseInstanceOf(
+                                                            LeadershipLostException.class);
+                                            assertThat(runAsyncExecutedFuture)
+                                                    .as(
+                                                            "The callback should not have been executed.")
+                                                    .isNotDone();
+                                        }));
+            }
+        };
+    }
+
+    @Test
+    void testRunAsyncByDeregisteredComponent() throws Exception {
+        new Context() {
+            {
+                runTestWithSynchronousEventHandling(
+                        () -> {
+                            grantLeadership();
+
+                            applyToBothContenderContexts(
+                                    ctx -> {
+                                        ctx.leaderElection.close();
+
+                                        final CompletableFuture<Void> asyncOperationFuture =
+                                                ctx.leaderElection.runAsyncIfLeader(
+                                                        UUID.randomUUID(),
+                                                        () -> {
+                                                            throw new RuntimeException(
+                                                                    "Expected error");
+                                                        },
+                                                        "Test: runAsync executed while having the LeaderElection stopped.");
+
+                                        assertThat(asyncOperationFuture)
+                                                .as(
+                                                        "The LeaderElection process is stopped and shouldn't forward any errors.")
+                                                .isNotCompletedExceptionally()
+                                                .isCompleted();
+                                    });
+                        });
+            }
+        };
+    }
+
+    @Test
+    void testRunAsyncOnConcurrentDeregistration() throws Exception {
+        new Context() {
+            {
+                runTestWithManuallyTriggeredEvents(
+                        executorService -> {
+                            grantLeadership();
+                            executorService.triggerAll();
+
+                            applyToBothContenderContexts(
+                                    ctx -> {
+                                        final CompletableFuture<Void> asyncOperationFuture =
+                                                ctx.leaderElection.runAsyncIfLeader(
+                                                        UUID.randomUUID(),
+                                                        () -> {
+                                                            throw new RuntimeException(
+                                                                    "Expected error");
+                                                        },
+                                                        "Test: runAsync executed while stopping the LeaderElection.");
+
+                                        assertThat(asyncOperationFuture).isNotDone();
+
+                                        ctx.leaderElection.close();
+
+                                        executorService.trigger();
+
+                                        assertThat(asyncOperationFuture)
+                                                .as(
+                                                        "The LeaderElection process is stopped and shouldn't forward any errors.")
+                                                .isNotCompletedExceptionally()
+                                                .isCompleted();
+                                    });
+                        });
+            }
+        };
+    }
+
+    @Test
+    void testRunAsyncOnStoppedInstance() throws Exception {
+        new Context() {
+            {
+                runTestWithManuallyTriggeredEvents(
+                        executorService -> {
+                            grantLeadership();
+                            executorService.triggerAll();
+
+                            // close contender #0 to prepare for the actual test execution on
+                            // contender #1
+                            contenderContext0.leaderElection.close();
+
+                            final CompletableFuture<Void> asyncOperationFuture =
+                                    contenderContext1.leaderElection.runAsyncIfLeader(
+                                            UUID.randomUUID(),
+                                            () -> {
+                                                throw new RuntimeException("Expected error");
+                                            },
+                                            "Test: runAsync executed while having the LeaderElection stopped.");
+
+                            contenderContext1.leaderElection.close();
+                            leaderElectionService.close();
+
+                            executorService.trigger();
+
+                            assertThat(asyncOperationFuture)
+                                    .as(
+                                            "The LeaderElection process is stopped and shouldn't forward any errors.")
+                                    .isNotCompletedExceptionally()
+                                    .isCompleted();
+                        });
+            }
+        };
+    }
+
+    @Test
+    void testRunAsyncOnConcurrentInstanceStop() throws Exception {
+        new Context() {
+            {
+                runTestWithSynchronousEventHandling(
+                        () -> {
+                            grantLeadership();
+
+                            closeLeaderElectionInBothContexts();
+                            leaderElectionService.close();
+
+                            applyToBothContenderContexts(
+                                    ctx -> {
+                                        final CompletableFuture<Void> asyncOperationFuture =
+                                                ctx.leaderElection.runAsyncIfLeader(
+                                                        UUID.randomUUID(),
+                                                        () -> {
+                                                            throw new RuntimeException(
+                                                                    "Expected error");
+                                                        },
+                                                        "Test: runAsync executed while having the LeaderElection stopped.");
+
+                                        assertThat(asyncOperationFuture)
+                                                .as(
+                                                        "The LeaderElection process is stopped and shouldn't forward any errors.")
+                                                .isNotCompletedExceptionally()
+                                                .isCompleted();
+                                    });
+                        });
+            }
+        };
+    }
+
+    @Test
     void testGrantDoesNotBlockNotifyLeaderInformationChange() throws Exception {
         testLeaderEventDoesNotBlockLeaderInformationChangeEventHandling(
-                (listener, componentId, storedLeaderInformation) -> {
-                    listener.onLeaderInformationChange(
-                            componentId,
-                            storedLeaderInformation.forComponentIdOrEmpty(componentId));
-                });
+                (listener, componentId, storedLeaderInformation) ->
+                        listener.onLeaderInformationChange(
+                                componentId,
+                                storedLeaderInformation.forComponentIdOrEmpty(componentId)));
     }
 
     @Test
     void testGrantDoesNotBlockNotifyAllKnownLeaderInformation() throws Exception {
         testLeaderEventDoesNotBlockLeaderInformationChangeEventHandling(
-                (listener, componentId, storedLeaderInformation) -> {
-                    listener.onLeaderInformationChange(storedLeaderInformation);
-                });
+                (listener, componentId, storedLeaderInformation) ->
+                        listener.onLeaderInformationChange(storedLeaderInformation));
     }
 
     private void testLeaderEventDoesNotBlockLeaderInformationChangeEventHandling(
@@ -1357,7 +1447,7 @@ class DefaultLeaderElectionServiceTest {
         private final String componentId;
         private final String address;
         private final TestingContender contender;
-        private LeaderElection leaderElection;
+        private final LeaderElection leaderElection;
 
         private static ContenderContext create(int id, LeaderElectionService leaderElectionService)
                 throws Exception {
@@ -1383,6 +1473,45 @@ class DefaultLeaderElectionServiceTest {
             this.address = address;
             this.contender = contender;
             this.leaderElection = leaderElection;
+        }
+
+        void assertLeadership(
+                AtomicReference<LeaderInformationRegister> storedInformation,
+                UUID expectedLeaderSessionID) {
+            assertLeadership(
+                    storedInformation,
+                    expectedLeaderSessionID,
+                    "The LeaderElection backend should have the expected leader information persisted.");
+        }
+
+        void assertLeadership(
+                AtomicReference<LeaderInformationRegister> storedInformation,
+                UUID expectedLeaderSessionID,
+                String assertMsg) {
+            assertLeaderInformation(
+                    storedInformation,
+                    LeaderInformation.known(expectedLeaderSessionID, address),
+                    assertMsg);
+        }
+
+        void assertNoLeadership(AtomicReference<LeaderInformationRegister> storedInformation) {
+            assertNoLeadership(
+                    storedInformation,
+                    "The LeaderElection backend should have the component-specific leader information cleaned up.");
+        }
+
+        void assertNoLeadership(
+                AtomicReference<LeaderInformationRegister> storedInformation, String assertMsg) {
+            assertLeaderInformation(storedInformation, LeaderInformation.empty(), assertMsg);
+        }
+
+        private void assertLeaderInformation(
+                AtomicReference<LeaderInformationRegister> storedInformation,
+                LeaderInformation expectedLeaderInformation,
+                String assertMsg) {
+            assertThat(storedInformation.get().forComponentIdOrEmpty(this.componentId))
+                    .as(assertMsg)
+                    .isEqualTo(expectedLeaderInformation);
         }
 
         @Override

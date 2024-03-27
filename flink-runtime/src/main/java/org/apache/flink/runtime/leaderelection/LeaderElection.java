@@ -18,7 +18,10 @@
 
 package org.apache.flink.runtime.leaderelection;
 
+import org.apache.flink.util.function.ThrowingRunnable;
+
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * {@code LeaderElection} serves as a proxy between {@code LeaderElectionService} and {@link
@@ -37,19 +40,28 @@ public interface LeaderElection extends AutoCloseable {
      * session ID in the {@link LeaderContender} and publishing the new leader session ID and the
      * related leader address to the leader retrieval services.
      *
+     * <p>Calling this method does not have any effect if the leadership was lost in the meantime.
+     *
      * @param leaderSessionID The new leader session ID
      * @param leaderAddress The address of the new leader
      */
     void confirmLeadership(UUID leaderSessionID, String leaderAddress);
 
     /**
-     * Returns {@code true} if the service's {@link LeaderContender} has the leadership under the
-     * given leader session ID acquired.
+     * Runs the passed {@code callback} if the leadership is still acquired when executing the
+     * {@code callback}.
      *
-     * @param leaderSessionId identifying the current leader
-     * @return true if the associated {@link LeaderContender} is the leader, otherwise false
+     * @param leaderSessionID The leadership session this {@code callback} is assigned to.
+     * @param callback The callback that shall be executed.
+     * @param eventLabelToLog A label that's used for logging the event handling.
+     * @return The future that can be used to monitor the completion of the asynchronous operation.
+     *     The future should complete exceptionally with a {@link LeadershipLostException} if the
+     *     callback could not be triggered due to missing leadership.
      */
-    boolean hasLeadership(UUID leaderSessionId);
+    CompletableFuture<Void> runAsyncIfLeader(
+            UUID leaderSessionID,
+            ThrowingRunnable<? extends Throwable> callback,
+            String eventLabelToLog);
 
     /**
      * Closes the {@code LeaderElection} by deregistering the {@link LeaderContender} from the
