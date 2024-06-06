@@ -808,7 +808,7 @@ public class SqlNodeToOperationConversion {
         String databaseComment =
                 sqlCreateDatabase
                         .getComment()
-                        .map(comment -> comment.getValueAs(NlsString.class).getValue())
+                        .map(SqlNode::toString)
                         .orElse(null);
         // set with properties
         Map<String, String> properties = new HashMap<>();
