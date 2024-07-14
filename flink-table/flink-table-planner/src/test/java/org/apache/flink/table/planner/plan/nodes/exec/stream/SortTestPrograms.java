@@ -40,7 +40,7 @@ public class SortTestPrograms {
         Row.of(5, "c", 9)
     };
 
-    static final TableTestProgram SORT_LIMIT_ASC =
+    public static final TableTestProgram SORT_LIMIT_ASC =
             TableTestProgram.of(
                             "sort-limit-asc",
                             "validates sort limit node by sorting integers in asc mode")
@@ -73,6 +73,8 @@ public class SortTestPrograms {
                                             "+I[1, a, 5]",
                                             "-D[4, b, 8]",
                                             "+I[3, b, 7]")
+                                    .expectedBatchStrings(
+                                            "+I[2, a, 6]", "+I[1, a, 5]", "+I[3, b, 7]")
                                     // Since the same data is replayed after restore the heap state
                                     // is restored and updated.
                                     // The final state of the heap is shown below with every
@@ -88,7 +90,7 @@ public class SortTestPrograms {
                     .runSql("INSERT INTO sink_t SELECT * from source_t ORDER BY a LIMIT 3")
                     .build();
 
-    static final TableTestProgram SORT_LIMIT_DESC =
+    public static final TableTestProgram SORT_LIMIT_DESC =
             TableTestProgram.of(
                             "sort-limit-desc",
                             "validates sort limit node by sorting integers in desc mode")
@@ -118,6 +120,8 @@ public class SortTestPrograms {
                                             "+I[3, b, 7]",
                                             "-D[3, b, 7]",
                                             "+I[5, c, 9]")
+                                    .expectedBatchStrings(
+                                            "+I[4, b, 8]", "+I[6, c, 10]", "+I[5, c, 9]")
                                     // heap state
                                     //       [5, c, 9]
                                     // [6, c, 10]  [6, c, 10]
@@ -126,7 +130,7 @@ public class SortTestPrograms {
                     .runSql("INSERT INTO sink_t SELECT * from source_t ORDER BY a DESC LIMIT 3")
                     .build();
 
-    static final TableTestProgram SORT_ASC =
+    public static final TableTestProgram SORT_ASC =
             TableTestProgram.of("sort-asc", "validates sort node by sorting integers in asc mode")
                     .setupConfig(InternalConfigOptions.TABLE_EXEC_NON_TEMPORAL_SORT_ENABLED, true)
                     .setupTableSource(
@@ -148,7 +152,7 @@ public class SortTestPrograms {
                     .runSql("INSERT INTO sink_t SELECT * from source_t ORDER BY a")
                     .build();
 
-    static final TableTestProgram SORT_DESC =
+    public static final TableTestProgram SORT_DESC =
             TableTestProgram.of("sort-desc", "validates sort node by sorting integers in desc mode")
                     .setupConfig(InternalConfigOptions.TABLE_EXEC_NON_TEMPORAL_SORT_ENABLED, true)
                     .setupTableSource(

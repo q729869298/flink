@@ -28,7 +28,7 @@ import static org.apache.flink.table.factories.TestFormatFactory.CHANGELOG_MODE;
 /** {@link TableTestProgram} definitions for testing {@link StreamExecRank}. */
 public class RankTestPrograms {
 
-    static final TableTestProgram RANK_TEST_APPEND_FAST_STRATEGY =
+    public static final TableTestProgram RANK_TEST_APPEND_FAST_STRATEGY =
             getTableTestProgram(
                     "rank-test-append-fast-strategy",
                     "I",
@@ -43,9 +43,10 @@ public class RankTestPrograms {
                         "-U[6, c, 1]",
                         "+U[5, c, 1]"
                     },
+                    new String[] {"+I[1, a, 1]", "+I[3, b, 1]", "+I[5, c, 1]"},
                     new String[] {"+I[4, d, 1]", "+I[3, e, 1]"});
 
-    static final TableTestProgram RANK_TEST_RETRACT_STRATEGY =
+    public static final TableTestProgram RANK_TEST_RETRACT_STRATEGY =
             getTableTestProgram(
                     "rank-test-retract-strategy",
                     "I,UA,UB",
@@ -60,9 +61,10 @@ public class RankTestPrograms {
                         "-D[6, c, 1]",
                         "+I[5, c, 1]"
                     },
+                    new String[] {"+I[1, a, 1, 1]", "+I[3, b, 1, 1]", "+I[5, c, 1, 1]"},
                     new String[] {"+I[4, d, 1]", "+I[3, e, 1]"});
 
-    static final TableTestProgram RANK_TEST_UPDATE_FAST_STRATEGY =
+    public static final TableTestProgram RANK_TEST_UPDATE_FAST_STRATEGY =
             TableTestProgram.of("rank-test-update-fast-strategy", "validates rank exec node")
                     .setupTableSource(
                             SourceTestStep.newBuilder("MyTable")
@@ -98,6 +100,20 @@ public class RankTestPrograms {
                                             "-U[6, c, 1, 1]",
                                             "+U[5, c, 1, 1]",
                                             "+I[6, c, 1, 2]")
+                                    .expectedBatchStrings(
+                                            "+I[1, a, 1, 1]",
+                                            "+I[2, a, 1, 2]",
+                                            "+I[3, b, 1, 1]",
+                                            "+I[4, b, 1, 2]",
+                                            "+I[5, c, 1, 1]",
+                                            "+I[6, c, 1, 2]")
+                                    .expectedBatchStrings(
+                                            "+I[1, a, 1, 1]",
+                                            "+I[2, a, 1, 2]",
+                                            "+I[3, b, 1, 1]",
+                                            "+I[4, b, 1, 2]",
+                                            "+I[5, c, 1, 1]",
+                                            "+I[6, c, 1, 2]")
                                     .consumedAfterRestore(
                                             new String[] {
                                                 "+I[4, d, 1, 1]",
@@ -124,6 +140,7 @@ public class RankTestPrograms {
             final String name,
             final String changelogMode,
             final String[] resultsBeforeRestore,
+            final String[] batchResults,
             final String[] resultsAfterRestore) {
         return TableTestProgram.of(name, "validates rank exec node")
                 .setupTableSource(
@@ -143,6 +160,7 @@ public class RankTestPrograms {
                         SinkTestStep.newBuilder("sink_t")
                                 .addSchema("a INT", "b VARCHAR", "c BIGINT")
                                 .consumedBeforeRestore(resultsBeforeRestore)
+                                .expectedBatchStrings(batchResults)
                                 .consumedAfterRestore(resultsAfterRestore)
                                 .build())
                 .runSql(
@@ -152,7 +170,7 @@ public class RankTestPrograms {
                 .build();
     }
 
-    static final TableTestProgram RANK_N_TEST =
+    public static final TableTestProgram RANK_N_TEST =
             TableTestProgram.of("rank-n-test", "validates rank node can handle multiple outputs")
                     .setupTableSource(
                             SourceTestStep.newBuilder("MyTable1")

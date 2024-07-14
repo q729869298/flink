@@ -28,6 +28,36 @@ import org.apache.flink.table.api.config.TableConfigOptions;
 import org.apache.flink.table.planner.plan.nodes.exec.ExecNode;
 import org.apache.flink.table.planner.plan.nodes.exec.ExecNodeMetadata;
 import org.apache.flink.table.planner.plan.nodes.exec.MultipleExecNodeMetadata;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecCalc;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecCorrelate;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecExchange;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecExpand;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecHashAggregate;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecHashJoin;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecHashWindowAggregate;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecInputAdapter;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecLimit;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecLookupJoin;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecMatch;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecMultipleInput;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecNestedLoopJoin;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecOverAggregate;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecPythonCorrelate;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecPythonGroupAggregate;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecPythonGroupWindowAggregate;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecPythonOverAggregate;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecRank;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecScriptTransform;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecSink;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecSort;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecSortAggregate;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecSortLimit;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecSortMergeJoin;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecSortWindowAggregate;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecTableSourceScan;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecUnion;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecValues;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecWindowTableFunction;
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecAsyncCalc;
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecCalc;
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecChangelogNormalize;
@@ -148,6 +178,43 @@ public final class ExecNodeMetadataUtil {
                     add(StreamExecPythonGroupAggregate.class);
                     add(StreamExecPythonGroupWindowAggregate.class);
                     add(StreamExecPythonOverAggregate.class);
+                    // Batch execution mode
+
+                    // TODO: Balance these with the RestoreTestCompleteness test
+                    add(BatchExecExchange.class);
+                    add(BatchExecSink.class);
+                    add(BatchExecSort.class);
+                    add(BatchExecValues.class);
+                    add(BatchExecTableSourceScan.class);
+                    add(BatchExecCalc.class);
+                    add(BatchExecLimit.class);
+                    add(BatchExecHashAggregate.class);
+                    add(BatchExecSortAggregate.class);
+                    add(BatchExecCorrelate.class);
+                    add(BatchExecExpand.class);
+                    add(BatchExecHashJoin.class);
+                    add(BatchExecMultipleInput.class);
+
+                    add(BatchExecNestedLoopJoin.class);
+                    add(BatchExecMatch.class);
+                    add(BatchExecHashWindowAggregate.class);
+                    add(BatchExecInputAdapter.class);
+                    add(BatchExecOverAggregate.class);
+
+                    add(BatchExecPythonCorrelate.class);
+                    add(BatchExecPythonGroupAggregate.class);
+                    add(BatchExecPythonGroupWindowAggregate.class);
+                    add(BatchExecPythonOverAggregate.class);
+
+                    add(BatchExecRank.class);
+                    add(BatchExecScriptTransform.class);
+                    add(BatchExecSortLimit.class);
+                    add(BatchExecSortMergeJoin.class);
+                    add(BatchExecSortWindowAggregate.class);
+                    add(BatchExecWindowTableFunction.class);
+
+                    add(BatchExecUnion.class);
+                    add(BatchExecLookupJoin.class);
                 }
             };
 
@@ -198,8 +265,9 @@ public final class ExecNodeMetadataUtil {
     }
 
     public static <T extends ExecNode<?>> boolean isUnsupported(Class<T> execNode) {
-        return !StreamExecNode.class.isAssignableFrom(execNode)
-                || UNSUPPORTED_JSON_SERDE_CLASSES.contains(execNode);
+        boolean streamOrKnownExecNode =
+                StreamExecNode.class.isAssignableFrom(execNode) || execNodes().contains(execNode);
+        return !streamOrKnownExecNode || UNSUPPORTED_JSON_SERDE_CLASSES.contains(execNode);
     }
 
     public static void addTestNode(Class<? extends ExecNode<?>> execNodeClass) {

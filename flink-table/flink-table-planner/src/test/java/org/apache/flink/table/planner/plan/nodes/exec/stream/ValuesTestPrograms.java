@@ -24,7 +24,7 @@ import org.apache.flink.table.test.program.TableTestProgram;
 /** {@link TableTestProgram} definitions for testing {@link StreamExecValues}. */
 public class ValuesTestPrograms {
 
-    static final TableTestProgram VALUES_TEST =
+    public static final TableTestProgram VALUES_TEST =
             TableTestProgram.of("values-test", "validates values node")
                     .setupTableSink(
                             SinkTestStep.newBuilder("sink_t")

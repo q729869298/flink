@@ -19,6 +19,24 @@
 package org.apache.flink.table.planner.plan.nodes.exec.testutils;
 
 import org.apache.flink.table.planner.plan.nodes.exec.ExecNode;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecHashAggregate;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecHashWindowAggregate;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecInputAdapter;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecMatch;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecMultipleInput;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecNestedLoopJoin;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecOverAggregate;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecPythonCorrelate;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecPythonGroupAggregate;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecPythonGroupWindowAggregate;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecPythonOverAggregate;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecRank;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecScriptTransform;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecSortAggregate;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecSortLimit;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecSortMergeJoin;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecSortWindowAggregate;
+import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecWindowTableFunction;
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecPythonCalc;
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecPythonCorrelate;
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecPythonGroupAggregate;
@@ -39,6 +57,7 @@ import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -55,6 +74,28 @@ public class RestoreTestCompleteness {
                     add(StreamExecPythonGroupAggregate.class);
                     add(StreamExecPythonGroupTableAggregate.class);
                     add(StreamExecPythonGroupWindowAggregate.class);
+
+                    add(BatchExecPythonCorrelate.class);
+                    add(BatchExecPythonGroupAggregate.class);
+                    add(BatchExecPythonGroupWindowAggregate.class);
+                    add(BatchExecPythonOverAggregate.class);
+
+                    add(BatchExecHashAggregate.class);
+                    add(BatchExecSortAggregate.class);
+                    add(BatchExecScriptTransform.class);
+                    add(BatchExecMultipleInput.class);
+
+                    add(BatchExecNestedLoopJoin.class);
+                    add(BatchExecMatch.class);
+                    add(BatchExecHashWindowAggregate.class);
+                    add(BatchExecInputAdapter.class);
+                    add(BatchExecOverAggregate.class);
+
+                    add(BatchExecRank.class);
+                    add(BatchExecSortLimit.class);
+                    add(BatchExecSortMergeJoin.class);
+                    add(BatchExecSortWindowAggregate.class);
+                    add(BatchExecWindowTableFunction.class);
                 }
             };
 
@@ -107,6 +148,38 @@ public class RestoreTestCompleteness {
             for (Class<? extends ExecNode<?>> childExecNode : childExecNodes) {
                 execNodesWithRestoreTests.add(childExecNode);
             }
+        }
+
+        Set<ClassPath.ClassInfo> batchClassesInPackage =
+                ClassPath.from(this.getClass().getClassLoader())
+                        .getTopLevelClassesRecursive(
+                                "org.apache.flink.table.planner.plan.nodes.exec.batch")
+                        .stream()
+                        .filter(x -> BatchRestoreTestBase.class.isAssignableFrom(x.load()))
+                        .collect(Collectors.toSet());
+
+        //        Set<Class<? extends ExecNode<?>>> execNodesWithRestoreTests = new HashSet<>();
+
+        for (ClassPath.ClassInfo classInfo : batchClassesInPackage) {
+            Class<?> restoreTest = classInfo.load();
+
+            Class<? extends ExecNode<?>> execNode = getExecNode(restoreTest);
+            execNodesWithRestoreTests.add(execNode);
+
+            List<Class<? extends ExecNode<?>>> childExecNodes = getChildExecNodes(restoreTest);
+            for (Class<? extends ExecNode<?>> childExecNode : childExecNodes) {
+                execNodesWithRestoreTests.add(childExecNode);
+            }
+        }
+
+        System.out.println(
+                execNodesWithRestoreTests.stream()
+                        .map(Objects::toString)
+                        .collect(Collectors.joining(", ")));
+        for (Map.Entry<ExecNodeNameVersion, Class<? extends ExecNode<?>>> entry :
+                versionedExecNodes.entrySet()) {
+            ExecNodeNameVersion execNodeNameVersion = entry.getKey();
+            System.out.println(execNodeNameVersion);
         }
 
         for (Map.Entry<ExecNodeNameVersion, Class<? extends ExecNode<?>>> entry :

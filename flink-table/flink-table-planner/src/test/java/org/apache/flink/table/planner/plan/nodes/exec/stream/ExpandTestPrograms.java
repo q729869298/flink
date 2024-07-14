@@ -29,7 +29,7 @@ import org.apache.flink.types.RowKind;
 /** {@link TableTestProgram} definitions for testing {@link StreamExecExpand}. */
 public class ExpandTestPrograms {
 
-    static final TableTestProgram EXPAND =
+    public static final TableTestProgram EXPAND =
             TableTestProgram.of("expand", "validates expand node")
                     .setupConfig(
                             OptimizerConfigOptions.TABLE_OPTIMIZER_AGG_PHASE_STRATEGY,
@@ -60,6 +60,7 @@ public class ExpandTestPrograms {
                                             Row.of(2, 1L, null),
                                             Row.ofKind(RowKind.UPDATE_AFTER, 2, 1L, "Hello"),
                                             Row.ofKind(RowKind.UPDATE_AFTER, 2, 2L, "Hello"))
+                                    .expectedBatchRows(Row.of(1, 1L, "Hi"), Row.of(2, 2L, "Hello"))
                                     .consumedAfterRestore(
                                             Row.of(5, 1L, null),
                                             Row.ofKind(RowKind.UPDATE_AFTER, 5, 1L, "Hello there"))
