@@ -19,6 +19,7 @@
 package org.apache.flink.state.forst;
 
 import org.apache.flink.api.common.state.v2.AggregatingState;
+import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.core.memory.DataInputDeserializer;
 import org.apache.flink.core.memory.DataOutputSerializer;
 import org.apache.flink.core.state.InternalStateFuture;
@@ -47,11 +48,11 @@ public class ForStAggregatingState<K, N, IN, ACC, OUT>
         extends InternalAggregatingState<K, N, IN, ACC, OUT>
         implements AggregatingState<IN, OUT>, ForStInnerTable<K, N, ACC> {
 
-    final ColumnFamilyHandle columnFamilyHandle;
-    final ThreadLocal<SerializedCompositeKeyBuilder<K>> serializedKeyBuilder;
-    final ThreadLocal<DataOutputSerializer> valueSerializerView;
-    final ThreadLocal<DataInputDeserializer> valueDeserializerView;
-
+    private final ColumnFamilyHandle columnFamilyHandle;
+    private final ThreadLocal<SerializedCompositeKeyBuilder<K>> serializedKeyBuilder;
+    private final ThreadLocal<DataOutputSerializer> valueSerializerView;
+    private final ThreadLocal<DataInputDeserializer> valueDeserializerView;
+    private final ThreadLocal<TypeSerializer<N>> namespaceSerializer;
     /* Creates a new InternalKeyedState with the given asyncExecutionController and stateDescriptor.
      *
      * @param stateRequestHandler The async request handler for handling all requests.
@@ -62,11 +63,13 @@ public class ForStAggregatingState<K, N, IN, ACC, OUT>
             StateRequestHandler stateRequestHandler,
             ColumnFamilyHandle columnFamily,
             Supplier<SerializedCompositeKeyBuilder<K>> serializedKeyBuilderInitializer,
+            Supplier<TypeSerializer<N>> namespaceSerializerInitializer,
             Supplier<DataOutputSerializer> valueSerializerViewInitializer,
             Supplier<DataInputDeserializer> valueDeserializerViewInitializer) {
         super(stateRequestHandler, stateDescriptor);
         this.columnFamilyHandle = columnFamily;
         this.serializedKeyBuilder = ThreadLocal.withInitial(serializedKeyBuilderInitializer);
+        this.namespaceSerializer = ThreadLocal.withInitial(namespaceSerializerInitializer);
         this.valueDeserializerView = ThreadLocal.withInitial(valueDeserializerViewInitializer);
         this.valueSerializerView = ThreadLocal.withInitial(valueSerializerViewInitializer);
     }
@@ -82,7 +85,9 @@ public class ForStAggregatingState<K, N, IN, ACC, OUT>
                 ctxKey -> {
                     SerializedCompositeKeyBuilder<K> builder = serializedKeyBuilder.get();
                     builder.setKeyAndKeyGroup(ctxKey.getRawKey(), ctxKey.getKeyGroup());
-                    return builder.build();
+                    return builder.buildCompositeKeyNamespace(
+                            key.getNamespace(this), namespaceSerializer.get()
+                    );
                 });
     }
 

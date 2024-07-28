@@ -165,6 +165,7 @@ public class ForStDBOperationTestBase {
                 buildMockStateRequestHandler(),
                 cf,
                 serializedKeyBuilder,
+                () -> VoidSerializer.INSTANCE,
                 valueSerializerView,
                 valueDeserializerView);
     }
