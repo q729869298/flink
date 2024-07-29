@@ -86,8 +86,7 @@ public class ForStAggregatingState<K, N, IN, ACC, OUT>
                     SerializedCompositeKeyBuilder<K> builder = serializedKeyBuilder.get();
                     builder.setKeyAndKeyGroup(ctxKey.getRawKey(), ctxKey.getKeyGroup());
                     return builder.buildCompositeKeyNamespace(
-                            key.getNamespace(this), namespaceSerializer.get()
-                    );
+                            key.getNamespace(this), namespaceSerializer.get());
                 });
     }
 
