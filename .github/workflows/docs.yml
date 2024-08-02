@@ -36,12 +36,9 @@ jobs:
         run: |
           currentBranch=$(git branch --show-current)
 
-          echo "flink_branch=${currentBranch}" >> ${GITHUB_ENV}
+          echo "flink_branch=release-1.20" >> ${GITHUB_ENV}
 
-          if [ "${currentBranch}" = "master" ]; then
-            echo "flink_alias=release-1.20" >> ${GITHUB_ENV}
-          elif [ "${currentBranch}" = "release-1.19" ]; then
-            echo "flink_alias=stable" >> ${GITHUB_ENV}
+          echo "flink_alias=release-1.20" >> ${GITHUB_ENV}
           fi
       - name: Build documentation
         run: |
