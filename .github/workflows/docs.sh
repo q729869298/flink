@@ -46,8 +46,10 @@ if [ $? -ne 0 ]; then
 	exit 1
 fi
 
+echo "build Flink; required for Javadoc step"
 # build Flink; required for Javadoc step
 mvn clean install -B -DskipTests -Dfast -Dskip.npm -Pskip-webui-build
+echo "finish build Flink"
 
 # build java/scala docs
 mkdir -p docs/target/api
