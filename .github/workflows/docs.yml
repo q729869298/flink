@@ -27,7 +27,7 @@ jobs:
       max-parallel: 1
       matrix:
         branch:
-          - fix-npm-issue
+          - patch-fix
     steps:
       - uses: actions/checkout@v3
         with:
