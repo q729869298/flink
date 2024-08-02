@@ -39,7 +39,6 @@ jobs:
           echo "flink_branch=release-1.20" >> ${GITHUB_ENV}
 
           echo "flink_alias=release-1.20" >> ${GITHUB_ENV}
-          fi
       - name: Build documentation
         run: |
           docker run --rm --volume "$PWD:/root/flink" chesnay/flink-ci:java_8_11_17_21_maven_386 bash -c "cd /root/flink && ./.github/workflows/docs-new.sh"
