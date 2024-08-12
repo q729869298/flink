@@ -28,7 +28,7 @@ import org.apache.flink.client.program.PackagedProgramRetriever;
 import org.apache.flink.client.program.artifact.ArtifactFetchManager;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.PipelineOptionsInternal;
-import org.apache.flink.core.execution.RestoreMode;
+import org.apache.flink.core.execution.RecoveryClaimMode;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.core.plugin.PluginManager;
 import org.apache.flink.core.plugin.PluginUtils;
@@ -70,12 +70,12 @@ public final class StandaloneApplicationClusterEntryPoint extends ApplicationClu
         if (clusterConfiguration
                 .getSavepointRestoreSettings()
                 .getRestoreMode()
-                .equals(RestoreMode.LEGACY)) {
+                .equals(RecoveryClaimMode.LEGACY)) {
             LOG.warn(
                     "The {} restore mode is deprecated, please use {} or {} mode instead.",
-                    RestoreMode.LEGACY,
-                    RestoreMode.CLAIM,
-                    RestoreMode.NO_CLAIM);
+                    RecoveryClaimMode.LEGACY,
+                    RecoveryClaimMode.CLAIM,
+                    RecoveryClaimMode.NO_CLAIM);
         }
         PackagedProgram program = null;
         try {
