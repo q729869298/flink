@@ -88,7 +88,7 @@ _string_doc_seealso = """
              :func:`~Expression.overlay`, :func:`~Expression.regexp_replace`,
              :func:`~Expression.regexp_extract`, :func:`~Expression.substring`,
              :py:attr:`~Expression.from_base64`, :py:attr:`~Expression.to_base64`,
-             :py:attr:`~Expression.ltrim`, :py:attr:`~Expression.rtrim`, :func:`~Expression.repeat`,
+             :func:`~Expression.ltrim`, :func:`~Expression.rtrim`, :func:`~Expression.repeat`,
              :func:`~Expression.json_quote`, :func:`~Expression.json_unquote`
 """
 
@@ -1006,6 +1006,17 @@ class Expression(Generic[T]):
         """
         return _unary_op("hex")(self)
 
+    @property
+    def unhex(self) -> 'Expression':
+        """
+        Converts hexadecimal string expr to BINARY.
+        If the length of expr is odd, the first character is discarded
+        and the result is left padded with a null byte.
+
+        :return: a BINARY. null if expr is null or expr contains non-hex characters.
+        """
+        return _unary_op("unhex")(self)
+
     def truncate(self, n: Union[int, 'Expression[int]'] = 0) -> 'Expression[T]':
         """
         Returns a number of truncated to n decimal places.
@@ -1324,19 +1335,25 @@ class Expression(Generic[T]):
                  for e in obj]
         return _binary_op("printf")(self, to_jarray(gateway.jvm.Object, exprs))
 
-    @property
-    def ltrim(self) -> 'Expression[str]':
+    def ltrim(self, trim_str=None) -> 'Expression[str]':
         """
-        Returns a string that removes the left whitespaces from the given string.
+        Removes any leading characters within trim_str from str.
+        trim_str is set to whitespace by default.
         """
-        return _unary_op("ltrim")(self)
+        if trim_str is None:
+            return _unary_op("ltrim")(self)
+        else:
+            return _binary_op("ltrim")(self, trim_str)
 
-    @property
-    def rtrim(self) -> 'Expression[str]':
+    def rtrim(self, trim_str=None) -> 'Expression[str]':
         """
-        Returns a string that removes the right whitespaces from the given string.
+        Removes any trailing characters within trim_str from str.
+        trim_str is set to whitespace by default.
         """
-        return _unary_op("rtrim")(self)
+        if trim_str is None:
+            return _unary_op("rtrim")(self)
+        else:
+            return _binary_op("rtrim")(self, trim_str)
 
     def btrim(self, trim_str=None) -> 'Expression':
         """

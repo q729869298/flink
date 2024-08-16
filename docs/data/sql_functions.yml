@@ -238,6 +238,16 @@ arithmetic:
       NUMERIC.hex()
       STRING.hex()
     description: Returns a string representation of an integer NUMERIC value or a STRING in hex format. Returns NULL if the argument is NULL. E.g. a numeric 20 leads to "14", a numeric 100 leads to "64", a string "hello,world" leads to "68656C6C6F2C776F726C64".
+  - sql: UNHEX(expr)
+    table: expr.unhex()
+    description: |
+      Converts hexadecimal string expr to BINARY.
+      
+      If the length of expr is odd, the first character is discarded and the result is left padded with a null byte. 
+      
+      expr <CHAR | VARCHAR>
+      
+      Returns a BINARY. `NULL` if expr is `NULL` or expr contains non-hex characters.
   - sql: TRUNCATE(numeric1, integer2)
     table: NUMERIC1.truncate(INTEGER2)
     description: Returns a numeric of truncated to integer2 decimal places. Returns NULL if numeric1 or integer2 is NULL. If integer2 is 0, the result has no decimal point or fractional part. integer2 can be negative to cause integer2 digits left of the decimal point of the value to become zero. This function can also pass in only one numeric1 parameter and not set integer2 to use. If integer2 is not set, the function truncates as if integer2 were 0. E.g. 42.324.truncate(2) to 42.32. and 42.324.truncate() to 42.0.
@@ -280,17 +290,33 @@ string:
       STRING1.trim(BOTH)
       STRING1.trim()
     description: Returns a string that removes leading and/or trailing characters STRING2 from STRING1. By default, whitespaces at both sides are removed.
-  - sql: LTRIM(string)
-    table: STRING.ltrim()
-    description: Returns a string that removes the left whitespaces from STRING. E.g., ' This is a test String.'.ltrim() returns "This is a test String.".
-  - sql: RTRIM(string)
-    table: STRING.rtrim()
-    description: Returns a string that removes the right whitespaces from STRING. E.g., 'This is a test String. '.rtrim() returns "This is a test String.".
+  - sql: LTRIM(str[, trimStr])
+    table: str.ltrim([trimStr])
+    description: |
+      Removes any leading characters within trimStr from str. trimStr is set to whitespace by default.
+      
+      E.g., ' This is a test String.'.ltrim() returns "This is a test String.".
+      
+      str <CHAR | VARCHAR>, trimStr <CHAR | VARCHAR>
+      
+      Returns a STRING representation of the trimmed str. `NULL` if any of the arguments are `NULL`.
+  - sql: RTRIM(str[, trimStr])
+    table: str.rtrim([trimStr])
+    description: |
+      Removes any trailing characters within trimStr from str. trimStr is set to whitespace by default.
+      
+      E.g., 'This is a test String. '.rtrim() returns "This is a test String.".
+      
+      str <CHAR | VARCHAR>, trimStr <CHAR | VARCHAR>
+      
+      Returns a STRING representation of the trimmed str. `NULL` if any of the arguments are `NULL`.
   - sql: BTRIM(str[, trimStr])
     table: str.btrim([trimStr])
     description: |
       Removes any leading and trailing characters within trimStr from str. trimStr is set to whitespace by default.
+      
       str <CHAR | VARCHAR>, trimStr <CHAR | VARCHAR>
+      
       Returns a STRING representation of the trimmed str. `NULL` if any of the arguments are `NULL`.
   - sql: REPEAT(string, int)
     table: STRING.repeat(INT)
@@ -315,8 +341,11 @@ string:
     table: expr.translate(fromStr, toStr)
     description: |
       Translate an expr where all characters in fromStr have been replaced with those in toStr.
+      
       If toStr has a shorter length than fromStr, unmatched characters are removed.
-      expr [<CHAR> | <VARCHAR>], fromStr [<CHAR> | <VARCHAR>], toStr [<CHAR> | <VARCHAR>]
+      
+      expr <CHAR | VARCHAR>, fromStr <CHAR | VARCHAR>, toStr <CHAR | VARCHAR>
+      
       Returns a STRING of translated expr.
   - sql: REGEXP_EXTRACT(string1, string2[, integer])
     table: STRING1.regexpExtract(STRING2[, INTEGER1])
@@ -422,8 +451,11 @@ string:
     table: index.elt(expr, exprs...)
     description: |
       Returns the index-th expression. index must be an integer between 1 and the number of expressions.
+      
       index <TINYINT | SMALLINT | INTEGER | BIGINT>, expr <CHAR | VARCHAR>, exprs <CHAR | VARCHAR>
+      
       index <TINYINT | SMALLINT | INTEGER | BIGINT>, expr <BINARY | VARBINARY>, exprs <BINARY | VARBINARY>
+      
       The result has the type of the least common type of all expressions. `NULL` if index is `NULL` or out of range.
 
 temporal:

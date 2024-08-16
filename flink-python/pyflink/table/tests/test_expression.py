@@ -124,6 +124,7 @@ class PyFlinkBatchExpressionTests(PyFlinkTestCase):
         self.assertEqual('end(a)', str(expr1.end))
         self.assertEqual('bin(a)', str(expr1.bin))
         self.assertEqual('hex(a)', str(expr1.hex))
+        self.assertEqual("UNHEX(a)", str(expr1.unhex))
         self.assertEqual('truncate(a, 3)', str(expr1.truncate(3)))
 
         # string functions
@@ -161,8 +162,10 @@ class PyFlinkBatchExpressionTests(PyFlinkTestCase):
         self.assertEqual('locate(a, b, 2)', str(expr1.locate(expr2, 2)))
         self.assertEqual('parseUrl(a, b)', str(expr1.parse_url(expr2)))
         self.assertEqual("parseUrl(a, b, 'query')", str(expr1.parse_url(expr2, 'query')))
-        self.assertEqual('ltrim(a)', str(expr1.ltrim))
-        self.assertEqual('rtrim(a)', str(expr1.rtrim))
+        self.assertEqual('ltrim(a)', str(expr1.ltrim()))
+        self.assertEqual('ltrim(a, b)', str(expr1.ltrim(expr2)))
+        self.assertEqual('rtrim(a)', str(expr1.rtrim()))
+        self.assertEqual('rtrim(a, b)', str(expr1.rtrim(expr2)))
         self.assertEqual('repeat(a, 3)', str(expr1.repeat(3)))
         self.assertEqual("over(a, 'w')", str(expr1.over('w')))
         self.assertEqual('reverse(a)', str(expr1.reverse))

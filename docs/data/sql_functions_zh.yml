@@ -296,6 +296,16 @@ arithmetic:
     description: |
       以十六进制格式返回整数 numeric 或字符串 string 的字符串表示。如果参数为 `NULL`，则返回 `NULL`。
       例如数字 20 返回“14”，数字 100 返回“64”，字符串“hello,world” 返回“68656C6C6F2C776F726C64”。
+  - sql: UNHEX(expr)
+    table: expr.unhex()
+    description: |
+      将十六进制字符串 expr 转换为 BINARY。
+      
+      如果 expr 的长度为奇数，则会舍弃第一个字符，并在结果开头补充一个空字节。
+      
+      expr <CHAR | VARCHAR>
+      
+      返回一个 BINARY。如果 expr 为 `NULL` 或包含非十六进制字符，则返回 `NULL`。
   - sql: TRUNCATE(numeric1, integer2)
     table: NUMERIC1.truncate(INTEGER2)
     description: |
@@ -342,21 +352,33 @@ string:
       STRING1.trim(BOTH)
       STRING1.trim()
     description: 删除字符串 STRING1 开头和结尾可能存在的字符串 STRING2 并返回。默认情况下，会删除 STRING1 开头和结尾的空格。
-  - sql: LTRIM(string)
-    table: STRING.ltrim()
+  - sql: LTRIM(str[, trimStr])
+    table: str.ltrim([trimStr])
     description: |
-      返回从 STRING 中删除左边空格的字符串。
+      从 str 的开头删除 trimStr 中的字符。trimStr 默认设置为空格。
+      
       例如 `' This is a test String.'.ltrim()` 返回 `'This is a test String.'`。
-  - sql: RTRIM(string)
-    table: STRING.rtrim()
+      
+      str <CHAR | VARCHAR>, trimStr <CHAR | VARCHAR>
+      
+      返回一个 STRING 格式的裁剪后的 str。如果任何参数为 `NULL`，则返回 `NULL`。
+  - sql: RTRIM(str[, trimStr])
+    table: str.rtrim([trimStr])
     description: |
-      返回从 STRING 中删除右边空格的字符串。
+      从 str 的结尾删除 trimStr 中的字符。trimStr 默认设置为空格。
+      
       例如 `'This is a test String. '.rtrim()` 返回 `'This is a test String.'`。
+      
+      str <CHAR | VARCHAR>, trimStr <CHAR | VARCHAR>
+      
+      返回一个 STRING 格式的裁剪后的 str。如果任何参数为 `NULL`，则返回 `NULL`。
   - sql: BTRIM(str[, trimStr])
     table: str.btrim([trimStr])
-    description: |
-      从 str 的左边和右边删除 trimStr 中的字符。trimStr 默认设置为空格。      
+    description: |      
+      从 str 的开头和结尾删除 trimStr 中的字符。trimStr 默认设置为空格。      
+      
       str <CHAR | VARCHAR>, trimStr <CHAR | VARCHAR>
+      
       返回一个 STRING 格式的裁剪后的 str。如果任何参数为 `NULL`，则返回 `NULL`。
   - sql: REPEAT(string, int)
     table: STRING.repeat(INT)
@@ -391,8 +413,11 @@ string:
     table: expr.translate(fromStr, toStr)
     description: |
       将 expr 中所有出现在 fromStr 之中的字符替换为 toStr 中的相应字符。
+      
       如果 toStr 的长度短于 fromStr，则未匹配的字符将被移除。
-      expr [<CHAR> | <VARCHAR>], fromStr [<CHAR> | <VARCHAR>], toStr [<CHAR> | <VARCHAR>]
+      
+      expr <CHAR | VARCHAR>, fromStr <CHAR | VARCHAR>, toStr <CHAR | VARCHAR>
+      
       返回 STRING 格式的转换结果。
   - sql: REGEXP_EXTRACT(string1, string2[, integer])
     table: STRING1.regexpExtract(STRING2[, INTEGER1])
@@ -522,8 +547,11 @@ string:
     table: index.elt(expr, exprs...)
     description: |
       返回第 index 个表达式。index 必须是介于 1 和 表达式数量之间的整数。
+      
       index <TINYINT | SMALLINT | INTEGER | BIGINT>, expr <CHAR | VARCHAR>, exprs <CHAR | VARCHAR>
+      
       index <TINYINT | SMALLINT | INTEGER | BIGINT>, expr <BINARY | VARBINARY>, exprs <BINARY | VARBINARY>
+      
       结果类型为所有 expr 的公共类型。如果 index 为 `NULL` 或超出范围，则返回 `NULL`。
 
 temporal:
