@@ -50,6 +50,7 @@ import org.apache.flink.connector.file.sink.writer.FileWriterBucketStateSerializ
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
+import org.apache.flink.runtime.fs.hdfs.HadoopFileSystem;
 import org.apache.flink.streaming.api.connector.sink2.CommittableMessage;
 import org.apache.flink.streaming.api.connector.sink2.SupportsPreCommitTopology;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -708,10 +709,10 @@ public class FileSink<IN>
         }
 
         BucketWriter<IN, String> createBucketWriter() throws IOException {
-            return noLocalWrite ? new BulkBucketWriter<>(
-                    FileSystem.get(basePath.toUri()).createRecoverableWriter(noLocalWrite),
-                    writerFactory) : new BulkBucketWriter<>(
-                    FileSystem.get(basePath.toUri()).createRecoverableWriter(),
+            return new BulkBucketWriter<>(
+                    noLocalWrite && FileSystem.get(basePath.toUri()) instanceof HadoopFileSystem
+                            ? FileSystem.get(basePath.toUri()).createRecoverableWriter(noLocalWrite)
+                            : FileSystem.get(basePath.toUri()).createRecoverableWriter(),
                     writerFactory);
         }
     }
