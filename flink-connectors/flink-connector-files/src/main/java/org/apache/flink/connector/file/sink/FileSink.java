@@ -350,8 +350,6 @@ public class FileSink<IN>
 
         private RollingPolicy<IN, String> rollingPolicy;
 
-        private boolean isWritingLocalNode = false;
-
         private OutputFileConfig outputFileConfig;
 
         private boolean isCompactDisabledExplicitly = false;
@@ -401,11 +399,6 @@ public class FileSink<IN>
 
         public T withRollingPolicy(final RollingPolicy<IN, String> policy) {
             this.rollingPolicy = checkNotNull(policy);
-            return self();
-        }
-
-        public T enableNoLocalWriting() {
-            this.isWritingLocalNode = true;
             return self();
         }
 
