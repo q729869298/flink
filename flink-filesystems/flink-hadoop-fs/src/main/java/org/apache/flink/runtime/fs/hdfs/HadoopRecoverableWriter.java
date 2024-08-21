@@ -95,10 +95,7 @@ public class HadoopRecoverableWriter implements RecoverableWriter {
     protected RecoverableFsDataOutputStream getRecoverableFsDataOutputStream(
             org.apache.hadoop.fs.Path targetFile, org.apache.hadoop.fs.Path tempFile)
             throws IOException {
-        if (noLocalWrite) {
-            return new HadoopRecoverableFsDataOutputStream(fs, targetFile, tempFile, true);
-        }
-        return new HadoopRecoverableFsDataOutputStream(fs, targetFile, tempFile, false);
+        return new HadoopRecoverableFsDataOutputStream(fs, targetFile, tempFile, noLocalWrite);
     }
 
     @Override
