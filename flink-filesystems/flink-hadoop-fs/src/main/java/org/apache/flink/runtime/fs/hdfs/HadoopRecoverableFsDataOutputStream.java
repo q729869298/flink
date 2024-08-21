@@ -77,7 +77,7 @@ class HadoopRecoverableFsDataOutputStream extends BaseHadoopFsRecoverableFsDataO
                             EnumSet.of(
                                     CreateFlag.CREATE,
                                     CreateFlag.OVERWRITE,
-                                    CreateFlag.IGNORE_CLIENT_LOCALITY),
+                                    CreateFlag.NO_LOCAL_WRITE),
                             fs.getConf().getInt("io.file.buffer.size", 4096),
                             fs.getDefaultReplication(tempFile),
                             fs.getDefaultBlockSize(tempFile),
