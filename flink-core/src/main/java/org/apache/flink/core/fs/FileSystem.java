@@ -666,6 +666,11 @@ public abstract class FileSystem implements IFileSystem {
     }
 
     @Override
+    public RecoverableWriter createRecoverableWriter(boolean noLocalWrite) throws IOException {
+        return IFileSystem.super.createRecoverableWriter(noLocalWrite);
+    }
+
+    @Override
     public abstract FileStatus[] listStatus(Path f) throws IOException;
 
     @Override

@@ -238,6 +238,25 @@ public interface IFileSystem {
     }
 
     /**
+     * Creates a new {@link RecoverableWriter}. A recoverable writer creates streams that can
+     * persist and recover their intermediate state. Persisting and recovering intermediate state is
+     * a core building block for writing to files that span multiple checkpoints.
+     *
+     * <p>The returned object can act as a shared factory to open and recover multiple streams.
+     *
+     * <p>This method is optional on file systems and various file system implementations may not
+     * support this method, throwing an {@code UnsupportedOperationException}.
+     *
+     * @param b Flag to indicate whether the writer should not write to local storage.
+     * @return A RecoverableWriter for this file system.
+     * @throws IOException Thrown, if the recoverable writer cannot be instantiated.
+     */
+    default RecoverableWriter createRecoverableWriter(boolean b) throws IOException {
+        throw new UnsupportedOperationException(
+                "This file system does not support recoverable writers that does not write on local machine.");
+    }
+
+    /**
      * List the statuses of the files/directories in the given path if the path is a directory.
      *
      * @param f given path

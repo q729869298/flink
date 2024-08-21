@@ -350,6 +350,8 @@ public class FileSink<IN>
 
         private RollingPolicy<IN, String> rollingPolicy;
 
+        private boolean isWritingLocalNode = false;
+
         private OutputFileConfig outputFileConfig;
 
         private boolean isCompactDisabledExplicitly = false;
@@ -399,6 +401,11 @@ public class FileSink<IN>
 
         public T withRollingPolicy(final RollingPolicy<IN, String> policy) {
             this.rollingPolicy = checkNotNull(policy);
+            return self();
+        }
+
+        public T enableNoLocalWriting() {
+            this.isWritingLocalNode = true;
             return self();
         }
 
@@ -526,6 +533,8 @@ public class FileSink<IN>
 
         private CheckpointRollingPolicy<IN, String> rollingPolicy;
 
+        private boolean noLocalWrite = false;
+
         private OutputFileConfig outputFileConfig;
 
         private boolean isCompactDisabledExplicitly = false;
@@ -577,6 +586,11 @@ public class FileSink<IN>
 
         public T withRollingPolicy(CheckpointRollingPolicy<IN, String> rollingPolicy) {
             this.rollingPolicy = checkNotNull(rollingPolicy);
+            return self();
+        }
+
+        public T enableNoLocalWriting() {
+            this.noLocalWrite = true;
             return self();
         }
 
@@ -695,7 +709,8 @@ public class FileSink<IN>
 
         BucketWriter<IN, String> createBucketWriter() throws IOException {
             return new BulkBucketWriter<>(
-                    FileSystem.get(basePath.toUri()).createRecoverableWriter(), writerFactory);
+                    FileSystem.get(basePath.toUri()).createRecoverableWriter(noLocalWrite),
+                    writerFactory);
         }
     }
 

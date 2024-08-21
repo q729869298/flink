@@ -21,6 +21,7 @@ package org.apache.flink.runtime.fs.hdfs;
 import org.apache.flink.core.fs.AbstractRecoverableWriterTest;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.core.fs.Path;
+import org.apache.flink.core.fs.RecoverableWriter;
 import org.apache.flink.runtime.util.HadoopUtils;
 import org.apache.flink.testutils.junit.utils.TempDirUtils;
 import org.apache.flink.util.OperatingSystem;
@@ -28,7 +29,9 @@ import org.apache.flink.util.OperatingSystem;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
@@ -81,6 +84,18 @@ class HadoopRecoverableWriterTest extends AbstractRecoverableWriterTest {
                     .delete(new org.apache.hadoop.fs.Path(basePath.toUri()), true);
             hdfsCluster.shutdown();
         }
+    }
+
+    private RecoverableWriter getNoLocalWriteFileSystemWriter() throws Exception {
+        return fileSystem.createRecoverableWriter(true);
+    }
+
+    @Test
+    void testNoLocalWrite() throws Exception {
+        final HadoopRecoverableWriter writer =
+                (HadoopRecoverableWriter) getNoLocalWriteFileSystemWriter();
+
+        Assertions.assertTrue(writer.noLocalWrite);
     }
 
     @Override

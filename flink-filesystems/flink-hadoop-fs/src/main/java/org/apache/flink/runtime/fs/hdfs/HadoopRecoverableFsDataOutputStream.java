@@ -29,10 +29,12 @@ import org.apache.flink.util.FlinkRuntimeException;
 import org.apache.flink.util.IOUtils;
 import org.apache.flink.util.Preconditions;
 
+import org.apache.hadoop.fs.CreateFlag;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.fs.viewfs.ViewFileSystem;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.util.VersionInfo;
@@ -43,6 +45,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.time.Duration;
+import java.util.EnumSet;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -57,7 +60,8 @@ class HadoopRecoverableFsDataOutputStream extends BaseHadoopFsRecoverableFsDataO
 
     private static Method truncateHandle;
 
-    HadoopRecoverableFsDataOutputStream(FileSystem fs, Path targetFile, Path tempFile)
+    HadoopRecoverableFsDataOutputStream(
+            FileSystem fs, Path targetFile, Path tempFile, boolean noLocalWrite)
             throws IOException {
 
         ensureTruncateInitialized();
@@ -65,6 +69,22 @@ class HadoopRecoverableFsDataOutputStream extends BaseHadoopFsRecoverableFsDataO
         this.fs = checkNotNull(fs);
         this.targetFile = checkNotNull(targetFile);
         this.tempFile = checkNotNull(tempFile);
+        if (noLocalWrite) {
+            this.out =
+                    fs.create(
+                            tempFile,
+                            FsPermission.getFileDefault(),
+                            EnumSet.of(
+                                    CreateFlag.CREATE,
+                                    CreateFlag.OVERWRITE,
+                                    CreateFlag.IGNORE_CLIENT_LOCALITY),
+                            fs.getConf().getInt("io.file.buffer.size", 4096),
+                            fs.getDefaultReplication(tempFile),
+                            fs.getDefaultBlockSize(tempFile),
+                            null);
+        } else {
+            this.out = fs.create(tempFile);
+        }
         this.out = fs.create(tempFile);
     }
 
