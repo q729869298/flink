@@ -48,6 +48,8 @@ import java.time.Duration;
 import java.util.EnumSet;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IO_FILE_BUFFER_SIZE_DEFAULT;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IO_FILE_BUFFER_SIZE_KEY;
 
 /**
  * An implementation of the {@link RecoverableFsDataOutputStream} for Hadoop's file system
@@ -78,14 +80,14 @@ class HadoopRecoverableFsDataOutputStream extends BaseHadoopFsRecoverableFsDataO
                                     CreateFlag.CREATE,
                                     CreateFlag.OVERWRITE,
                                     CreateFlag.NO_LOCAL_WRITE),
-                            fs.getConf().getInt("io.file.buffer.size", 4096),
-                            fs.getDefaultReplication(tempFile),
-                            fs.getDefaultBlockSize(tempFile),
+                            fs.getConf()
+                                    .getInt(IO_FILE_BUFFER_SIZE_KEY, IO_FILE_BUFFER_SIZE_DEFAULT),
+                            fs.getDefaultReplication(),
+                            fs.getDefaultBlockSize(),
                             null);
         } else {
             this.out = fs.create(tempFile);
         }
-        this.out = fs.create(tempFile);
     }
 
     @VisibleForTesting
