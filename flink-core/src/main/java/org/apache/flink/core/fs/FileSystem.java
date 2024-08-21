@@ -26,6 +26,7 @@ package org.apache.flink.core.fs;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.Public;
+import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.CoreOptions;
 import org.apache.flink.configuration.IllegalConfigurationException;
@@ -665,6 +666,7 @@ public abstract class FileSystem implements IFileSystem {
         return IFileSystem.super.createRecoverableWriter();
     }
 
+    @PublicEvolving
     @Override
     public RecoverableWriter createRecoverableWriter(boolean noLocalWrite) throws IOException {
         if (noLocalWrite) {
