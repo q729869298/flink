@@ -708,8 +708,10 @@ public class FileSink<IN>
         }
 
         BucketWriter<IN, String> createBucketWriter() throws IOException {
-            return new BulkBucketWriter<>(
+            return noLocalWrite ? new BulkBucketWriter<>(
                     FileSystem.get(basePath.toUri()).createRecoverableWriter(noLocalWrite),
+                    writerFactory) : new BulkBucketWriter<>(
+                    FileSystem.get(basePath.toUri()).createRecoverableWriter(),
                     writerFactory);
         }
     }
