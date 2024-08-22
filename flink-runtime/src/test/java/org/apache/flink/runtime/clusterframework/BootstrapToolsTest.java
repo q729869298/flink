@@ -298,8 +298,15 @@ class BootstrapToolsTest {
 
         BootstrapTools.writeConfiguration(
                 flinkConfig, new File(flinkConfDir, GlobalConfiguration.getFlinkConfFilename()));
-        final Configuration loadedFlinkConfig =
-                GlobalConfiguration.loadConfiguration(flinkConfDir.getAbsolutePath());
+        final Configuration loadedFlinkConfig;
+        if (standardYaml) {
+            loadedFlinkConfig =
+                    GlobalConfiguration.loadConfiguration(flinkConfDir.getAbsolutePath());
+        } else {
+            loadedFlinkConfig =
+                    GlobalConfiguration.loadConfiguration(
+                            flinkConfDir.getAbsolutePath(), null, true);
+        }
         assertThat(loadedFlinkConfig.get(listStringConfigOption))
                 .containsExactlyInAnyOrderElementsOf(list);
         assertThat(loadedFlinkConfig.get(listDurationConfigOption))

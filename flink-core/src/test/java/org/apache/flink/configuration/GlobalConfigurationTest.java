@@ -64,7 +64,8 @@ class GlobalConfigurationTest {
             pw.println("mykey9: myvalue9"); // OK
             pw.println("mykey9: myvalue10"); // OK, overwrite last value
         }
-        Configuration conf = GlobalConfiguration.loadConfiguration(tmpDir.getAbsolutePath());
+        Configuration conf =
+                GlobalConfiguration.loadConfiguration(tmpDir.getAbsolutePath(), null, true);
 
         // all distinct keys from confFile1 + confFile2 key
         assertThat(conf.keySet()).hasSize(6);
@@ -164,7 +165,8 @@ class GlobalConfigurationTest {
             pw.append("invalid");
         }
 
-        assertThat(GlobalConfiguration.loadConfiguration(tmpDir.getAbsolutePath())).isNotNull();
+        assertThat(GlobalConfiguration.loadConfiguration(tmpDir.getAbsolutePath(), null, true))
+                .isNotNull();
         // Clear the standard yaml flag to avoid impact to other cases.
         GlobalConfiguration.setStandardYaml(true);
     }

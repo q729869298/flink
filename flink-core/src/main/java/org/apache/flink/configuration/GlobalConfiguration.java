@@ -45,6 +45,11 @@ public final class GlobalConfiguration {
 
     private static final Logger LOG = LoggerFactory.getLogger(GlobalConfiguration.class);
 
+    /**
+     * @deprecated This file is deprecated and is only used to help users migrate their legacy
+     *     configuration files to the new configuration file `config.yaml`.
+     */
+    @Deprecated @VisibleForTesting
     public static final String LEGACY_FLINK_CONF_FILENAME = "flink-conf.yaml";
 
     public static final String FLINK_CONF_FILENAME = "config.yaml";
@@ -126,6 +131,13 @@ public final class GlobalConfiguration {
      */
     public static Configuration loadConfiguration(
             final String configDir, @Nullable final Configuration dynamicProperties) {
+        return loadConfiguration(configDir, dynamicProperties, false);
+    }
+
+    public static Configuration loadConfiguration(
+            final String configDir,
+            @Nullable final Configuration dynamicProperties,
+            boolean loadLegacyConfigFile) {
 
         if (configDir == null) {
             throw new IllegalArgumentException(
@@ -143,11 +155,9 @@ public final class GlobalConfiguration {
         }
 
         // get Flink yaml configuration file
-        File yamlConfigFile = new File(confDirFile, LEGACY_FLINK_CONF_FILENAME);
         Configuration configuration;
-
-        if (!yamlConfigFile.exists()) {
-            yamlConfigFile = new File(confDirFile, FLINK_CONF_FILENAME);
+        if (loadLegacyConfigFile) {
+            File yamlConfigFile = new File(confDirFile, LEGACY_FLINK_CONF_FILENAME);
             if (!yamlConfigFile.exists()) {
                 throw new IllegalConfigurationException(
                         "The Flink config file '"
@@ -156,18 +166,43 @@ public final class GlobalConfiguration {
                                 + yamlConfigFile.getAbsolutePath()
                                 + ") does not exist.");
             } else {
+                standardYaml = false;
+                LOG.info(
+                        "Using legacy YAML parser to load flink configuration file from {}.",
+                        yamlConfigFile.getAbsolutePath());
+                configuration = loadLegacyYAMLResource(yamlConfigFile);
+            }
+        } else {
+            File yamlConfigFile = new File(confDirFile, FLINK_CONF_FILENAME);
+            if (!yamlConfigFile.exists()) {
+                File legacyFile = new File(confDirFile, LEGACY_FLINK_CONF_FILENAME);
+                if (legacyFile.exists()) {
+                    throw new IllegalConfigurationException(
+                            "The Flink config file '"
+                                    + yamlConfigFile
+                                    + "' ("
+                                    + yamlConfigFile.getAbsolutePath()
+                                    + ") does not exist. However, a legacy configuration file '"
+                                    + legacyFile
+                                    + "' ("
+                                    + legacyFile.getAbsolutePath()
+                                    + ") exists. Starting from FLINK-2.0, the legacy configuration file is no longer supported. "
+                                    + "Please use the new configuration file 'config.yaml'.");
+                } else {
+                    throw new IllegalConfigurationException(
+                            "The Flink config file '"
+                                    + yamlConfigFile
+                                    + "' ("
+                                    + yamlConfigFile.getAbsolutePath()
+                                    + ") does not exist.");
+                }
+            } else {
                 standardYaml = true;
                 LOG.info(
                         "Using standard YAML parser to load flink configuration file from {}.",
                         yamlConfigFile.getAbsolutePath());
                 configuration = loadYAMLResource(yamlConfigFile);
             }
-        } else {
-            standardYaml = false;
-            LOG.info(
-                    "Using legacy YAML parser to load flink configuration file from {}.",
-                    yamlConfigFile.getAbsolutePath());
-            configuration = loadLegacyYAMLResource(yamlConfigFile);
         }
 
         logConfiguration("Loading", configuration);
