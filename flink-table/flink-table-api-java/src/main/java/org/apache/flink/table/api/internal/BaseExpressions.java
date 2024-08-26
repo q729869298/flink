@@ -76,6 +76,7 @@ import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.ATAN;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.AVG;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.BETWEEN;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.BIN;
+import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.BTRIM;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.CARDINALITY;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.CAST;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.CEIL;
@@ -90,6 +91,7 @@ import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.DECODE
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.DEGREES;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.DISTINCT;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.DIVIDE;
+import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.ELT;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.ENCODE;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.EQUALS;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.EXP;
@@ -116,6 +118,8 @@ import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.IS_NUL
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.IS_TRUE;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.JSON_EXISTS;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.JSON_QUERY;
+import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.JSON_QUOTE;
+import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.JSON_UNQUOTE;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.JSON_VALUE;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.LAST_VALUE;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.LEFT;
@@ -152,11 +156,16 @@ import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.PARSE_
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.PLUS;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.POSITION;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.POWER;
+import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.PRINTF;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.PROCTIME;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.RADIANS;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.REGEXP;
+import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.REGEXP_COUNT;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.REGEXP_EXTRACT;
+import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.REGEXP_EXTRACT_ALL;
+import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.REGEXP_INSTR;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.REGEXP_REPLACE;
+import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.REGEXP_SUBSTR;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.REPEAT;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.REPLACE;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.REVERSE;
@@ -193,6 +202,7 @@ import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.TRANSL
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.TRIM;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.TRUNCATE;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.TRY_CAST;
+import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.UNHEX;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.UPPER;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.URL_DECODE;
 import static org.apache.flink.table.functions.BuiltInFunctionDefinitions.URL_ENCODE;
@@ -814,6 +824,17 @@ public abstract class BaseExpressions<InType, OutType> {
     }
 
     /**
+     * Converts hexadecimal string {@code expr} to BINARY. If the length of {@code expr} is odd, the
+     * first character is discarded and the result is left padded with a null byte.
+     *
+     * @return a BINARY. <br>
+     *     null if expr is null or expr contains non-hex characters.
+     */
+    public OutType unhex() {
+        return toApiSpecificExpression(unresolvedCall(UNHEX, toExpr()));
+    }
+
+    /**
      * Returns a number of truncated to n decimal places. If n is 0,the result has no decimal point
      * or fractional part. n can be negative to cause n digits left of the decimal point of the
      * value to become zero. E.g. truncate(42.345, 2) to 42.34.
@@ -1014,12 +1035,25 @@ public abstract class BaseExpressions<InType, OutType> {
     }
 
     /**
-     * Returns true, if a string matches the specified LIKE pattern.
+     * Returns true, if a string matches the specified LIKE pattern with default escape character
+     * '/'.
      *
      * <p>e.g. "Jo_n%" matches all strings that start with "Jo(arbitrary letter)n"
      */
     public OutType like(InType pattern) {
         return toApiSpecificExpression(unresolvedCall(LIKE, toExpr(), objectToExpression(pattern)));
+    }
+
+    /**
+     * Returns true, if a string matches the specified LIKE pattern with specified escape character
+     * consisting of a single char.
+     *
+     * <p>e.g. "Jo_n%" matches all strings that start with "Jo(arbitrary letter)n"
+     */
+    public OutType like(InType pattern, InType escape) {
+        return toApiSpecificExpression(
+                unresolvedCall(
+                        LIKE, toExpr(), objectToExpression(pattern), objectToExpression(escape)));
     }
 
     /**
@@ -1119,6 +1153,19 @@ public abstract class BaseExpressions<InType, OutType> {
     }
 
     /**
+     * Returns the number of times {@code str} matches the {@code regex} pattern. {@code regex} must
+     * be a Java regular expression.
+     *
+     * @param regex A STRING expression with a matching pattern.
+     * @return An INTEGER representation of the number of matches. <br>
+     *     null if any of the arguments are null or {@code regex} is invalid.
+     */
+    public OutType regexpCount(InType regex) {
+        return toApiSpecificExpression(
+                unresolvedCall(REGEXP_COUNT, toExpr(), objectToExpression(regex)));
+    }
+
+    /**
      * Returns a string with all substrings that match the regular expression consecutively being
      * replaced.
      */
@@ -1147,6 +1194,72 @@ public abstract class BaseExpressions<InType, OutType> {
     public OutType regexpExtract(InType regex) {
         return toApiSpecificExpression(
                 unresolvedCall(REGEXP_EXTRACT, toExpr(), objectToExpression(regex)));
+    }
+
+    /**
+     * Extracts all the substrings in {@code str} that match the {@code regex} expression and
+     * correspond to the regex group {@code extractIndex}. <br>
+     * {@code regex} may contain multiple groups. {@code extractIndex} indicates which regex group
+     * to extract and starts from 1, also the default value if not specified. 0 means matching the
+     * entire regular expression.
+     *
+     * @param regex A STRING expression with a matching pattern.
+     * @param extractIndex An optional INTEGER expression with default 1.
+     * @return An ARRAY&lt;STRING&gt; of all the matched substrings. <br>
+     *     null if any of the arguments are null or invalid.
+     */
+    public OutType regexpExtractAll(InType regex, InType extractIndex) {
+        return toApiSpecificExpression(
+                unresolvedCall(
+                        REGEXP_EXTRACT_ALL,
+                        toExpr(),
+                        objectToExpression(regex),
+                        objectToExpression(extractIndex)));
+    }
+
+    /** Extracts all the strings in str that match the regex expression. */
+    public OutType regexpExtractAll(InType regex) {
+        return toApiSpecificExpression(
+                unresolvedCall(REGEXP_EXTRACT_ALL, toExpr(), objectToExpression(regex)));
+    }
+
+    /**
+     * Returns the position of the first substring in {@code str} that matches {@code regex}. <br>
+     * Result indexes begin at 1, 0 if there is no match. <br>
+     *
+     * @param regex A STRING expression with a matching pattern.
+     * @return An INTEGER representation of the first matched substring index. <br>
+     *     null if any of the arguments are null or {@code regex} is invalid.
+     */
+    public OutType regexpInstr(InType regex) {
+        return toApiSpecificExpression(
+                unresolvedCall(REGEXP_INSTR, toExpr(), objectToExpression(regex)));
+    }
+
+    /**
+     * Returns the first substring in {@code str} that matches {@code regex}.
+     *
+     * @param regex A STRING expression with a matching pattern.
+     * @return A STRING representation of the first matched substring. <br>
+     *     null if any of the arguments are null or {@code regex} is invalid or pattern is not
+     *     found.
+     */
+    public OutType regexpSubstr(InType regex) {
+        return toApiSpecificExpression(
+                unresolvedCall(REGEXP_SUBSTR, toExpr(), objectToExpression(regex)));
+    }
+
+    /**
+     * Returns a string by quotes a string as a JSON value and wrapping it with double quote
+     * characters.
+     */
+    public OutType jsonQuote() {
+        return toApiSpecificExpression(unresolvedCall(JSON_QUOTE, objectToExpression(toExpr())));
+    }
+
+    /** Returns a string by unquoting JSON value. */
+    public OutType jsonUnquote() {
+        return toApiSpecificExpression(unresolvedCall(JSON_UNQUOTE, objectToExpression(toExpr())));
     }
 
     /** Returns the base string decoded with base64. */
@@ -1246,14 +1359,53 @@ public abstract class BaseExpressions<InType, OutType> {
                         objectToExpression(key)));
     }
 
+    /**
+     * Returns a formatted string from printf-style format string. The function exploits the {@link
+     * java.util.Formatter} with Locale.US.
+     *
+     * @param obj any expression
+     * @return a formatted string. null if {@code format} is null or invalid.
+     */
+    public final OutType printf(InType... obj) {
+        Expression[] args =
+                Stream.concat(
+                                Stream.of(toExpr()),
+                                Arrays.stream(obj).map(ApiExpressionUtils::objectToExpression))
+                        .toArray(Expression[]::new);
+        return toApiSpecificExpression(unresolvedCall(PRINTF, args));
+    }
+
     /** Returns a string that removes the left whitespaces from the given string. */
     public OutType ltrim() {
         return toApiSpecificExpression(unresolvedCall(LTRIM, toExpr()));
     }
 
+    /** Returns a string that removes the left chars in trimStr from the given string. */
+    public OutType ltrim(InType trimStr) {
+        return toApiSpecificExpression(
+                unresolvedCall(LTRIM, toExpr(), objectToExpression(trimStr)));
+    }
+
     /** Returns a string that removes the right whitespaces from the given string. */
     public OutType rtrim() {
         return toApiSpecificExpression(unresolvedCall(RTRIM, toExpr()));
+    }
+
+    /** Returns a string that removes the right chars in trimStr from the given string. */
+    public OutType rtrim(InType trimStr) {
+        return toApiSpecificExpression(
+                unresolvedCall(RTRIM, toExpr(), objectToExpression(trimStr)));
+    }
+
+    /** Returns a string that removes the left and right whitespaces from the given string. */
+    public OutType btrim() {
+        return toApiSpecificExpression(unresolvedCall(BTRIM, toExpr()));
+    }
+
+    /** Returns a string that removes the left and right chars in trimStr from the given string. */
+    public OutType btrim(InType trimStr) {
+        return toApiSpecificExpression(
+                unresolvedCall(BTRIM, toExpr(), objectToExpression(trimStr)));
     }
 
     /** Returns a string that repeats the base string n times. */
@@ -1314,6 +1466,24 @@ public abstract class BaseExpressions<InType, OutType> {
                         toExpr(),
                         objectToExpression(listDelimiter),
                         objectToExpression(keyValueDelimiter)));
+    }
+
+    /**
+     * Returns the {@code index}-th expression. {@code index} must be an integer between 1 and the
+     * number of expressions.
+     *
+     * @param expr a STRING or BINARY expression
+     * @param exprs a STRING or BINARY expression
+     * @return result type is the least common type of all expressions.<br>
+     *     null if {@code index} is null or out of range.
+     */
+    public OutType elt(InType expr, InType... exprs) {
+        Expression[] args =
+                Stream.concat(
+                                Stream.of(toExpr(), objectToExpression(expr)),
+                                Arrays.stream(exprs).map(ApiExpressionUtils::objectToExpression))
+                        .toArray(Expression[]::new);
+        return toApiSpecificExpression(unresolvedCall(ELT, args));
     }
 
     // Temporal operations
