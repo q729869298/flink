@@ -26,10 +26,11 @@ import org.apache.flink.streaming.api.functions.aggregation.AggregationFunction.
 import org.apache.flink.streaming.api.scala.function.{ProcessWindowFunction, WindowFunction}
 import org.apache.flink.streaming.api.scala.function.util._
 import org.apache.flink.streaming.api.windowing.evictors.Evictor
-import org.apache.flink.streaming.api.windowing.time.Time
 import org.apache.flink.streaming.api.windowing.triggers.Trigger
 import org.apache.flink.streaming.api.windowing.windows.Window
 import org.apache.flink.util.Collector
+
+import java.time.Duration
 
 /**
  * A [[WindowedStream]] represents a data stream where elements are grouped by key, and for each
@@ -75,7 +76,7 @@ class WindowedStream[T, K, W <: Window](javaStream: JavaWStream[T, K, W]) {
    * thrown.
    */
   @PublicEvolving
-  def allowedLateness(lateness: Time): WindowedStream[T, K, W] = {
+  def allowedLateness(lateness: Duration): WindowedStream[T, K, W] = {
     javaStream.allowedLateness(lateness)
     this
   }

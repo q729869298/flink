@@ -25,10 +25,11 @@ import org.apache.flink.api.java.typeutils.ResultTypeQueryable
 import org.apache.flink.streaming.api.datastream.{CoGroupedStreams => JavaCoGroupedStreams, JoinedStreams => JavaJoinedStreams}
 import org.apache.flink.streaming.api.windowing.assigners.WindowAssigner
 import org.apache.flink.streaming.api.windowing.evictors.Evictor
-import org.apache.flink.streaming.api.windowing.time.Time
 import org.apache.flink.streaming.api.windowing.triggers.Trigger
 import org.apache.flink.streaming.api.windowing.windows.Window
 import org.apache.flink.util.Collector
+
+import java.time.Duration
 
 /**
  * `JoinedStreams` represents two [[DataStream]]s that have been joined. A streaming join operation
@@ -49,7 +50,7 @@ import org.apache.flink.util.Collector
  * val result = one.join(two)
  *     .where {t => ... }
  *     .equal {t => ... }
- *     .window(TumblingEventTimeWindows.of(Time.of(5, TimeUnit.SECONDS)))
+ *     .window(TumblingEventTimeWindows.of(Duration.ofSeconds(5)))
  *     .apply(new MyJoinFunction())
  * }
  * }}}
@@ -129,7 +130,7 @@ class JoinedStreams[T1, T2](input1: DataStream[T1], input2: DataStream[T2]) {
           windowAssigner: WindowAssigner[_ >: JavaCoGroupedStreams.TaggedUnion[T1, T2], W],
           trigger: Trigger[_ >: JavaCoGroupedStreams.TaggedUnion[T1, T2], _ >: W],
           evictor: Evictor[_ >: JavaCoGroupedStreams.TaggedUnion[T1, T2], _ >: W],
-          val allowedLateness: Time) {
+          val allowedLateness: Duration) {
 
         /** Sets the [[Trigger]] that should be used to trigger window emission. */
         @PublicEvolving
@@ -155,7 +156,7 @@ class JoinedStreams[T1, T2](input1: DataStream[T1], input2: DataStream[T2]) {
          * [[WindowedStream#allowedLateness(Time)]]
          */
         @PublicEvolving
-        def allowedLateness(newLateness: Time): WithWindow[W] = {
+        def allowedLateness(newLateness: Duration): WithWindow[W] = {
           new WithWindow[W](windowAssigner, trigger, evictor, newLateness)
         }
 

@@ -22,13 +22,12 @@ import org.apache.flink.streaming.api.functions.sink.SinkFunction
 import org.apache.flink.streaming.api.functions.source.SourceFunction
 import org.apache.flink.streaming.api.watermark.Watermark
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows
-import org.apache.flink.streaming.api.windowing.time.Time
 import org.apache.flink.test.util.AbstractTestBaseJUnit4
 
 import org.junit.Assert._
 import org.junit.Test
 
-import java.util.concurrent.TimeUnit
+import java.time.Duration
 
 import scala.collection.mutable
 
@@ -83,7 +82,7 @@ class CoGroupJoinITCase extends AbstractTestBaseJUnit4 {
       .coGroup(source2)
       .where(_._1)
       .equalTo(_._1)
-      .window(TumblingEventTimeWindows.of(Time.of(3, TimeUnit.MILLISECONDS)))
+      .window(TumblingEventTimeWindows.of(Duration.ofMillis(3)))
       .apply {
         (first: Iterator[(String, Int)], second: Iterator[(String, Int)]) =>
           "F:" + first.mkString("") + " S:" + second.mkString("")
@@ -158,7 +157,7 @@ class CoGroupJoinITCase extends AbstractTestBaseJUnit4 {
       .join(source2)
       .where(_._1)
       .equalTo(_._1)
-      .window(TumblingEventTimeWindows.of(Time.of(3, TimeUnit.MILLISECONDS)))
+      .window(TumblingEventTimeWindows.of(Duration.ofMillis(3)))
       .apply((l, r) => l.toString + ":" + r.toString)
       .addSink(new SinkFunction[String]() {
         override def invoke(value: String) {
@@ -223,7 +222,7 @@ class CoGroupJoinITCase extends AbstractTestBaseJUnit4 {
       .join(source1)
       .where(_._1)
       .equalTo(_._1)
-      .window(TumblingEventTimeWindows.of(Time.of(3, TimeUnit.MILLISECONDS)))
+      .window(TumblingEventTimeWindows.of(Duration.ofMillis(3)))
       .apply((l, r) => l.toString + ":" + r.toString)
       .addSink(new SinkFunction[String]() {
         override def invoke(value: String) {

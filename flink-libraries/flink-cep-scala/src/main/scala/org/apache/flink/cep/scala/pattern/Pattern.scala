@@ -23,7 +23,6 @@ import org.apache.flink.cep.pattern.{MalformedPatternException, Pattern => JPatt
 import org.apache.flink.cep.pattern.conditions.{IterativeCondition, SimpleCondition}
 import org.apache.flink.cep.pattern.conditions.IterativeCondition.{Context => JContext}
 import org.apache.flink.cep.scala.conditions.Context
-import org.apache.flink.streaming.api.windowing.time.Time
 
 import java.time.Duration
 
@@ -64,12 +63,6 @@ class Pattern[T, F <: T](jPattern: JPattern[T, F]) {
 
   /** @return Name of the pattern operator */
   def getName: String = jPattern.getName
-
-  /** @return Window length in which the pattern match has to occur */
-  @deprecated(message = "Use getWindowSize", since = "1.19.0")
-  def getWindowTime: Option[Time] = {
-    getWindowSize.map(Time.of)
-  }
 
   /** @return Window length in which the pattern match has to occur */
   def getWindowSize: Option[Duration] = {
@@ -259,12 +252,6 @@ class Pattern[T, F <: T](jPattern: JPattern[T, F]) {
       override def filter(value: F, ctx: JContext[F]): Boolean = cleanCond(value)
     }
     until(condFun)
-  }
-
-  @deprecated(message = "Use within(Duration)", since = "1.19.0")
-  def within(windowTime: Time): Pattern[T, F] = {
-    jPattern.within(Time.toDuration(windowTime))
-    this
   }
 
   /**

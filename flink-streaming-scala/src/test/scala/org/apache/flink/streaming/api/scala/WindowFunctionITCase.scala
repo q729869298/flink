@@ -24,14 +24,13 @@ import org.apache.flink.streaming.api.functions.source.SourceFunction
 import org.apache.flink.streaming.api.scala.testutils.{CheckingIdentityRichAllWindowFunction, CheckingIdentityRichProcessAllWindowFunction, CheckingIdentityRichProcessWindowFunction, CheckingIdentityRichWindowFunction}
 import org.apache.flink.streaming.api.watermark.Watermark
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows
-import org.apache.flink.streaming.api.windowing.time.Time
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow
 import org.apache.flink.util.TestLogger
 
 import org.junit.Assert._
 import org.junit.Test
 
-import java.util.concurrent.TimeUnit
+import java.time.Duration
 
 import scala.collection.mutable
 
@@ -68,7 +67,7 @@ class WindowFunctionITCase extends TestLogger {
 
     source1
       .keyBy(0)
-      .window(TumblingEventTimeWindows.of(Time.of(3, TimeUnit.MILLISECONDS)))
+      .window(TumblingEventTimeWindows.of(Duration.ofMillis(3)))
       .apply(new CheckingIdentityRichWindowFunction[(String, Int), Tuple, TimeWindow]())
       .addSink(new SinkFunction[(String, Int)]() {
         override def invoke(value: (String, Int)) {
@@ -125,7 +124,7 @@ class WindowFunctionITCase extends TestLogger {
 
     source1
       .keyBy(0)
-      .window(TumblingEventTimeWindows.of(Time.of(3, TimeUnit.MILLISECONDS)))
+      .window(TumblingEventTimeWindows.of(Duration.ofMillis(3)))
       .process(new CheckingIdentityRichProcessWindowFunction[(String, Int), Tuple, TimeWindow]())
       .addSink(new SinkFunction[(String, Int)]() {
         override def invoke(value: (String, Int)) {
@@ -181,7 +180,7 @@ class WindowFunctionITCase extends TestLogger {
       .assignTimestampsAndWatermarks(new WindowFunctionITCase.Tuple2TimestampExtractor)
 
     source1
-      .windowAll(TumblingEventTimeWindows.of(Time.of(3, TimeUnit.MILLISECONDS)))
+      .windowAll(TumblingEventTimeWindows.of(Duration.ofMillis(3)))
       .apply(new CheckingIdentityRichAllWindowFunction[(String, Int), TimeWindow]())
       .addSink(new SinkFunction[(String, Int)]() {
         override def invoke(value: (String, Int)) {
@@ -237,7 +236,7 @@ class WindowFunctionITCase extends TestLogger {
       .assignTimestampsAndWatermarks(new WindowFunctionITCase.Tuple2TimestampExtractor)
 
     source1
-      .windowAll(TumblingEventTimeWindows.of(Time.of(3, TimeUnit.MILLISECONDS)))
+      .windowAll(TumblingEventTimeWindows.of(Duration.ofMillis(3)))
       .process(new CheckingIdentityRichProcessAllWindowFunction[(String, Int), TimeWindow]())
       .addSink(new SinkFunction[(String, Int)]() {
         override def invoke(value: (String, Int)) {

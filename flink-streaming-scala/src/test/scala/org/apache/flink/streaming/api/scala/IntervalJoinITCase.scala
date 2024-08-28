@@ -21,12 +21,13 @@ import org.apache.flink.api.scala.typeutils.CaseClassTypeInfo
 import org.apache.flink.streaming.api.functions.co.ProcessJoinFunction
 import org.apache.flink.streaming.api.functions.sink.SinkFunction
 import org.apache.flink.streaming.api.functions.timestamps.AscendingTimestampExtractor
-import org.apache.flink.streaming.api.windowing.time.Time
 import org.apache.flink.test.util.AbstractTestBaseJUnit4
 import org.apache.flink.util.Collector
 
 import org.junit.Assert.assertTrue
 import org.junit.Test
+
+import java.time.Duration
 
 import scala.collection.mutable.ListBuffer
 
@@ -51,7 +52,7 @@ class IntervalJoinITCase extends AbstractTestBaseJUnit4 {
 
     val join = dataStream1
       .intervalJoin(dataStream2)
-      .between(Time.milliseconds(0), Time.milliseconds(2))
+      .between(Duration.ofMillis(0), Duration.ofMillis(2))
       .process(new CombineJoinFunction())
 
     assertTrue(join.dataType.isInstanceOf[CaseClassTypeInfo[_]])
@@ -89,7 +90,7 @@ class IntervalJoinITCase extends AbstractTestBaseJUnit4 {
 
     val join = dataStream1
       .intervalJoin(dataStream2)
-      .between(Time.milliseconds(0), Time.milliseconds(2))
+      .between(Duration.ofMillis(0), Duration.ofMillis(2))
       .lowerBoundExclusive()
       .upperBoundExclusive()
       .process(new CombineJoinFunction())
