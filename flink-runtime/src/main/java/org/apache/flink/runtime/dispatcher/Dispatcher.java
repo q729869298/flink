@@ -94,6 +94,7 @@ import org.apache.flink.runtime.rpc.RpcService;
 import org.apache.flink.runtime.rpc.RpcServiceUtils;
 import org.apache.flink.runtime.scheduler.ExecutionGraphInfo;
 import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
+import org.apache.flink.streaming.api.graph.StreamGraphHasherV2;
 import org.apache.flink.util.CollectionUtil;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FlinkException;
@@ -1099,14 +1100,18 @@ public abstract class Dispatcher extends FencedRpcEndpoint<DispatcherId>
     @Override
     public CompletableFuture<CoordinationResponse> deliverCoordinationRequestToCoordinator(
             JobID jobId,
-            OperatorID operatorId,
+            String userDefinedOperatorId,
             SerializedValue<CoordinationRequest> serializedRequest,
             Time timeout) {
         return performOperationOnJobMasterGateway(
                 jobId,
                 gateway ->
                         gateway.deliverCoordinationRequestToCoordinator(
-                                operatorId, serializedRequest, timeout));
+                                new OperatorID(
+                                        StreamGraphHasherV2.generateUserSpecifiedHash(
+                                                userDefinedOperatorId)),
+                                serializedRequest,
+                                timeout));
     }
 
     @Override
