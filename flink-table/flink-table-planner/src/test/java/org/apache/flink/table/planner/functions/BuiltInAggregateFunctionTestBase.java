@@ -27,6 +27,7 @@ import org.apache.flink.table.api.Table;
 import org.apache.flink.table.api.TableDescriptor;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.TableResult;
+import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.connector.source.SourceFunctionProvider;
@@ -64,12 +65,14 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.flink.core.testutils.FlinkAssertions.anyCauseMatches;
 import static org.apache.flink.runtime.state.StateBackendLoader.HASHMAP_STATE_BACKEND_NAME;
 import static org.apache.flink.runtime.state.StateBackendLoader.ROCKSDB_STATE_BACKEND_NAME;
 import static org.apache.flink.table.test.TableAssertions.assertThat;
 import static org.apache.flink.table.types.DataType.getFieldDataTypes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 /** Test base for testing aggregate {@link BuiltInFunctionDefinition built-in functions}. */
 @Execution(ExecutionMode.CONCURRENT)
@@ -275,6 +278,28 @@ abstract class BuiltInAggregateFunctionTestBase {
             return this;
         }
 
+        TestSpec testSqlValidationError(Function<Table, String> sqlSpec, String exceptionMessage) {
+            this.testItems.add(new SqlValidationErrorItem(sqlSpec, exceptionMessage));
+            return this;
+        }
+
+        TestSpec testTableApiValidationError(
+                TableApiAggSpec tableApiSpec, String exceptionMessage) {
+            this.testItems.add(
+                    new TableApiValidationErrorItem(
+                            tableApiSpec.selectExpr, tableApiSpec.groupByExpr, exceptionMessage));
+            return this;
+        }
+
+        TestSpec testValidationError(
+                Function<Table, String> sqlSpec,
+                TableApiAggSpec tableApiSpec,
+                String exceptionMessage) {
+            testSqlValidationError(sqlSpec, exceptionMessage);
+            testTableApiValidationError(tableApiSpec, exceptionMessage);
+            return this;
+        }
+
         private Executable createTestItemExecutable(TestItem testItem, String stateBackend) {
             return () -> {
                 Configuration conf = new Configuration();
@@ -360,6 +385,70 @@ abstract class BuiltInAggregateFunctionTestBase {
         }
 
         protected abstract TableResult getResult(TableEnvironment tEnv, Table sourceTable);
+    }
+
+    private abstract static class ValidationErrorItem implements TestItem {
+        private final Class<? extends Throwable> exceptionClass;
+        private final String exceptionMessage;
+
+        public ValidationErrorItem(String exceptionMessage) {
+            this.exceptionClass = ValidationException.class;
+            this.exceptionMessage = exceptionMessage;
+        }
+
+        @Override
+        public void execute(TableEnvironment tEnv, Table sourceTable) {
+            Throwable t = catchThrowable(() -> getResult(tEnv, sourceTable));
+            assertThat(t)
+                    .as("Expected a validation exception")
+                    .isNotNull()
+                    .satisfies(
+                            exceptionMessage == null
+                                    ? anyCauseMatches(exceptionClass)
+                                    : anyCauseMatches(exceptionClass, exceptionMessage));
+        }
+
+        protected abstract void getResult(TableEnvironment tEnv, Table sourceTable);
+    }
+
+    private static final class SqlValidationErrorItem extends ValidationErrorItem {
+        private final Function<Table, String> spec;
+
+        public SqlValidationErrorItem(Function<Table, String> spec, String exceptionMessage) {
+            super(exceptionMessage);
+            this.spec = spec;
+        }
+
+        @Override
+        protected void getResult(TableEnvironment tEnv, Table sourceTable) {
+            tEnv.sqlQuery(spec.apply(sourceTable)).execute();
+        }
+    }
+
+    private static final class TableApiValidationErrorItem extends ValidationErrorItem {
+        private final List<Expression> selectExpr;
+        private final List<Expression> groupByExpr;
+
+        public TableApiValidationErrorItem(
+                List<Expression> selectExpr,
+                @Nullable List<Expression> groupByExpr,
+                String exceptionMessage) {
+            super(exceptionMessage);
+            this.selectExpr = selectExpr;
+            this.groupByExpr = groupByExpr;
+        }
+
+        @Override
+        protected void getResult(TableEnvironment tEnv, Table sourceTable) {
+            if (groupByExpr != null) {
+                sourceTable
+                        .groupBy(groupByExpr.toArray(new Expression[0]))
+                        .select(selectExpr.toArray(new Expression[0]))
+                        .execute();
+            } else {
+                sourceTable.select(selectExpr.toArray(new Expression[0])).execute();
+            }
+        }
     }
 
     private abstract static class RuntimeErrorItem implements TestItem {
