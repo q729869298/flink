@@ -27,7 +27,6 @@ import org.apache.flink.runtime.blob.VoidBlobStore;
 import org.apache.flink.runtime.clusterframework.ApplicationStatus;
 import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
 import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutorServiceAdapter;
-import org.apache.flink.runtime.dispatcher.cleanup.DispatcherResourceCleanerFactory;
 import org.apache.flink.runtime.dispatcher.cleanup.TestingCleanupRunnerFactory;
 import org.apache.flink.runtime.dispatcher.cleanup.TestingResourceCleanerFactory;
 import org.apache.flink.runtime.entrypoint.ClusterEntrypoint;
@@ -377,9 +376,7 @@ public class MiniDispatcherTest extends TestLogger {
                         // JobManagerRunnerRegistry needs to be added explicitly
                         // because cleaning it will trigger the closeAsync latch
                         // provided by TestingJobManagerRunner
-                        .withLocallyCleanableResource(
-                                DispatcherResourceCleanerFactory.toLocallyCleanableResource(
-                                        jobManagerRunnerRegistry, mainThreadExecutor))
+                        .withLocallyCleanableInMainThreadResource(jobManagerRunnerRegistry)
                         .withGloballyCleanableResource(
                                 (jobId, ignoredExecutor) -> globalCleanupResultFuture)
                         .withLocallyCleanableResource(
