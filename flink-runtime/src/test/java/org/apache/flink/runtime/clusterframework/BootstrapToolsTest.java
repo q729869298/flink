@@ -32,7 +32,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
-import java.io.IOException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
@@ -225,16 +224,6 @@ class BootstrapToolsTest {
 
     @Test
     void testWriteConfigurationAndReloadWithStandardYaml() throws Exception {
-        testWriteConfigurationAndReloadInternal(true);
-    }
-
-    @Test
-    void testWriteConfigurationAndReloadWithLegacyYaml() throws Exception {
-        testWriteConfigurationAndReloadInternal(false);
-    }
-
-    private void testWriteConfigurationAndReloadInternal(boolean standardYaml) throws IOException {
-        GlobalConfiguration.setStandardYaml(standardYaml);
         final File flinkConfDir = TempDirUtils.newFolder(temporaryFolder).getAbsoluteFile();
         final Configuration flinkConfig = new Configuration();
 
@@ -299,22 +288,12 @@ class BootstrapToolsTest {
         BootstrapTools.writeConfiguration(
                 flinkConfig, new File(flinkConfDir, GlobalConfiguration.getFlinkConfFilename()));
         final Configuration loadedFlinkConfig;
-        if (standardYaml) {
-            loadedFlinkConfig =
-                    GlobalConfiguration.loadConfiguration(flinkConfDir.getAbsolutePath());
-        } else {
-            loadedFlinkConfig =
-                    GlobalConfiguration.loadConfiguration(
-                            flinkConfDir.getAbsolutePath(), null, true);
-        }
+        loadedFlinkConfig = GlobalConfiguration.loadConfiguration(flinkConfDir.getAbsolutePath());
         assertThat(loadedFlinkConfig.get(listStringConfigOption))
                 .containsExactlyInAnyOrderElementsOf(list);
         assertThat(loadedFlinkConfig.get(listDurationConfigOption))
                 .containsExactlyInAnyOrderElementsOf(durationList);
         assertThat(loadedFlinkConfig.get(mapConfigOption)).containsAllEntriesOf(map);
         assertThat(loadedFlinkConfig.get(durationConfigOption)).isEqualTo(duration);
-
-        // clean the standard yaml flag to avoid impact to other cases.
-        GlobalConfiguration.setStandardYaml(true);
     }
 }

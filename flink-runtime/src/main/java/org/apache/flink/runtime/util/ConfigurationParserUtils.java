@@ -21,6 +21,7 @@ package org.apache.flink.runtime.util;
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.ConfigurationFileMigrationUtils;
 import org.apache.flink.configuration.ConfigurationUtils;
 import org.apache.flink.configuration.GlobalConfiguration;
 import org.apache.flink.configuration.IllegalConfigurationException;
@@ -228,13 +229,9 @@ public class ConfigurationParserUtils {
             throw e;
         }
 
-        Configuration configuration =
-                GlobalConfiguration.loadConfiguration(
-                        clusterConfiguration.getConfigDir(), null, true);
-
-        Configuration standardYamlConfig = new Configuration(true);
-        standardYamlConfig.addAll(configuration);
-
-        return ConfigurationUtils.convertConfigToWritableLines(standardYamlConfig, false);
+        return ConfigurationUtils.convertConfigToWritableLines(
+                ConfigurationFileMigrationUtils.migrateLegacyToStandardYamlConfig(
+                        clusterConfiguration.getConfigDir()),
+                false);
     }
 }
