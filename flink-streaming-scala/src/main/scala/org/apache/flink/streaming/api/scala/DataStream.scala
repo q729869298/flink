@@ -38,9 +38,10 @@ import org.apache.flink.streaming.api.functions.sink.SinkFunction
 import org.apache.flink.streaming.api.functions.timestamps.{AscendingTimestampExtractor, BoundedOutOfOrdernessTimestampExtractor}
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator
 import org.apache.flink.streaming.api.windowing.assigners._
-import org.apache.flink.streaming.api.windowing.time.Time
 import org.apache.flink.streaming.api.windowing.windows.{GlobalWindow, TimeWindow, Window}
 import org.apache.flink.util.{CloseableIterator, Collector}
+
+import java.time.Duration
 
 import scala.collection.JavaConverters._
 
@@ -738,55 +739,6 @@ class DataStream[T](stream: JavaStream[T]) {
       def filter(in: T) = cleanFun(in)
     }
     filter(filterFun)
-  }
-
-  /**
-   * Windows this DataStream into tumbling time windows.
-   *
-   * This is a shortcut for either `.window(TumblingEventTimeWindows.of(size))` or
-   * `.window(TumblingProcessingTimeWindows.of(size))` depending on the time characteristic set
-   * using [[StreamExecutionEnvironment.setStreamTimeCharacteristic]].
-   *
-   * Note: This operation can be inherently non-parallel since all elements have to pass through the
-   * same operator instance. (Only for special cases, such as aligned time windows is it possible to
-   * perform this operation in parallel).
-   *
-   * @param size
-   *   The size of the window.
-   *
-   * @deprecated
-   *   Please use [[windowAll()]] with either [[TumblingEventTimeWindows]] or
-   *   [[TumblingProcessingTimeWindows]]. For more information, see the deprecation notice on
-   *   [[org.apache.flink.streaming.api.TimeCharacteristic]].
-   */
-  @deprecated
-  def timeWindowAll(size: Time): AllWindowedStream[T, TimeWindow] = {
-    new AllWindowedStream(javaStream.timeWindowAll(size))
-  }
-
-  /**
-   * Windows this DataStream into sliding time windows.
-   *
-   * This is a shortcut for either `.window(SlidingEventTimeWindows.of(size, slide))` or
-   * `.window(SlidingProcessingTimeWindows.of(size, slide))` depending on the time characteristic
-   * set using [[StreamExecutionEnvironment.setStreamTimeCharacteristic]].
-   *
-   * Note: This operation can be inherently non-parallel since all elements have to pass through the
-   * same operator instance. (Only for special cases, such as aligned time windows is it possible to
-   * perform this operation in parallel).
-   *
-   * @param size
-   *   The size of the window.
-   *
-   * @deprecated
-   *   Please use [[windowAll()]] with either [[SlidingEventTimeWindows]] or
-   *   [[SlidingProcessingTimeWindows]]. For more information, see the deprecation notice on
-   *   [[org.apache.flink.streaming.api.TimeCharacteristic]].
-   */
-  @deprecated
-  def timeWindowAll(size: Time, slide: Time): AllWindowedStream[T, TimeWindow] = {
-    new AllWindowedStream(javaStream.timeWindowAll(size, slide))
-
   }
 
   /**
