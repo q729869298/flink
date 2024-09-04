@@ -93,6 +93,9 @@ public final class SpecificTypeStrategies {
     /** See {@link DecimalTimesTypeStrategy}. */
     public static final TypeStrategy DECIMAL_TIMES = new DecimalTimesTypeStrategy();
 
+    /** See {@link PercentileTypeStrategy}. */
+    public static final TypeStrategy PERCENTILE = new PercentileTypeStrategy();
+
     /** See {@link SourceWatermarkTypeStrategy}. */
     public static final TypeStrategy SOURCE_WATERMARK = new SourceWatermarkTypeStrategy();
 

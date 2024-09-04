@@ -27,6 +27,7 @@ import org.apache.flink.table.planner.functions.sql.{SqlFirstLastValueAggFunctio
 import org.apache.flink.table.planner.functions.utils.AggSqlFunction
 import org.apache.flink.table.runtime.functions.aggregate._
 import org.apache.flink.table.runtime.functions.aggregate.BatchApproxCountDistinctAggFunctions._
+import org.apache.flink.table.runtime.functions.aggregate.PercentileAggFunction.{MultiPercentileAggFunction, SinglePercentileAggFunction}
 import org.apache.flink.table.types.logical._
 import org.apache.flink.table.types.logical.LogicalTypeRoot._
 
@@ -165,8 +166,13 @@ class AggFunctionFactory(
         udagg.makeFunction(constants.toArray, argTypes)
 
       case bridge: BridgingSqlAggFunction =>
-        bridge.getDefinition.asInstanceOf[UserDefinedFunction]
-
+        bridge.getName match {
+          // built-in imperativeFunction
+          case "PERCENTILE" => createPercentileAggFunction(argTypes)
+          // DeclarativeAggregateFunction & UDF
+          case _ =>
+            bridge.getDefinition.asInstanceOf[UserDefinedFunction]
+        }
       case unSupported: SqlAggFunction =>
         throw new TableException(s"Unsupported Function: '${unSupported.getName}'")
     }
@@ -633,5 +639,25 @@ class AggFunctionFactory(
       types: Array[LogicalType],
       ignoreNulls: Boolean): UserDefinedFunction = {
     new ArrayAggFunction(types(0), ignoreNulls)
+  }
+
+  private def createPercentileAggFunction(
+      argTypes: Array[LogicalType]
+  ): UserDefinedFunction = {
+    if (argTypes.length == 2) {
+      argTypes(1) match {
+        case _: ArrayType =>
+          new MultiPercentileAggFunction(argTypes(0), null)
+        case _ =>
+          new SinglePercentileAggFunction(argTypes(0), null)
+      }
+    } else {
+      argTypes(1) match {
+        case _: ArrayType =>
+          new MultiPercentileAggFunction(argTypes(0), argTypes(2))
+        case _ =>
+          new SinglePercentileAggFunction(argTypes(0), argTypes(2))
+      }
+    }
   }
 }
