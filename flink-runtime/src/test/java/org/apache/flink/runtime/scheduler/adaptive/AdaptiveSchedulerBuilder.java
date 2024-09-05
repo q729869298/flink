@@ -17,7 +17,6 @@
 
 package org.apache.flink.runtime.scheduler.adaptive;
 
-import org.apache.flink.api.common.time.Time;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.failure.FailureEnricher;
 import org.apache.flink.runtime.blob.BlobWriter;
@@ -159,8 +158,8 @@ public class AdaptiveSchedulerBuilder {
         return this;
     }
 
-    public AdaptiveSchedulerBuilder setRpcTimeout(final Time rpcTimeout) {
-        this.rpcTimeout = rpcTimeout.toDuration();
+    public AdaptiveSchedulerBuilder setRpcTimeout(final Duration rpcTimeout) {
+        this.rpcTimeout = rpcTimeout;
         return this;
     }
 
@@ -249,7 +248,7 @@ public class AdaptiveSchedulerBuilder {
                         new DefaultExecutionDeploymentTracker(),
                         executorService,
                         executorService,
-                        Time.fromDuration(rpcTimeout),
+                        rpcTimeout,
                         jobManagerJobMetricGroup,
                         blobWriter,
                         shuffleMaster,

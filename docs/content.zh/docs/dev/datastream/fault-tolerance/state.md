@@ -302,7 +302,7 @@ env.execute()
 ```java
 import org.apache.flink.api.common.state.StateTtlConfig;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
-import org.apache.flink.api.common.time.Time;
+import java.time.Duration;
 
 StateTtlConfig ttlConfig = StateTtlConfig
     .newBuilder(Duration.ofSeconds(1))
@@ -318,7 +318,7 @@ stateDescriptor.enableTimeToLive(ttlConfig);
 ```scala
 import org.apache.flink.api.common.state.StateTtlConfig
 import org.apache.flink.api.common.state.ValueStateDescriptor
-import org.apache.flink.api.common.time.Time
+import java.time.Duration
 
 val ttlConfig = StateTtlConfig
     .newBuilder(Duration.ofSeconds(1))
@@ -438,7 +438,7 @@ ttl_config = StateTtlConfig \
 {{< tab "Java" >}}
 ```java
 import org.apache.flink.api.common.state.StateTtlConfig;
-import org.apache.flink.api.common.time.Time;
+import java.time.Duration;
 
 StateTtlConfig ttlConfig = StateTtlConfig
     .newBuilder(Duration.ofSeconds(1))
@@ -449,7 +449,7 @@ StateTtlConfig ttlConfig = StateTtlConfig
 {{< tab "Scala" >}}
 ```scala
 import org.apache.flink.api.common.state.StateTtlConfig
-import org.apache.flink.api.common.time.Time
+import java.time.Duration
 
 val ttlConfig = StateTtlConfig
     .newBuilder(Duration.ofSeconds(1))
