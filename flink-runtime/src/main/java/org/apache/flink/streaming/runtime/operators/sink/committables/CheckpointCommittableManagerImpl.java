@@ -23,7 +23,8 @@ import org.apache.flink.metrics.groups.SinkCommitterMetricGroup;
 import org.apache.flink.streaming.api.connector.sink2.CommittableSummary;
 import org.apache.flink.streaming.api.connector.sink2.CommittableWithLineage;
 
-import javax.annotation.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -44,6 +45,9 @@ class CheckpointCommittableManagerImpl<CommT> implements CheckpointCommittableMa
     private final int subtaskId;
     private final int numberOfSubtasks;
     private final SinkCommitterMetricGroup metricGroup;
+
+    private static final Logger LOG =
+            LoggerFactory.getLogger(CheckpointCommittableManagerImpl.class);
 
     CheckpointCommittableManagerImpl(
             int subtaskId,
@@ -86,7 +90,11 @@ class CheckpointCommittableManagerImpl<CommT> implements CheckpointCommittableMa
                 subtasksCommittableManagers.putIfAbsent(summary.getSubtaskId(), manager);
         if (existing != null) {
             throw new UnsupportedOperationException(
-                    "Currently it is not supported to update the CommittableSummary for a checkpoint coming from the same subtask. Please check the status of FLINK-25920");
+                    String.format(
+                            "Received duplicate committable summary for checkpoint %d (new=%s, old=%s). Please check the status of FLINK-25920",
+                            checkpointId, manager, existing));
+        } else {
+            LOG.debug("Setting the summary for checkpointId {} with {}", checkpointId, manager);
         }
     }
 
