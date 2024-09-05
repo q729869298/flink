@@ -23,6 +23,7 @@ import org.apache.flink.api.common.serialization.SerializationSchema.Initializat
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.api.common.typeutils.base.BooleanSerializer;
 import org.apache.flink.api.common.typeutils.base.array.BytePrimitiveArraySerializer;
 import org.apache.flink.api.connector.sink2.CommittingSinkWriter;
 import org.apache.flink.api.connector.sink2.InitContext;
@@ -90,6 +91,13 @@ class SinkWriterOperator<InputT, CommT> extends AbstractStreamOperator<Committab
     @Nullable private final SimpleVersionedSerializer<CommT> committableSerializer;
     private final List<CommT> legacyCommittables = new ArrayList<>();
 
+    /**
+     * Used to remember that EOI has already happened so that we don't emit the last committables of
+     * the final checkpoints twice.
+     */
+    private static final ListStateDescriptor<Boolean> END_OF_INPUT_STATE_DESC =
+            new ListStateDescriptor<>("end_of_input_state", BooleanSerializer.INSTANCE);
+
     /** The runtime information of the input element. */
     private final Context<InputT> context;
 
@@ -107,6 +115,7 @@ class SinkWriterOperator<InputT, CommT> extends AbstractStreamOperator<Committab
     private final MailboxExecutor mailboxExecutor;
 
     private boolean endOfInput = false;
+    private ListState<Boolean> endOfInputState;
 
     SinkWriterOperator(
             Sink<InputT> sink,
@@ -160,7 +169,19 @@ class SinkWriterOperator<InputT, CommT> extends AbstractStreamOperator<Committab
                 legacyCommitterState.clear();
             }
         }
-        sinkWriter = writerStateHandler.createWriter(initContext, context);
+
+        // use union state to ensure that rescaling works correctly
+        this.endOfInputState =
+                context.getOperatorStateStore().getUnionListState(END_OF_INPUT_STATE_DESC);
+        this.endOfInput = this.endOfInputState.get().iterator().hasNext();
+
+        // Don't bother creating a writer if we are already at the end of input.
+        // This attempt is only about running the committer, so avoid creating unnecessary
+        // transactions in the writer.
+        sinkWriter =
+                this.endOfInput
+                        ? new ClosedWriter<>()
+                        : writerStateHandler.createWriter(initContext, context);
     }
 
     @Override
@@ -178,7 +199,7 @@ class SinkWriterOperator<InputT, CommT> extends AbstractStreamOperator<Committab
     @Override
     public void prepareSnapshotPreBarrier(long checkpointId) throws Exception {
         super.prepareSnapshotPreBarrier(checkpointId);
-        if (!endOfInput) {
+        if (!this.endOfInput) {
             sinkWriter.flush(false);
             emitCommittables(checkpointId);
         }
@@ -195,9 +216,15 @@ class SinkWriterOperator<InputT, CommT> extends AbstractStreamOperator<Committab
 
     @Override
     public void endInput() throws Exception {
-        endOfInput = true;
-        sinkWriter.flush(true);
-        emitCommittables(Long.MAX_VALUE);
+        if (!this.endOfInput) {
+            this.endOfInput = true;
+            // endOfInputState is union state, so it's enough if one task adds something to it
+            if (getRuntimeContext().getTaskInfo().getIndexOfThisSubtask() == 0) {
+                endOfInputState.add(true);
+            }
+            sinkWriter.flush(true);
+            emitCommittables(Long.MAX_VALUE);
+        }
     }
 
     private void emitCommittables(long checkpointId) throws IOException, InterruptedException {
@@ -360,5 +387,18 @@ class SinkWriterOperator<InputT, CommT> extends AbstractStreamOperator<Committab
                     .<IN>getTypeSerializerIn(0, getRuntimeContext().getUserCodeClassLoader())
                     .duplicate();
         }
+    }
+
+    private static final class ClosedWriter<T> implements SinkWriter<T> {
+        @Override
+        public void write(T element, Context context) {
+            throw new IllegalStateException("Attempt to write to a closed writer: " + element);
+        }
+
+        @Override
+        public void flush(boolean endOfInput) {}
+
+        @Override
+        public void close() {}
     }
 }
