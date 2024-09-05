@@ -20,8 +20,6 @@ package org.apache.flink.streaming.api.connector.sink2;
 
 import org.assertj.core.api.AbstractObjectAssert;
 
-import java.util.OptionalLong;
-
 /**
  * Custom assertions for {@link
  * org.apache.flink.streaming.api.connector.sink2.CommittableWithLineage}.
@@ -38,7 +36,7 @@ public class CommittableWithLinageAssert
     }
 
     public CommittableWithLinageAssert hasCheckpointId(long checkpointId) {
-        return returns(OptionalLong.of(checkpointId), CommittableWithLineage::getCheckpointId);
+        return returns(checkpointId, CommittableWithLineage::getCheckpointId);
     }
 
     public CommittableWithLinageAssert hasSubtaskId(int subtaskId) {

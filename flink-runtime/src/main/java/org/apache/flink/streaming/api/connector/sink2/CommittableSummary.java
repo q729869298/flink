@@ -20,10 +20,7 @@ package org.apache.flink.streaming.api.connector.sink2;
 
 import org.apache.flink.annotation.Experimental;
 
-import javax.annotation.Nullable;
-
 import java.util.Objects;
-import java.util.OptionalLong;
 
 /**
  * This class tracks the information about committables belonging to one checkpoint coming from one
@@ -39,7 +36,7 @@ public class CommittableSummary<CommT> implements CommittableMessage<CommT> {
     /** May change after recovery. */
     private final int numberOfSubtasks;
 
-    @Nullable private final Long checkpointId;
+    private final long checkpointId;
     /** The number of committables coming from the given subtask in the particular checkpoint. */
     private final int numberOfCommittables;
     /** The number of committables that have not been successfully committed. */
@@ -50,7 +47,7 @@ public class CommittableSummary<CommT> implements CommittableMessage<CommT> {
     public CommittableSummary(
             int subtaskId,
             int numberOfSubtasks,
-            @Nullable Long checkpointId,
+            long checkpointId,
             int numberOfCommittables,
             int numberOfPendingCommittables,
             int numberOfFailedCommittables) {
@@ -70,8 +67,8 @@ public class CommittableSummary<CommT> implements CommittableMessage<CommT> {
         return numberOfSubtasks;
     }
 
-    public OptionalLong getCheckpointId() {
-        return checkpointId == null ? OptionalLong.empty() : OptionalLong.of(checkpointId);
+    public long getCheckpointId() {
+        return checkpointId;
     }
 
     public int getNumberOfCommittables() {

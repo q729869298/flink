@@ -208,8 +208,8 @@ class CommitterOperator<CommT> extends AbstractStreamOperator<CommittableMessage
 
         // in case of unaligned checkpoint, we may receive notifyCheckpointComplete before the
         // committables
-        OptionalLong checkpointId = element.getValue().getCheckpointId();
-        if (checkpointId.isPresent() && checkpointId.getAsLong() <= lastCompletedCheckpointId) {
+        long checkpointId = element.getValue().getCheckpointId();
+        if (checkpointId <= lastCompletedCheckpointId) {
             commitAndEmitCheckpoints();
         }
     }
