@@ -23,6 +23,7 @@ import org.apache.flink.api.connector.sink2.Committer;
 
 import javax.annotation.Nullable;
 
+import java.util.Objects;
 import java.util.OptionalLong;
 import java.util.function.Function;
 
@@ -58,5 +59,36 @@ public class CommittableWithLineage<CommT> implements CommittableMessage<CommT> 
 
     public <NewCommT> CommittableWithLineage<NewCommT> map(Function<CommT, NewCommT> mapper) {
         return new CommittableWithLineage<>(mapper.apply(committable), checkpointId, subtaskId);
+    }
+
+    @Override
+    public String toString() {
+        return "CommittableWithLineage{"
+                + "committable="
+                + committable
+                + ", checkpointId="
+                + checkpointId
+                + ", subtaskId="
+                + subtaskId
+                + '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        CommittableWithLineage<?> that = (CommittableWithLineage<?>) o;
+        return checkpointId == that.checkpointId
+                && subtaskId == that.subtaskId
+                && Objects.equals(committable, that.committable);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(committable, checkpointId, subtaskId);
     }
 }

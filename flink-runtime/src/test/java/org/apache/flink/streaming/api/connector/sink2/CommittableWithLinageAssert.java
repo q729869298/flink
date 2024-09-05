@@ -18,50 +18,30 @@
 
 package org.apache.flink.streaming.api.connector.sink2;
 
-import org.assertj.core.api.AbstractAssert;
+import org.assertj.core.api.AbstractObjectAssert;
 
-import javax.annotation.Nullable;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.OptionalLong;
 
 /**
  * Custom assertions for {@link
  * org.apache.flink.streaming.api.connector.sink2.CommittableWithLineage}.
  */
 public class CommittableWithLinageAssert
-        extends AbstractAssert<CommittableWithLinageAssert, CommittableWithLineage<?>> {
+        extends AbstractObjectAssert<CommittableWithLinageAssert, CommittableWithLineage<?>> {
 
     public CommittableWithLinageAssert(CommittableWithLineage<?> summary) {
         super(summary, CommittableWithLinageAssert.class);
     }
 
-    public CommittableWithLinageAssert isEqualTo(CommittableWithLineage<?> committableWithLineage) {
-        isNotNull();
-        assertThat(actual.getSubtaskId()).isEqualTo(committableWithLineage.getSubtaskId());
-        assertThat(actual.getCheckpointId()).isEqualTo(committableWithLineage.getCheckpointId());
-        assertThat(actual.getCommittable()).isEqualTo(committableWithLineage.getCommittable());
-        return this;
-    }
-
     public CommittableWithLinageAssert hasCommittable(Object committable) {
-        isNotNull();
-        assertThat(actual.getCommittable()).isEqualTo(committable);
-        return this;
+        return returns(committable, CommittableWithLineage::getCommittable);
     }
 
-    public CommittableWithLinageAssert hasCheckpointId(@Nullable Long checkpointId) {
-        isNotNull();
-        if (checkpointId == null) {
-            assertThat(actual.getCheckpointId()).isEmpty();
-        } else {
-            assertThat(actual.getCheckpointId()).hasValue(checkpointId);
-        }
-        return this;
+    public CommittableWithLinageAssert hasCheckpointId(long checkpointId) {
+        return returns(OptionalLong.of(checkpointId), CommittableWithLineage::getCheckpointId);
     }
 
     public CommittableWithLinageAssert hasSubtaskId(int subtaskId) {
-        isNotNull();
-        assertThat(actual.getSubtaskId()).isEqualTo(subtaskId);
-        return this;
+        return returns(subtaskId, CommittableWithLineage::getSubtaskId);
     }
 }

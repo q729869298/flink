@@ -22,6 +22,7 @@ import org.apache.flink.annotation.Experimental;
 
 import javax.annotation.Nullable;
 
+import java.util.Objects;
 import java.util.OptionalLong;
 
 /**
@@ -87,6 +88,52 @@ public class CommittableSummary<CommT> implements CommittableMessage<CommT> {
 
     public <NewCommT> CommittableSummary<NewCommT> map() {
         return new CommittableSummary<>(
+                subtaskId,
+                numberOfSubtasks,
+                checkpointId,
+                numberOfCommittables,
+                numberOfPendingCommittables,
+                numberOfFailedCommittables);
+    }
+
+    @Override
+    public String toString() {
+        return "CommittableSummary{"
+                + "subtaskId="
+                + subtaskId
+                + ", numberOfSubtasks="
+                + numberOfSubtasks
+                + ", checkpointId="
+                + checkpointId
+                + ", numberOfCommittables="
+                + numberOfCommittables
+                + ", numberOfPendingCommittables="
+                + numberOfPendingCommittables
+                + ", numberOfFailedCommittables="
+                + numberOfFailedCommittables
+                + '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        CommittableSummary<?> that = (CommittableSummary<?>) o;
+        return subtaskId == that.subtaskId
+                && numberOfSubtasks == that.numberOfSubtasks
+                && checkpointId == that.checkpointId
+                && numberOfCommittables == that.numberOfCommittables
+                && numberOfPendingCommittables == that.numberOfPendingCommittables
+                && numberOfFailedCommittables == that.numberOfFailedCommittables;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(
                 subtaskId,
                 numberOfSubtasks,
                 checkpointId,
