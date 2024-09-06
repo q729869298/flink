@@ -25,6 +25,8 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.blob.BlobServer;
 import org.apache.flink.runtime.blob.VoidBlobStore;
 import org.apache.flink.runtime.clusterframework.ApplicationStatus;
+import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
+import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutorServiceAdapter;
 import org.apache.flink.runtime.dispatcher.cleanup.TestingCleanupRunnerFactory;
 import org.apache.flink.runtime.dispatcher.cleanup.TestingResourceCleanerFactory;
 import org.apache.flink.runtime.entrypoint.ClusterEntrypoint;
@@ -107,6 +109,8 @@ public class MiniDispatcherTest extends TestLogger {
     private CompletableFuture<Void> localCleanupResultFuture;
     private CompletableFuture<Void> globalCleanupResultFuture;
 
+    private ComponentMainThreadExecutor mainThreadExecutor;
+
     @BeforeClass
     public static void setupClass() throws IOException {
         jobGraph = JobGraphTestUtils.singleNoOpJobGraph();
@@ -131,6 +135,8 @@ public class MiniDispatcherTest extends TestLogger {
 
         testingJobManagerRunnerFactory = new TestingJobMasterServiceLeadershipRunnerFactory();
         testingCleanupRunnerFactory = new TestingCleanupRunnerFactory();
+
+        mainThreadExecutor = ComponentMainThreadExecutorServiceAdapter.forMainThread();
 
         // the default setting shouldn't block the cleanup
         localCleanupResultFuture = FutureUtils.completedVoidFuture();
@@ -340,6 +346,7 @@ public class MiniDispatcherTest extends TestLogger {
             throws Exception {
         final JobManagerRunnerRegistry jobManagerRunnerRegistry =
                 new DefaultJobManagerRunnerRegistry(2);
+
         return new MiniDispatcher(
                 rpcService,
                 DispatcherId.generate(),
@@ -369,7 +376,7 @@ public class MiniDispatcherTest extends TestLogger {
                         // JobManagerRunnerRegistry needs to be added explicitly
                         // because cleaning it will trigger the closeAsync latch
                         // provided by TestingJobManagerRunner
-                        .withLocallyCleanableResource(jobManagerRunnerRegistry)
+                        .withLocallyCleanableInMainThreadResource(jobManagerRunnerRegistry)
                         .withGloballyCleanableResource(
                                 (jobId, ignoredExecutor) -> globalCleanupResultFuture)
                         .withLocallyCleanableResource(
