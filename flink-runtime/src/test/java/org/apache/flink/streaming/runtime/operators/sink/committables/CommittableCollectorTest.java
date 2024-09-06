@@ -20,6 +20,7 @@ package org.apache.flink.streaming.runtime.operators.sink.committables;
 
 import org.apache.flink.metrics.groups.SinkCommitterMetricGroup;
 import org.apache.flink.runtime.metrics.groups.MetricsGroupTestUtils;
+import org.apache.flink.streaming.api.connector.sink2.CommittableMessage;
 import org.apache.flink.streaming.api.connector.sink2.CommittableSummary;
 import org.apache.flink.streaming.api.connector.sink2.SinkV2Assertions;
 
@@ -50,13 +51,14 @@ class CommittableCollectorTest {
     void testGetEndOfInputCommittable() {
         final CommittableCollector<Integer> committableCollector =
                 new CommittableCollector<>(1, 1, METRIC_GROUP);
-        CommittableSummary<Integer> first = new CommittableSummary<>(1, 1, null, 1, 0, 0);
+        CommittableSummary<Integer> first =
+                new CommittableSummary<>(1, 1, CommittableMessage.EOI, 1, 0, 0);
         committableCollector.addMessage(first);
 
         CommittableManager<Integer> endOfInputCommittable =
                 committableCollector.getEndOfInputCommittable();
         assertThat(endOfInputCommittable).isNotNull();
         SinkV2Assertions.assertThat(endOfInputCommittable.getSummary())
-                .hasCheckpointId(Long.MAX_VALUE);
+                .hasCheckpointId(CommittableMessage.EOI);
     }
 }
