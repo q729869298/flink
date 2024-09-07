@@ -17,7 +17,6 @@
  */
 package org.apache.flink.table.planner.runtime.stream.table
 
-import org.apache.flink.api.common.time.Time
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.scala._
 import org.apache.flink.table.api._
@@ -33,6 +32,7 @@ import org.apache.flink.testutils.junit.extensions.parameterized.ParameterizedTe
 import org.apache.flink.types.Row
 
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.data.Percentage
 import org.junit.jupiter.api.{BeforeEach, TestTemplate}
 import org.junit.jupiter.api.extension.ExtendWith
 
@@ -564,5 +564,60 @@ class AggregateITCase(mode: StateBackendMode) extends StreamingWithStateTestBase
     // with the one calculated for plus()/minus(), which result in loosing a decimal digit.
     val expected = List("0.51760137,6172.51760137432650000000,6.17283945061728350000,1.66666667")
     assertThat(sink.getRetractResults).isEqualTo(expected)
+  }
+
+  @TestTemplate
+  def testSinglePercentile(): Unit = {
+    val t = failingDataSource(tupleData5)
+      .toTable(tEnv, 'a, 'b, 'c, 'd, 'e)
+      .groupBy('e)
+      .select('e, 'a.percentile(0.7), 'a.percentile(0.7, 'b))
+
+    val sink = new TestingRetractSink
+    t.toRetractStream[Row].addSink(sink).setParallelism(1)
+    env.execute()
+
+    val expected = List(List(4.2, 5.0), List(4.6, 5.0), List(5.0, 5.0))
+    val ERROR_RATE = Percentage.withPercentage(1e-6)
+
+    val result = sink.getRetractResults.sorted
+    for (i <- result.indices) {
+      val actual = result(i).split(",")
+      assertThat(actual(0).toInt).isEqualTo(i + 1)
+      for (j <- expected(i).indices) {
+        assertThat(actual(j + 1).toDouble).isCloseTo(expected(i)(j), ERROR_RATE)
+      }
+    }
+  }
+
+  @TestTemplate
+  def testMultiPercentile(): Unit = {
+    val t = failingDataSource(tupleData5)
+      .toTable(tEnv, 'a, 'b, 'c, 'd, 'e)
+      .groupBy('e)
+      .select(
+        'e,
+        'a.percentile(array(0.3, 0.1, 0.7)).as('wo),
+        'a.percentile(array(0.3, 0.1, 0.7), 'b).as('w))
+      .select('e, 'wo.at(1), 'wo.at(2), 'wo.at(3), 'w.at(1), 'w.at(2), 'w.at(3))
+
+    val sink = new TestingRetractSink
+    t.toRetractStream[Row].addSink(sink).setParallelism(1)
+    env.execute()
+
+    val expected = List(
+      List(1.8, 1.0, 4.2, 4.0, 2.0, 5.0),
+      List(3.0, 2.0, 4.6, 4.0, 3.0, 5.0),
+      List(3.4, 3.0, 5.0, 5.0, 3.0, 5.0))
+    val ERROR_RATE = Percentage.withPercentage(1e-6)
+
+    val result = sink.getRetractResults.sorted
+    for (i <- result.indices) {
+      val actual = result(i).split(",")
+      assertThat(actual(0).toInt).isEqualTo(i + 1)
+      for (j <- expected(i).indices) {
+        assertThat(actual(j + 1).toDouble).isCloseTo(expected(i)(j), ERROR_RATE)
+      }
+    }
   }
 }
