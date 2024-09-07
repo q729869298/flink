@@ -23,7 +23,8 @@ from pyflink.common.serialization import SimpleStringSchema
 from pyflink.common.typeinfo import Types
 from pyflink.common.watermark_strategy import TimestampAssigner, WatermarkStrategy
 from pyflink.datastream import StreamExecutionEnvironment, TimeCharacteristic
-from pyflink.datastream.connectors import FlinkKafkaProducer, FlinkKafkaConsumer
+from pyflink.datastream.connectors.kafka import KafkaSource, KafkaSink, KafkaOffsetsInitializer, \
+    KafkaRecordSerializationSchema
 from pyflink.datastream.formats.json import JsonRowDeserializationSchema
 from pyflink.datastream.functions import KeyedProcessFunction
 
@@ -42,19 +43,31 @@ def python_data_stream_example():
                                 [Types.LONG(), Types.LONG(), Types.DOUBLE(), Types.INT(),
                                  Types.INT()])
     json_row_schema = JsonRowDeserializationSchema.builder().type_info(type_info).build()
-    kafka_props = {'bootstrap.servers': 'localhost:9092', 'group.id': 'pyflink-e2e-source'}
 
-    kafka_consumer = FlinkKafkaConsumer("timer-stream-source", json_row_schema, kafka_props)
-    kafka_producer = FlinkKafkaProducer("timer-stream-sink", SimpleStringSchema(), kafka_props)
+    source = KafkaSource.builder() \
+        .set_bootstrap_servers('localhost:9092') \
+        .set_group_id('pyflink-e2e-source') \
+        .set_topic_pattern("timer-stream-source") \
+        .set_value_only_deserializer(json_row_schema) \
+        .set_starting_offsets(KafkaOffsetsInitializer.earliest()) \
+        .build()
+
+    record_serializer = KafkaRecordSerializationSchema.builder() \
+        .set_topic('timer-stream-sink') \
+        .set_value_serialization_schema(SimpleStringSchema()) \
+        .build()
+    sink = KafkaSink.builder() \
+        .set_bootstrap_servers('localhost:9092') \
+        .set_record_serializer(record_serializer) \
+        .build()
 
     watermark_strategy = WatermarkStrategy.for_bounded_out_of_orderness(Duration.of_seconds(5))\
         .with_timestamp_assigner(KafkaRowTimestampAssigner())
 
-    kafka_consumer.set_start_from_earliest()
-    ds = env.add_source(kafka_consumer).assign_timestamps_and_watermarks(watermark_strategy)
+    ds = env.from_source(source, watermark_strategy, source_name="kafka source")
     ds.key_by(MyKeySelector(), key_type=Types.LONG()) \
         .process(MyProcessFunction(), output_type=Types.STRING()) \
-        .add_sink(kafka_producer)
+        .sink_to(sink)
     env.execute_async("test data stream timer")
 
 
