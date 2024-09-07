@@ -97,7 +97,8 @@ public class CheckpointTestUtils {
                                 + numFullyFinishedTaskStates);
 
         for (int stateIdx = 0; stateIdx < numAllRunningTaskStates; ++stateIdx) {
-            OperatorState taskState = new OperatorState(new OperatorID(), numSubtasksPerTask, 128);
+            OperatorState taskState =
+                    new OperatorState(null, null, new OperatorID(), numSubtasksPerTask, 128);
             randomlySetCoordinatorState(taskState, random);
             randomlySetSubtaskState(
                     taskState, IntStream.range(0, numSubtasksPerTask).toArray(), random, basePath);
@@ -105,7 +106,8 @@ public class CheckpointTestUtils {
         }
 
         for (int stateIdx = 0; stateIdx < numPartlyFinishedTaskStates; ++stateIdx) {
-            OperatorState taskState = new OperatorState(new OperatorID(), numSubtasksPerTask, 128);
+            OperatorState taskState =
+                    new OperatorState(null, null, new OperatorID(), numSubtasksPerTask, 128);
             randomlySetCoordinatorState(taskState, random);
             randomlySetSubtaskState(
                     taskState,
@@ -122,7 +124,8 @@ public class CheckpointTestUtils {
 
         for (int stateIdx = 0; stateIdx < numFullyFinishedTaskStates; ++stateIdx) {
             taskStates.add(
-                    new FullyFinishedOperatorState(new OperatorID(), numSubtasksPerTask, 128));
+                    new FullyFinishedOperatorState(
+                            null, null, new OperatorID(), numSubtasksPerTask, 128));
         }
 
         return taskStates;
