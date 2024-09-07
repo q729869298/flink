@@ -26,7 +26,6 @@ import org.apache.flink.streaming.api.scala.function.{AllWindowFunction, Process
 import org.apache.flink.streaming.api.transformations.OneInputTransformation
 import org.apache.flink.streaming.api.windowing.assigners._
 import org.apache.flink.streaming.api.windowing.evictors.CountEvictor
-import org.apache.flink.streaming.api.windowing.time.Time
 import org.apache.flink.streaming.api.windowing.triggers.{CountTrigger, EventTimeTrigger, ProcessingTimeTrigger, Trigger}
 import org.apache.flink.streaming.api.windowing.windows.{TimeWindow, Window}
 import org.apache.flink.streaming.runtime.operators.windowing._
@@ -37,6 +36,8 @@ import org.apache.flink.util.Collector
 import org.junit.{Rule, Test}
 import org.junit.Assert._
 import org.junit.rules.ExpectedException
+
+import java.time.Duration
 
 /**
  * These tests verify that the api calls on [[AllWindowedStream]] instantiate the correct window
@@ -67,7 +68,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     source
-      .windowAll(SlidingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .windowAll(SlidingEventTimeWindows.of(Duration.ofSeconds(1), Duration.ofMillis(100)))
       .reduce(new RichReduceFunction[(String, Int)] {
         override def reduce(value1: (String, Int), value2: (String, Int)) = null
       })
@@ -85,7 +86,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     source
-      .windowAll(SlidingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .windowAll(SlidingEventTimeWindows.of(Duration.ofSeconds(1), Duration.ofMillis(100)))
       .aggregate(new DummyRichAggregator())
 
     fail("exception was not thrown")
@@ -106,7 +107,7 @@ class AllWindowTranslationTest {
 
     env
       .fromElements("Hello", "Ciao")
-      .windowAll(EventTimeSessionWindows.withGap(Time.seconds(5)))
+      .windowAll(EventTimeSessionWindows.withGap(Duration.ofSeconds(5)))
       .trigger(new Trigger[String, TimeWindow]() {
         def onElement(
             element: String,
@@ -131,7 +132,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(EventTimeSessionWindows.withGap(Time.seconds(1)))
+      .windowAll(EventTimeSessionWindows.withGap(Duration.ofSeconds(1)))
       .evictor(CountEvictor.of(2))
       .process(new TestProcessAllWindowFunction)
 
@@ -166,7 +167,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(SlidingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .windowAll(SlidingEventTimeWindows.of(Duration.ofSeconds(1), Duration.ofMillis(100)))
       .reduce(new DummyReducer)
 
     val transform = window1.javaStream.getTransformation
@@ -196,7 +197,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(SlidingProcessingTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .windowAll(SlidingProcessingTimeWindows.of(Duration.ofSeconds(1), Duration.ofMillis(100)))
       .reduce(new DummyReducer)
 
     val transform = window1.javaStream.getTransformation
@@ -226,7 +227,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(SlidingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .windowAll(SlidingEventTimeWindows.of(Duration.ofSeconds(1), Duration.ofMillis(100)))
       .reduce((x, _) => x)
 
     val transform = window1.javaStream.getTransformation
@@ -256,7 +257,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(TumblingEventTimeWindows.of(Time.seconds(1)))
+      .windowAll(TumblingEventTimeWindows.of(Duration.ofSeconds(1)))
       .reduce(
         new DummyReducer,
         new ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
@@ -294,7 +295,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(1)))
+      .windowAll(TumblingProcessingTimeWindows.of(Duration.ofSeconds(1)))
       .reduce(
         new DummyReducer,
         new ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
@@ -332,7 +333,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(TumblingEventTimeWindows.of(Time.seconds(1)))
+      .windowAll(TumblingEventTimeWindows.of(Duration.ofSeconds(1)))
       .reduce(
         new DummyReducer,
         new ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
@@ -372,7 +373,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(1)))
+      .windowAll(TumblingProcessingTimeWindows.of(Duration.ofSeconds(1)))
       .reduce(
         new DummyReducer,
         new ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
@@ -410,7 +411,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(TumblingEventTimeWindows.of(Time.seconds(1)))
+      .windowAll(TumblingEventTimeWindows.of(Duration.ofSeconds(1)))
       .apply(
         new DummyReducer,
         new AllWindowFunction[(String, Int), (String, Int), TimeWindow] {
@@ -448,7 +449,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(TumblingEventTimeWindows.of(Time.seconds(1)))
+      .windowAll(TumblingEventTimeWindows.of(Duration.ofSeconds(1)))
       .reduce(
         (x, _) => x,
         (_: TimeWindow, in: Iterable[(String, Int)], out: Collector[(String, Int)]) =>
@@ -486,7 +487,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(SlidingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .windowAll(SlidingEventTimeWindows.of(Duration.ofSeconds(1), Duration.ofMillis(100)))
       .aggregate(new DummyAggregator())
 
     val transform = window1.javaStream.getTransformation
@@ -516,7 +517,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(SlidingProcessingTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .windowAll(SlidingProcessingTimeWindows.of(Duration.ofSeconds(1), Duration.ofMillis(100)))
       .aggregate(new DummyAggregator())
 
     val transform = window1.javaStream.getTransformation
@@ -546,7 +547,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(TumblingEventTimeWindows.of(Time.seconds(1)))
+      .windowAll(TumblingEventTimeWindows.of(Duration.ofSeconds(1)))
       .aggregate(new DummyAggregator(), new TestAllWindowFunction())
 
     val transform = window1.javaStream.getTransformation
@@ -576,7 +577,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(1)))
+      .windowAll(TumblingProcessingTimeWindows.of(Duration.ofSeconds(1)))
       .aggregate(new DummyAggregator(), new TestAllWindowFunction())
 
     val transform = window1.javaStream.getTransformation
@@ -606,7 +607,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(TumblingEventTimeWindows.of(Time.seconds(1)))
+      .windowAll(TumblingEventTimeWindows.of(Duration.ofSeconds(1)))
       .aggregate(new DummyAggregator(), new TestProcessAllWindowFunction())
 
     val transform = window1.javaStream.getTransformation
@@ -636,7 +637,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(1)))
+      .windowAll(TumblingProcessingTimeWindows.of(Duration.ofSeconds(1)))
       .aggregate(new DummyAggregator(), new TestProcessAllWindowFunction())
 
     val transform = window1.javaStream.getTransformation
@@ -666,7 +667,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(TumblingEventTimeWindows.of(Time.seconds(1)))
+      .windowAll(TumblingEventTimeWindows.of(Duration.ofSeconds(1)))
       .aggregate(
         new DummyAggregator(),
         {
@@ -707,7 +708,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(TumblingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .windowAll(TumblingEventTimeWindows.of(Duration.ofSeconds(1), Duration.ofMillis(100)))
       .apply(new AllWindowFunction[(String, Int), (String, Int), TimeWindow] {
         override def apply(
             window: TimeWindow,
@@ -742,7 +743,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .windowAll(TumblingProcessingTimeWindows.of(Duration.ofSeconds(1), Duration.ofMillis(100)))
       .apply(new AllWindowFunction[(String, Int), (String, Int), TimeWindow] {
         override def apply(
             window: TimeWindow,
@@ -777,7 +778,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(TumblingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .windowAll(TumblingEventTimeWindows.of(Duration.ofSeconds(1), Duration.ofMillis(100)))
       .process(new ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
         override def process(
             context: Context,
@@ -812,7 +813,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .windowAll(TumblingProcessingTimeWindows.of(Duration.ofSeconds(1), Duration.ofMillis(100)))
       .process(new ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
         override def process(
             context: Context,
@@ -847,7 +848,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(TumblingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .windowAll(TumblingEventTimeWindows.of(Duration.ofSeconds(1), Duration.ofMillis(100)))
       .apply((window, in, out: Collector[(String, Int)]) => in.foreach(x => out.collect(x)))
 
     val transform = window1.javaStream.getTransformation
@@ -877,7 +878,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(SlidingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .windowAll(SlidingEventTimeWindows.of(Duration.ofSeconds(1), Duration.ofMillis(100)))
       .trigger(CountTrigger.of(1))
       .reduce(new DummyReducer)
 
@@ -908,7 +909,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(TumblingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .windowAll(TumblingEventTimeWindows.of(Duration.ofSeconds(1), Duration.ofMillis(100)))
       .trigger(CountTrigger.of(1))
       .apply(new AllWindowFunction[(String, Int), (String, Int), TimeWindow] {
         override def apply(
@@ -944,7 +945,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(TumblingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .windowAll(TumblingEventTimeWindows.of(Duration.ofSeconds(1), Duration.ofMillis(100)))
       .trigger(CountTrigger.of(1))
       .process(new ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
         override def process(
@@ -980,7 +981,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(SlidingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .windowAll(SlidingEventTimeWindows.of(Duration.ofSeconds(1), Duration.ofMillis(100)))
       .evictor(CountEvictor.of(100))
       .reduce(new DummyReducer)
 
@@ -1012,7 +1013,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(TumblingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .windowAll(TumblingEventTimeWindows.of(Duration.ofSeconds(1), Duration.ofMillis(100)))
       .evictor(CountEvictor.of(100))
       .apply(new AllWindowFunction[(String, Int), (String, Int), TimeWindow] {
         override def apply(
@@ -1049,7 +1050,7 @@ class AllWindowTranslationTest {
     val source = env.fromElements(("hello", 1), ("hello", 2))
 
     val window1 = source
-      .windowAll(TumblingEventTimeWindows.of(Time.seconds(1), Time.milliseconds(100)))
+      .windowAll(TumblingEventTimeWindows.of(Duration.ofSeconds(1), Duration.ofMillis(100)))
       .evictor(CountEvictor.of(100))
       .process(new ProcessAllWindowFunction[(String, Int), (String, Int), TimeWindow] {
         override def process(

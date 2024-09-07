@@ -30,9 +30,10 @@ import org.apache.flink.streaming.api.functions.co.ProcessJoinFunction
 import org.apache.flink.streaming.api.functions.query.{QueryableAppendingStateOperator, QueryableValueStateOperator}
 import org.apache.flink.streaming.api.scala.function.StatefulFunction
 import org.apache.flink.streaming.api.windowing.assigners._
-import org.apache.flink.streaming.api.windowing.time.Time
-import org.apache.flink.streaming.api.windowing.windows.{GlobalWindow, TimeWindow, Window}
+import org.apache.flink.streaming.api.windowing.windows.{GlobalWindow, Window}
 import org.apache.flink.util.Collector
+
+import java.time.Duration
 
 /**
  * @deprecated
@@ -162,9 +163,9 @@ class KeyedStream[T, K](javaStream: KeyedJavaStream[T, K]) extends DataStream[T]
      *   The upper bound. Needs to be bigger than or equal to the lowerBound
      */
     @PublicEvolving
-    def between(lowerBound: Time, upperBound: Time): IntervalJoined[IN1, IN2, KEY] = {
-      val lowerMillis = lowerBound.toMilliseconds
-      val upperMillis = upperBound.toMilliseconds
+    def between(lowerBound: Duration, upperBound: Duration): IntervalJoined[IN1, IN2, KEY] = {
+      val lowerMillis = lowerBound.toMillis
+      val upperMillis = upperBound.toMillis
       new IntervalJoined[IN1, IN2, KEY](streamOne, streamTwo, lowerMillis, upperMillis)
     }
   }
@@ -235,46 +236,6 @@ class KeyedStream[T, K](javaStream: KeyedJavaStream[T, K]) extends DataStream[T]
   // ------------------------------------------------------------------------
   //  Windowing
   // ------------------------------------------------------------------------
-
-  /**
-   * Windows this [[KeyedStream]] into tumbling time windows.
-   *
-   * This is a shortcut for either `.window(TumblingEventTimeWindows.of(size))` or
-   * `.window(TumblingProcessingTimeWindows.of(size))` depending on the time characteristic set
-   * using [[StreamExecutionEnvironment.setStreamTimeCharacteristic()]]
-   *
-   * @param size
-   *   The size of the window.
-   *
-   * @deprecated
-   *   Please use [[window()]] with either [[TumblingEventTimeWindows]] or
-   *   [[TumblingProcessingTimeWindows]]. For more information, see the deprecation notice on
-   *   [[org.apache.flink.streaming.api.TimeCharacteristic]].
-   */
-  @deprecated
-  def timeWindow(size: Time): WindowedStream[T, K, TimeWindow] = {
-    new WindowedStream(javaStream.timeWindow(size))
-  }
-
-  /**
-   * Windows this [[KeyedStream]] into sliding time windows.
-   *
-   * This is a shortcut for either `.window(SlidingEventTimeWindows.of(size))` or
-   * `.window(SlidingProcessingTimeWindows.of(size))` depending on the time characteristic set using
-   * [[StreamExecutionEnvironment.setStreamTimeCharacteristic()]]
-   *
-   * @param size
-   *   The size of the window.
-   *
-   * @deprecated
-   *   Please use [[window()]] with either [[SlidingEventTimeWindows]] or
-   *   [[SlidingProcessingTimeWindows]]. For more information, see the deprecation notice on
-   *   [[org.apache.flink.streaming.api.TimeCharacteristic]].
-   */
-  @deprecated
-  def timeWindow(size: Time, slide: Time): WindowedStream[T, K, TimeWindow] = {
-    new WindowedStream(javaStream.timeWindow(size, slide))
-  }
 
   /**
    * Windows this [[KeyedStream]] into sliding count windows.

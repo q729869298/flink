@@ -26,11 +26,12 @@ import org.apache.flink.streaming.api.functions.aggregation.AggregationFunction.
 import org.apache.flink.streaming.api.scala.function.{AllWindowFunction, ProcessAllWindowFunction}
 import org.apache.flink.streaming.api.scala.function.util.{ScalaAllWindowFunction, ScalaAllWindowFunctionWrapper, ScalaProcessAllWindowFunctionWrapper, ScalaReduceFunction}
 import org.apache.flink.streaming.api.windowing.evictors.Evictor
-import org.apache.flink.streaming.api.windowing.time.Time
 import org.apache.flink.streaming.api.windowing.triggers.Trigger
 import org.apache.flink.streaming.api.windowing.windows.Window
 import org.apache.flink.util.Collector
 import org.apache.flink.util.Preconditions.checkNotNull
+
+import java.time.Duration
 
 /**
  * A [[AllWindowedStream]] represents a data stream where the stream of elements is split into
@@ -70,7 +71,7 @@ class AllWindowedStream[T, W <: Window](javaStream: JavaAllWStream[T, W]) {
    * thrown.
    */
   @PublicEvolving
-  def allowedLateness(lateness: Time): AllWindowedStream[T, W] = {
+  def allowedLateness(lateness: Duration): AllWindowedStream[T, W] = {
     javaStream.allowedLateness(lateness)
     this
   }

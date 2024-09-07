@@ -23,11 +23,10 @@ import org.apache.flink.streaming.api.scala.extensions.acceptPartialFunctions
 import org.apache.flink.streaming.api.scala.extensions.base.AcceptPFTestBase
 import org.apache.flink.streaming.api.scala.extensions.data.KeyValuePair
 import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows
-import org.apache.flink.streaming.api.windowing.time.Time
 
 import org.junit.Test
 
-import java.util.concurrent.TimeUnit
+import java.time.Duration
 
 class OnJoinedStreamTest extends AcceptPFTestBase {
 
@@ -39,7 +38,7 @@ class OnJoinedStreamTest extends AcceptPFTestBase {
         .where { case (id, _) => id }
         .equalTo { case (id, _) => id }
         .window {
-          TumblingProcessingTimeWindows.of(Time.of(1, TimeUnit.SECONDS))
+          TumblingProcessingTimeWindows.of(Duration.ofSeconds(1))
         }
         .projecting { case ((_, v1), (_, v2)) => s"$v1 $v2" }
     assert(
@@ -55,7 +54,7 @@ class OnJoinedStreamTest extends AcceptPFTestBase {
         .where { case KeyValuePair(id, _) => id }
         .equalTo { case KeyValuePair(id, _) => id }
         .window {
-          TumblingProcessingTimeWindows.of(Time.of(1, TimeUnit.SECONDS))
+          TumblingProcessingTimeWindows.of(Duration.ofSeconds(1))
         }
         .projecting { case (KeyValuePair(_, v1), KeyValuePair(_, v2)) => s"$v1 $v2" }
     assert(

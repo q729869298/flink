@@ -18,9 +18,10 @@
 package org.apache.flink.streaming.api.scala
 
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows
-import org.apache.flink.streaming.api.windowing.time.Time
 
 import org.junit.{Assert, Test}
+
+import java.time.Duration
 
 /** Unit test for [[org.apache.flink.streaming.api.scala.JoinedStreams]] */
 class JoinedStreamsTest {
@@ -29,17 +30,17 @@ class JoinedStreamsTest {
   private val dataStream1 = env.fromElements("a1", "a2", "a3")
   private val dataStream2 = env.fromElements("a1", "a2")
   private val keySelector = (s: String) => s
-  private val tsAssigner = TumblingEventTimeWindows.of(Time.milliseconds(1))
+  private val tsAssigner = TumblingEventTimeWindows.of(Duration.ofMillis(1))
 
   @Test
   def testSetAllowedLateness(): Unit = {
-    val lateness = Time.milliseconds(42)
+    val lateness = Duration.ofMillis(42)
     val withLateness = dataStream1
       .join(dataStream2)
       .where(keySelector)
       .equalTo(keySelector)
       .window(tsAssigner)
       .allowedLateness(lateness)
-    Assert.assertEquals(lateness.toMilliseconds, withLateness.allowedLateness.toMilliseconds)
+    Assert.assertEquals(lateness.toMillis, withLateness.allowedLateness.toMillis)
   }
 }

@@ -25,14 +25,13 @@ import org.apache.flink.streaming.api.functions.source.SourceFunction
 import org.apache.flink.streaming.api.scala.testutils.{CheckingIdentityRichAllWindowFunction, CheckingIdentityRichProcessAllWindowFunction, CheckingIdentityRichProcessWindowFunction, CheckingIdentityRichWindowFunction}
 import org.apache.flink.streaming.api.watermark.Watermark
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows
-import org.apache.flink.streaming.api.windowing.time.Time
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow
 import org.apache.flink.test.util.AbstractTestBaseJUnit4
 
 import org.junit.Assert._
 import org.junit.Test
 
-import java.util.concurrent.TimeUnit
+import java.time.Duration
 
 import scala.collection.mutable
 
@@ -71,7 +70,7 @@ class WindowReduceITCase extends AbstractTestBaseJUnit4 {
 
     source1
       .keyBy(0)
-      .window(TumblingEventTimeWindows.of(Time.of(3, TimeUnit.MILLISECONDS)))
+      .window(TumblingEventTimeWindows.of(Duration.ofMillis(3)))
       .reduce((a, b) => (a._1 + b._1, a._2 + b._2))
       .addSink(new SinkFunction[(String, Int)]() {
         override def invoke(value: (String, Int)) {
@@ -122,7 +121,7 @@ class WindowReduceITCase extends AbstractTestBaseJUnit4 {
 
     source1
       .keyBy(0)
-      .window(TumblingEventTimeWindows.of(Time.of(3, TimeUnit.MILLISECONDS)))
+      .window(TumblingEventTimeWindows.of(Duration.ofMillis(3)))
       .reduce(
         reduceFunc,
         new CheckingIdentityRichWindowFunction[(String, Int), Tuple, TimeWindow]())
@@ -177,7 +176,7 @@ class WindowReduceITCase extends AbstractTestBaseJUnit4 {
 
     source1
       .keyBy(0)
-      .window(TumblingEventTimeWindows.of(Time.of(3, TimeUnit.MILLISECONDS)))
+      .window(TumblingEventTimeWindows.of(Duration.ofMillis(3)))
       .reduce(
         reduceFunc,
         new CheckingIdentityRichProcessWindowFunction[(String, Int), Tuple, TimeWindow]())
@@ -224,7 +223,7 @@ class WindowReduceITCase extends AbstractTestBaseJUnit4 {
       .assignTimestampsAndWatermarks(new WindowReduceITCase.Tuple2TimestampExtractor)
 
     source1
-      .windowAll(TumblingEventTimeWindows.of(Time.of(3, TimeUnit.MILLISECONDS)))
+      .windowAll(TumblingEventTimeWindows.of(Duration.ofMillis(3)))
       .reduce((a, b) => (a._1 + b._1, a._2 + b._2))
       .addSink(new SinkFunction[(String, Int)]() {
         override def invoke(value: (String, Int)) {
@@ -274,7 +273,7 @@ class WindowReduceITCase extends AbstractTestBaseJUnit4 {
       .assignTimestampsAndWatermarks(new WindowReduceITCase.Tuple2TimestampExtractor)
 
     source1
-      .windowAll(TumblingEventTimeWindows.of(Time.of(3, TimeUnit.MILLISECONDS)))
+      .windowAll(TumblingEventTimeWindows.of(Duration.ofMillis(3)))
       .reduce(reduceFunc, new CheckingIdentityRichAllWindowFunction[(String, Int), TimeWindow]())
       .addSink(new SinkFunction[(String, Int)]() {
         override def invoke(value: (String, Int)) {
@@ -326,7 +325,7 @@ class WindowReduceITCase extends AbstractTestBaseJUnit4 {
       .assignTimestampsAndWatermarks(new WindowReduceITCase.Tuple2TimestampExtractor)
 
     source1
-      .windowAll(TumblingEventTimeWindows.of(Time.of(3, TimeUnit.MILLISECONDS)))
+      .windowAll(TumblingEventTimeWindows.of(Duration.ofMillis(3)))
       .reduce(
         reduceFunc,
         new CheckingIdentityRichProcessAllWindowFunction[(String, Int), TimeWindow]())

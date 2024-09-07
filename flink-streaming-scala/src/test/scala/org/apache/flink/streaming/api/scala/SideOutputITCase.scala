@@ -21,7 +21,6 @@ import org.apache.flink.streaming.api.functions.{AssignerWithPunctuatedWatermark
 import org.apache.flink.streaming.api.scala.function.{ProcessAllWindowFunction, ProcessWindowFunction}
 import org.apache.flink.streaming.api.watermark.Watermark
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows
-import org.apache.flink.streaming.api.windowing.time.Time
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow
 import org.apache.flink.test.streaming.runtime.util.TestListResultSink
 import org.apache.flink.test.util.AbstractTestBaseJUnit4
@@ -30,6 +29,7 @@ import org.apache.flink.util.Collector
 import org.junit.Assert._
 import org.junit.Test
 
+import java.time.Duration
 import java.util
 
 /** Integration test for streaming programs using side outputs. */
@@ -154,7 +154,7 @@ class SideOutputITCase extends AbstractTestBaseJUnit4 {
 
     val windowOperator = dataStream
       .assignTimestampsAndWatermarks(new TestAssigner)
-      .windowAll(TumblingEventTimeWindows.of(Time.milliseconds(1)))
+      .windowAll(TumblingEventTimeWindows.of(Duration.ofMillis(1)))
       .sideOutputLateData(lateDataTag)
       .process(new ProcessAllWindowFunction[(String, Int), String, TimeWindow] {
         override def process(
@@ -195,7 +195,7 @@ class SideOutputITCase extends AbstractTestBaseJUnit4 {
     val windowOperator = dataStream
       .assignTimestampsAndWatermarks(new TestAssigner)
       .keyBy(i => i._1)
-      .window(TumblingEventTimeWindows.of(Time.milliseconds(1)))
+      .window(TumblingEventTimeWindows.of(Duration.ofMillis(1)))
       .sideOutputLateData(lateDataTag)
       .process(new ProcessWindowFunction[(String, Int), String, String, TimeWindow] {
         override def process(
@@ -237,7 +237,7 @@ class SideOutputITCase extends AbstractTestBaseJUnit4 {
     val windowOperator = dataStream
       .assignTimestampsAndWatermarks(new TestAssigner)
       .keyBy(i => i._1)
-      .window(TumblingEventTimeWindows.of(Time.milliseconds(1)))
+      .window(TumblingEventTimeWindows.of(Duration.ofMillis(1)))
       .process(new ProcessWindowFunction[(String, Int), String, String, TimeWindow] {
         override def process(
             key: String,
@@ -280,7 +280,7 @@ class SideOutputITCase extends AbstractTestBaseJUnit4 {
 
     val windowOperator = dataStream
       .assignTimestampsAndWatermarks(new TestAssigner)
-      .windowAll(TumblingEventTimeWindows.of(Time.milliseconds(1)))
+      .windowAll(TumblingEventTimeWindows.of(Duration.ofMillis(1)))
       .process(new ProcessAllWindowFunction[(String, Int), String, TimeWindow] {
         override def process(
             context: Context,

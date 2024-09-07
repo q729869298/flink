@@ -18,12 +18,10 @@
 package org.apache.flink.streaming.api.scala
 
 import org.apache.flink.api.common.state.{ListStateDescriptor, ReducingStateDescriptor}
-import org.apache.flink.api.java.tuple.Tuple
 import org.apache.flink.streaming.api.TimeCharacteristic
-import org.apache.flink.streaming.api.scala.function.WindowFunction
+import org.apache.flink.streaming.api.scala.function.AllWindowFunction
 import org.apache.flink.streaming.api.transformations.OneInputTransformation
-import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows
-import org.apache.flink.streaming.api.windowing.time.Time
+import org.apache.flink.streaming.api.windowing.assigners.{SlidingEventTimeWindows, TumblingProcessingTimeWindows}
 import org.apache.flink.streaming.api.windowing.triggers.EventTimeTrigger
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow
 import org.apache.flink.streaming.runtime.operators.windowing.WindowOperator
@@ -33,7 +31,7 @@ import org.apache.flink.util.Collector
 import org.junit.Assert._
 import org.junit.Test
 
-import java.util.concurrent.TimeUnit
+import java.time.Duration
 
 /**
  * These tests verify that the api calls on [[WindowedStream]] that use the "time" shortcut
@@ -56,7 +54,7 @@ class TimeWindowTranslationTest extends AbstractTestBaseJUnit4 {
 
     val window1 = source
       .keyBy(0)
-      .timeWindow(Time.seconds(1), Time.milliseconds(100))
+      .windowAll(TumblingProcessingTimeWindows.of(Duration.ofSeconds(1), Duration.ofMillis(100)))
       .reduce(reducer)
 
     val transform1 = window1.javaStream.getTransformation
@@ -68,13 +66,13 @@ class TimeWindowTranslationTest extends AbstractTestBaseJUnit4 {
 
     val window2 = source
       .keyBy(0)
-      .timeWindow(Time.minutes(1))
-      .apply(new WindowFunction[(String, Int), (String, Int), Tuple, TimeWindow]() {
-        def apply(
-            key: Tuple,
+      .windowAll(TumblingProcessingTimeWindows
+        .of(Duration.ofMinutes(1)))
+      .apply(new AllWindowFunction[(String, Int), (String, Int), TimeWindow] {
+        override def apply(
             window: TimeWindow,
-            values: Iterable[(String, Int)],
-            out: Collector[(String, Int)]) {}
+            input: Iterable[(String, Int)],
+            out: Collector[(String, Int)]): Unit = {}
       })
 
     val transform2 = window2.javaStream.getTransformation
@@ -94,7 +92,7 @@ class TimeWindowTranslationTest extends AbstractTestBaseJUnit4 {
 
     val window1 = source
       .keyBy(0)
-      .timeWindow(Time.of(1, TimeUnit.SECONDS), Time.of(100, TimeUnit.MILLISECONDS))
+      .windowAll(SlidingEventTimeWindows.of(Duration.ofSeconds(1), Duration.ofMillis(100)))
       .reduce(new DummyReducer())
 
     val transform1 = window1.javaStream.getTransformation
@@ -120,13 +118,12 @@ class TimeWindowTranslationTest extends AbstractTestBaseJUnit4 {
 
     val window1 = source
       .keyBy(0)
-      .timeWindow(Time.of(1, TimeUnit.SECONDS), Time.of(100, TimeUnit.MILLISECONDS))
-      .apply(new WindowFunction[(String, Int), (String, Int), Tuple, TimeWindow] {
+      .windowAll(SlidingEventTimeWindows.of(Duration.ofSeconds(1), Duration.ofMillis(100)))
+      .apply(new AllWindowFunction[(String, Int), (String, Int), TimeWindow] {
         override def apply(
-            key: Tuple,
             window: TimeWindow,
             input: Iterable[(String, Int)],
-            out: Collector[(String, Int)]): Unit = ???
+            out: Collector[(String, Int)]): Unit = {}
       })
 
     val transform1 = window1.javaStream.getTransformation

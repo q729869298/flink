@@ -44,7 +44,6 @@ import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrdernessTimestampExtractor;
 import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
-import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.streaming.tests.artificialstate.ArtificalOperatorStateMapper;
 import org.apache.flink.streaming.tests.artificialstate.ArtificialKeyedStateMapper;
@@ -53,6 +52,7 @@ import org.apache.flink.streaming.tests.artificialstate.builder.ArtificialStateB
 import org.apache.flink.streaming.tests.artificialstate.builder.ArtificialValueStateBuilder;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -415,7 +415,7 @@ public class DataStreamAllroundTestJobFactory {
     static BoundedOutOfOrdernessTimestampExtractor<Event> createTimestampExtractor(
             ParameterTool pt) {
         return new BoundedOutOfOrdernessTimestampExtractor<Event>(
-                Time.milliseconds(
+                Duration.ofMillis(
                         pt.getLong(
                                 SEQUENCE_GENERATOR_SRC_EVENT_TIME_MAX_OUT_OF_ORDERNESS.key(),
                                 SEQUENCE_GENERATOR_SRC_EVENT_TIME_MAX_OUT_OF_ORDERNESS
@@ -440,7 +440,7 @@ public class DataStreamAllroundTestJobFactory {
 
         return keyedStream.window(
                 TumblingEventTimeWindows.of(
-                        Time.milliseconds(
+                        Duration.ofMillis(
                                 pt.getLong(
                                                 TUMBLING_WINDOW_OPERATOR_NUM_EVENTS.key(),
                                                 TUMBLING_WINDOW_OPERATOR_NUM_EVENTS.defaultValue())
@@ -562,7 +562,7 @@ public class DataStreamAllroundTestJobFactory {
         long slideFactor = pt.getInt(TEST_SLIDE_FACTOR.key(), TEST_SLIDE_FACTOR.defaultValue());
 
         return SlidingEventTimeWindows.of(
-                Time.milliseconds(slideSize * slideFactor), Time.milliseconds(slideSize));
+                Duration.ofMillis(slideSize * slideFactor), Duration.ofMillis(slideSize));
     }
 
     static FlatMapFunction<Tuple2<Integer, List<Event>>, String> createSlidingWindowCheckMapper(
