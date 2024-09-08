@@ -18,7 +18,9 @@
 package org.apache.flink.runtime.operators.lifecycle;
 
 import org.apache.flink.changelog.fs.FsStateChangelogStorageFactory;
+import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.RestartStrategyOptions;
 import org.apache.flink.runtime.OperatorIDPair;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.operators.lifecycle.command.TestCommandDispatcher.TestCommandScope;
@@ -50,7 +52,6 @@ import java.util.concurrent.TimeUnit;
 
 import static java.util.Arrays.asList;
 import static java.util.stream.StreamSupport.stream;
-import static org.apache.flink.api.common.restartstrategy.RestartStrategies.fixedDelayRestart;
 import static org.apache.flink.configuration.JobManagerOptions.EXECUTION_FAILOVER_STRATEGY;
 import static org.apache.flink.runtime.operators.lifecycle.command.TestCommand.FINISH_SOURCES;
 import static org.apache.flink.runtime.operators.lifecycle.command.TestCommandDispatcher.TestCommandScope.ALL_SUBTASKS;
@@ -165,7 +166,20 @@ public class PartiallyFinishedSourcesITCase extends TestLogger {
                 sharedObjects,
                 cfg -> {},
                 env -> {
-                    env.setRestartStrategy(fixedDelayRestart(1, 0));
+                    Configuration configuration = new Configuration();
+                    configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+                    configuration.set(
+                            RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, 1);
+                    configuration.set(
+                            RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY,
+                            Duration.ofMillis(0));
+                    configuration.set(
+                            CheckpointingOptions.CHECKPOINTS_DIRECTORY,
+                            // with unaligned checkpoints state size can grow beyond the default
+                            // limits of in-memory storage
+                            TEMPORARY_FOLDER.newFolder().toURI().toString());
+                    env.configure(configuration, Thread.currentThread().getContextClassLoader());
+
                     // checkpoints can hang (because of not yet fixed bugs and triggering
                     // checkpoint while the source finishes), so we reduce the timeout to
                     // avoid hanging for too long.
@@ -175,10 +189,6 @@ public class PartiallyFinishedSourcesITCase extends TestLogger {
                             .setTolerableCheckpointFailureNumber(Integer.MAX_VALUE);
                     // explicitly set to one to ease avoiding race conditions
                     env.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
-                    env.getCheckpointConfig()
-                            // with unaligned checkpoints state size can grow beyond the default
-                            // limits of in-memory storage
-                            .setCheckpointStorage(TEMPORARY_FOLDER.newFolder().toURI());
                 });
     }
 
