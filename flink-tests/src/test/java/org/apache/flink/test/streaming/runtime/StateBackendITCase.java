@@ -21,9 +21,10 @@ package org.apache.flink.test.streaming.runtime;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.functions.RichMapFunction;
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.RestartStrategyOptions;
 import org.apache.flink.runtime.client.JobExecutionException;
 import org.apache.flink.runtime.state.AbstractKeyedStateBackend;
 import org.apache.flink.runtime.state.CheckpointStorage;
@@ -33,6 +34,7 @@ import org.apache.flink.runtime.state.OperatorStateBackend;
 import org.apache.flink.runtime.state.StateBackend;
 import org.apache.flink.runtime.state.memory.MemoryBackendCheckpointStorageAccess;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.graph.StreamGraph;
 import org.apache.flink.test.util.AbstractTestBaseJUnit4;
 import org.apache.flink.util.ExceptionUtils;
 
@@ -53,8 +55,9 @@ public class StateBackendITCase extends AbstractTestBaseJUnit4 {
         StreamExecutionEnvironment see = StreamExecutionEnvironment.getExecutionEnvironment();
         see.setParallelism(1);
 
-        see.getConfig().setRestartStrategy(RestartStrategies.noRestart());
-        see.setStateBackend(new FailingStateBackend());
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "none");
+        see.configure(configuration, Thread.currentThread().getContextClassLoader());
 
         see.fromData(new Tuple2<>("Hello", 1))
                 .keyBy(0)
@@ -78,7 +81,9 @@ public class StateBackendITCase extends AbstractTestBaseJUnit4 {
                 .print();
 
         try {
-            see.execute();
+            StreamGraph streamGraph = see.getStreamGraph();
+            streamGraph.setStateBackend(new FailingStateBackend());
+            see.execute(streamGraph);
             fail();
         } catch (JobExecutionException e) {
             assertTrue(ExceptionUtils.findThrowable(e, SuccessException.class).isPresent());

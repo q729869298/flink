@@ -20,18 +20,19 @@ package org.apache.flink.test.state.operator.restore;
 
 import org.apache.flink.FlinkVersion;
 import org.apache.flink.api.common.JobStatus;
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.time.Deadline;
 import org.apache.flink.client.program.ClusterClient;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.RestartStrategyOptions;
 import org.apache.flink.core.execution.CheckpointingMode;
 import org.apache.flink.core.execution.SavepointFormatType;
 import org.apache.flink.runtime.checkpoint.CheckpointFailureReason;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
-import org.apache.flink.runtime.state.StateBackend;
 import org.apache.flink.runtime.state.memory.MemoryStateBackend;
 import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.graph.StreamGraph;
 import org.apache.flink.streaming.api.graph.StreamingJobGraphGenerator;
 import org.apache.flink.test.util.MigrationTest;
 import org.apache.flink.test.util.MiniClusterWithClientResource;
@@ -258,8 +259,9 @@ public abstract class AbstractOperatorRestoreTestBase extends TestLogger impleme
     private JobGraph createJobGraph(ExecutionMode mode) {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.enableCheckpointing(500, CheckpointingMode.EXACTLY_ONCE);
-        env.setRestartStrategy(RestartStrategies.noRestart());
-        env.setStateBackend((StateBackend) new MemoryStateBackend());
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "none");
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
 
         switch (mode) {
             case MIGRATE:
@@ -270,7 +272,9 @@ public abstract class AbstractOperatorRestoreTestBase extends TestLogger impleme
                 break;
         }
 
-        return StreamingJobGraphGenerator.createJobGraph(env.getStreamGraph());
+        StreamGraph streamGraph = env.getStreamGraph();
+        streamGraph.setStateBackend(new MemoryStateBackend());
+        return StreamingJobGraphGenerator.createJobGraph(streamGraph);
     }
 
     private Path getSavepointPath(FlinkVersion version) {

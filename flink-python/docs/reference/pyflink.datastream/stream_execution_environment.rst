@@ -51,14 +51,10 @@ access).
     StreamExecutionEnvironment.enable_checkpointing
     StreamExecutionEnvironment.get_checkpoint_interval
     StreamExecutionEnvironment.get_checkpointing_mode
-    StreamExecutionEnvironment.get_state_backend
-    StreamExecutionEnvironment.set_state_backend
     StreamExecutionEnvironment.enable_changelog_state_backend
     StreamExecutionEnvironment.is_changelog_state_backend_enabled
     StreamExecutionEnvironment.set_default_savepoint_directory
     StreamExecutionEnvironment.get_default_savepoint_directory
-    StreamExecutionEnvironment.set_restart_strategy
-    StreamExecutionEnvironment.get_restart_strategy
     StreamExecutionEnvironment.add_default_kryo_serializer
     StreamExecutionEnvironment.register_type_with_kryo_serializer
     StreamExecutionEnvironment.register_type

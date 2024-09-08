@@ -22,13 +22,15 @@ import org.apache.flink.FlinkVersion;
 import org.apache.flink.api.common.accumulators.IntCounter;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.functions.RichFlatMapFunction;
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.common.typeutils.base.LongSerializer;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.RestartStrategyOptions;
 import org.apache.flink.contrib.streaming.state.EmbeddedRocksDBStateBackend;
+import org.apache.flink.runtime.state.StateBackend;
 import org.apache.flink.runtime.state.StateBackendLoader;
 import org.apache.flink.runtime.state.hashmap.HashMapStateBackend;
 import org.apache.flink.runtime.state.memory.MemoryStateBackend;
@@ -165,11 +167,14 @@ public class StatefulJobSnapshotMigrationITCase extends SnapshotMigrationTestBas
         final int parallelism = 4;
 
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setRestartStrategy(RestartStrategies.noRestart());
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "none");
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
 
+        StateBackend stateBackend;
         switch (snapshotSpec.getStateBackendType()) {
             case StateBackendLoader.ROCKSDB_STATE_BACKEND_NAME:
-                env.setStateBackend(new EmbeddedRocksDBStateBackend());
+                stateBackend = new EmbeddedRocksDBStateBackend();
 
                 if (executionMode == ExecutionMode.CREATE_SNAPSHOT) {
                     // disable changelog backend for now to ensure determinism in test data
@@ -178,10 +183,10 @@ public class StatefulJobSnapshotMigrationITCase extends SnapshotMigrationTestBas
                 }
                 break;
             case StateBackendLoader.MEMORY_STATE_BACKEND_NAME:
-                env.setStateBackend(new MemoryStateBackend());
+                stateBackend = new MemoryStateBackend();
                 break;
             case StateBackendLoader.HASHMAP_STATE_BACKEND_NAME:
-                env.setStateBackend(new HashMapStateBackend());
+                stateBackend = new HashMapStateBackend();
                 break;
             default:
                 throw new UnsupportedOperationException();
@@ -253,6 +258,7 @@ public class StatefulJobSnapshotMigrationITCase extends SnapshotMigrationTestBas
                     env,
                     "src/test/resources/" + snapshotPath,
                     snapshotSpec.getSnapshotType(),
+                    stateBackend,
                     new Tuple2<>(
                             MigrationTestUtils.AccumulatorCountingSink.NUM_ELEMENTS_ACCUMULATOR,
                             NUM_SOURCE_ELEMENTS * 2));
@@ -260,6 +266,7 @@ public class StatefulJobSnapshotMigrationITCase extends SnapshotMigrationTestBas
             restoreAndExecute(
                     env,
                     getResourceFilename(snapshotPath),
+                    stateBackend,
                     new Tuple2<>(
                             MigrationTestUtils.CheckingNonParallelSourceWithListState
                                     .SUCCESSFUL_RESTORE_CHECK_ACCUMULATOR,

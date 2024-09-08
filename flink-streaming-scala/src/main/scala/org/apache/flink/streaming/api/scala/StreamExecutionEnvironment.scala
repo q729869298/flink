@@ -22,7 +22,6 @@ import org.apache.flink.api.common.{ExecutionConfig, RuntimeExecutionMode}
 import org.apache.flink.api.common.eventtime.WatermarkStrategy
 import org.apache.flink.api.common.io.{FileInputFormat, FilePathFilter, InputFormat}
 import org.apache.flink.api.common.operators.SlotSharingGroup
-import org.apache.flink.api.common.restartstrategy.RestartStrategies.RestartStrategyConfiguration
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.connector.source.{Source, SourceSplit}
 import org.apache.flink.api.connector.source.lib.NumberSequenceSource
@@ -32,14 +31,12 @@ import org.apache.flink.api.scala.ClosureCleaner
 import org.apache.flink.configuration.{Configuration, ReadableConfig}
 import org.apache.flink.core.execution.{CheckpointingMode, JobClient, JobListener}
 import org.apache.flink.core.fs.Path
-import org.apache.flink.runtime.state.StateBackend
 import org.apache.flink.streaming.api.TimeCharacteristic
 import org.apache.flink.streaming.api.environment.{CheckpointConfig, StreamExecutionEnvironment => JavaEnv}
 import org.apache.flink.streaming.api.functions.source._
 import org.apache.flink.streaming.api.functions.source.SourceFunction.SourceContext
 import org.apache.flink.streaming.api.graph.StreamGraph
 import org.apache.flink.util.{SplittableIterator, TernaryBoolean}
-import org.apache.flink.util.Preconditions.checkNotNull
 
 import _root_.scala.language.implicitConversions
 import com.esotericsoftware.kryo.Serializer
@@ -298,43 +295,6 @@ class StreamExecutionEnvironment(javaEnv: JavaEnv) extends AutoCloseable {
   def getCheckpointingConsistencyMode = javaEnv.getCheckpointingConsistencyMode()
 
   /**
-   * Sets the state backend that describes how to store operator. It defines the data structures
-   * that hold state during execution (for example hash tables, RocksDB, or other data stores).
-   *
-   * State managed by the state backend includes both keyed state that is accessible on
-   * [[org.apache.flink.streaming.api.scala.KeyedStream]], as well as state maintained directly by
-   * the user code that implements
-   * [[org.apache.flink.streaming.api.checkpoint.CheckpointedFunction]].
-   *
-   * The [[org.apache.flink.runtime.state.hashmap.HashMapStateBackend]] maintains state in heap
-   * memory, as objects. It is lightweight without extra dependencies, but is limited to JVM heap
-   * memory.
-   *
-   * In contrast, the '''EmbeddedRocksDBStateBackend''' stores its state in an embedded
-   * '''RocksDB''' instance. This state backend can store very large state that exceeds memory and
-   * spills to local disk. All key/value state (including windows) is stored in the key/value index
-   * of RocksDB.
-   *
-   * In both cases, fault tolerance is managed via the jobs
-   * [[org.apache.flink.runtime.state.CheckpointStorage]] which configures how and where state
-   * backends persist during a checkpoint.
-   *
-   * @return
-   *   This StreamExecutionEnvironment itself, to allow chaining of function calls.
-   * @see
-   *   #getStateBackend()
-   */
-  @PublicEvolving
-  def setStateBackend(backend: StateBackend): StreamExecutionEnvironment = {
-    javaEnv.setStateBackend(backend)
-    this
-  }
-
-  /** Returns the state backend that defines how to store and checkpoint state. */
-  @PublicEvolving
-  def getStateBackend: StateBackend = javaEnv.getStateBackend()
-
-  /**
    * Enable the change log for current state backend. This change log allows operators to persist
    * state changes in a very fine-grained manner. Currently, the change log only applies to keyed
    * state, so non-keyed operator state and channel state are persisted as usual. The 'state' here
@@ -435,54 +395,6 @@ class StreamExecutionEnvironment(javaEnv: JavaEnv) extends AutoCloseable {
    */
   @PublicEvolving
   def getDefaultSavepointDirectory: Path = javaEnv.getDefaultSavepointDirectory
-
-  /**
-   * Sets the restart strategy configuration. The configuration specifies which restart strategy
-   * will be used for the execution graph in case of a restart.
-   *
-   * @param restartStrategyConfiguration
-   *   Restart strategy configuration to be set
-   */
-  @PublicEvolving
-  def setRestartStrategy(restartStrategyConfiguration: RestartStrategyConfiguration): Unit = {
-    javaEnv.setRestartStrategy(restartStrategyConfiguration)
-  }
-
-  /**
-   * Returns the specified restart strategy configuration.
-   *
-   * @return
-   *   The restart strategy configuration to be used
-   */
-  @PublicEvolving
-  def getRestartStrategy: RestartStrategyConfiguration = {
-    javaEnv.getRestartStrategy()
-  }
-
-  /**
-   * Sets the number of times that failed tasks are re-executed. A value of zero effectively
-   * disables fault tolerance. A value of "-1" indicates that the system default value (as defined
-   * in the configuration) should be used.
-   *
-   * @deprecated
-   *   This method will be replaced by [[setRestartStrategy()]]. The
-   *   FixedDelayRestartStrategyConfiguration contains the number of execution retries.
-   */
-  @PublicEvolving
-  def setNumberOfExecutionRetries(numRetries: Int): Unit = {
-    javaEnv.setNumberOfExecutionRetries(numRetries)
-  }
-
-  /**
-   * Gets the number of times the system will try to re-execute failed tasks. A value of "-1"
-   * indicates that the system default value (as defined in the configuration) should be used.
-   *
-   * @deprecated
-   *   This method will be replaced by [[getRestartStrategy]]. The
-   *   FixedDelayRestartStrategyConfiguration contains the number of execution retries.
-   */
-  @PublicEvolving
-  def getNumberOfExecutionRetries = javaEnv.getNumberOfExecutionRetries
 
   // --------------------------------------------------------------------------------------------
   // Registry for types and serializers

@@ -41,9 +41,7 @@ import org.apache.flink.configuration.StateChangelogOptions;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.jobgraph.JobType;
 import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
-import org.apache.flink.runtime.state.CheckpointStorage;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
-import org.apache.flink.runtime.state.StateBackend;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.apache.flink.streaming.api.lineage.LineageGraph;
@@ -161,10 +159,6 @@ public class StreamGraphGenerator {
     // Records the slot sharing groups and their corresponding fine-grained ResourceProfile
     private final Map<String, ResourceProfile> slotSharingGroupResources = new HashMap<>();
 
-    private StateBackend stateBackend;
-
-    private CheckpointStorage checkpointStorage;
-
     private TimeCharacteristic timeCharacteristic = DEFAULT_TIME_CHARACTERISTIC;
 
     private SavepointRestoreSettings savepointRestoreSettings;
@@ -234,13 +228,7 @@ public class StreamGraphGenerator {
         this.executionConfig = checkNotNull(executionConfig);
         this.checkpointConfig = new CheckpointConfig(checkpointConfig);
         this.configuration = checkNotNull(configuration);
-        this.checkpointStorage = this.checkpointConfig.getCheckpointStorage();
         this.savepointRestoreSettings = SavepointRestoreSettings.fromConfiguration(configuration);
-    }
-
-    public StreamGraphGenerator setStateBackend(StateBackend stateBackend) {
-        this.stateBackend = stateBackend;
-        return this;
     }
 
     public StreamGraphGenerator setTimeCharacteristic(TimeCharacteristic timeCharacteristic) {
@@ -363,8 +351,6 @@ public class StreamGraphGenerator {
         graph.setJobType(JobType.STREAMING);
         graph.setJobName(deriveJobName(DEFAULT_STREAMING_JOB_NAME));
 
-        graph.setStateBackend(stateBackend);
-        graph.setCheckpointStorage(checkpointStorage);
         graph.setGlobalStreamExchangeMode(deriveGlobalStreamExchangeModeStreaming());
     }
 
@@ -418,8 +404,6 @@ public class StreamGraphGenerator {
             graph.getJobConfiguration().set(StateChangelogOptions.ENABLE_STATE_CHANGE_LOG, false);
             graph.setCheckpointStorage(new BatchExecutionCheckpointStorage());
             graph.setTimerServiceProvider(BatchExecutionInternalTimeServiceManager::create);
-        } else {
-            graph.setStateBackend(stateBackend);
         }
     }
 

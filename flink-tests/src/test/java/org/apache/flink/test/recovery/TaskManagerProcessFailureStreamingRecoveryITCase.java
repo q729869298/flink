@@ -22,14 +22,15 @@ import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.api.common.functions.RuntimeContext;
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.RestartStrategyOptions;
 import org.apache.flink.runtime.state.filesystem.FsStateBackend;
 import org.apache.flink.streaming.api.checkpoint.ListCheckpointed;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
 import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunction;
+import org.apache.flink.streaming.api.graph.StreamGraph;
 import org.apache.flink.testutils.junit.extensions.parameterized.NoOpTestExtension;
 import org.apache.flink.testutils.junit.utils.TempDirUtils;
 
@@ -37,6 +38,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 
@@ -69,10 +71,13 @@ class TaskManagerProcessFailureStreamingRecoveryITCase
                         1337, // not needed since we use ZooKeeper
                         configuration);
         env.setParallelism(PARALLELISM);
-        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(1, 1000));
-        env.enableCheckpointing(200);
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, 1);
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY, Duration.ofMillis(1000));
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
 
-        env.setStateBackend(new FsStateBackend(tempCheckpointDir.getAbsoluteFile().toURI()));
+        env.enableCheckpointing(200);
 
         DataStream<Long> result =
                 env.addSource(new SleepyDurableGenerateSequence(coordinateDir, DATA_COUNT))
@@ -93,7 +98,10 @@ class TaskManagerProcessFailureStreamingRecoveryITCase
         result.addSink(new CheckpointedSink(DATA_COUNT));
 
         // blocking call until execution is done
-        env.execute();
+        StreamGraph streamGraph = env.getStreamGraph();
+        streamGraph.setStateBackend(
+                new FsStateBackend(tempCheckpointDir.getAbsoluteFile().toURI()));
+        env.execute(streamGraph);
     }
 
     private static class SleepyDurableGenerateSequence extends RichParallelSourceFunction<Long>

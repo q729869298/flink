@@ -21,7 +21,6 @@ import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.JobSubmissionResult;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.OpenContext;
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
@@ -29,7 +28,9 @@ import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.changelog.fs.FsStateChangelogStorageFactory;
+import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.RestartStrategyOptions;
 import org.apache.flink.configuration.StateChangelogOptions;
 import org.apache.flink.contrib.streaming.state.EmbeddedRocksDBStateBackend;
 import org.apache.flink.runtime.checkpoint.metadata.CheckpointMetadata;
@@ -55,6 +56,7 @@ import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.api.functions.sink.v2.DiscardingSink;
 import org.apache.flink.streaming.api.functions.source.RichSourceFunction;
 import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
+import org.apache.flink.streaming.api.graph.StreamGraph;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
@@ -150,7 +152,6 @@ public abstract class ChangelogRecoveryITCaseBase extends TestLogger {
     }
 
     protected StreamExecutionEnvironment getEnv(
-            StateBackend stateBackend,
             long checkpointInterval,
             int restartAttempts,
             long materializationInterval,
@@ -158,11 +159,13 @@ public abstract class ChangelogRecoveryITCaseBase extends TestLogger {
         Configuration conf = new Configuration();
         conf.set(
                 FILE_MERGING_ENABLED, false); // TODO: remove file merging setting after FLINK-32085
+        conf.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+        conf.set(RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, restartAttempts);
+        conf.set(RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY, Duration.ofMillis(0));
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment(conf);
         env.enableCheckpointing(checkpointInterval).enableChangelogStateBackend(true);
         env.getCheckpointConfig().enableUnalignedCheckpoints(false);
-        env.setStateBackend(stateBackend)
-                .setRestartStrategy(RestartStrategies.fixedDelayRestart(restartAttempts, 0));
+
         if (materializationInterval >= 0) {
             env.configure(
                     new Configuration()
@@ -182,7 +185,6 @@ public abstract class ChangelogRecoveryITCaseBase extends TestLogger {
     }
 
     protected StreamExecutionEnvironment getEnv(
-            StateBackend stateBackend,
             File checkpointFile,
             long checkpointInterval,
             int restartAttempts,
@@ -190,17 +192,27 @@ public abstract class ChangelogRecoveryITCaseBase extends TestLogger {
             int materializationMaxFailure) {
         StreamExecutionEnvironment env =
                 getEnv(
-                        stateBackend,
                         checkpointInterval,
                         restartAttempts,
                         materializationInterval,
                         materializationMaxFailure);
-        env.getCheckpointConfig().setCheckpointStorage(checkpointFile.toURI());
+        Configuration configuration = new Configuration();
+        configuration.set(
+                CheckpointingOptions.CHECKPOINTS_DIRECTORY, checkpointFile.toURI().toString());
+        env.configure(configuration);
         return env;
     }
 
     protected JobGraph buildJobGraph(
             StreamExecutionEnvironment env, ControlledSource controlledSource, JobID jobId) {
+        return buildJobGraph(delegatedStateBackend, env, controlledSource, jobId);
+    }
+
+    protected JobGraph buildJobGraph(
+            StateBackend stateBackend,
+            StreamExecutionEnvironment env,
+            ControlledSource controlledSource,
+            JobID jobId) {
         KeyedStream<Integer, Integer> keyedStream =
                 env.addSource(controlledSource)
                         .assignTimestampsAndWatermarks(WatermarkStrategy.forMonotonousTimestamps())
@@ -218,7 +230,10 @@ public abstract class ChangelogRecoveryITCaseBase extends TestLogger {
                                     Collector<Integer> out) {}
                         })
                 .sinkTo(new DiscardingSink<>());
-        return env.getStreamGraph().getJobGraph(env.getClass().getClassLoader(), jobId);
+        StreamGraph streamGraph = env.getStreamGraph();
+        streamGraph.setStateBackend(stateBackend);
+
+        return streamGraph.getJobGraph(env.getClass().getClassLoader(), jobId);
     }
 
     protected void waitAndAssert(JobGraph jobGraph) throws Exception {

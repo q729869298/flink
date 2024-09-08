@@ -23,7 +23,6 @@ import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.api.common.functions.AggregateFunction;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.functions.ReduceFunction;
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.state.AggregatingState;
 import org.apache.flink.api.common.state.AggregatingStateDescriptor;
 import org.apache.flink.api.common.state.CheckpointListener;
@@ -44,6 +43,8 @@ import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.typeutils.GenericTypeInfo;
 import org.apache.flink.client.program.ClusterClient;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.RestartStrategyOptions;
 import org.apache.flink.queryablestate.client.QueryableStateClient;
 import org.apache.flink.queryablestate.client.VoidNamespace;
 import org.apache.flink.queryablestate.client.VoidNamespaceSerializer;
@@ -56,6 +57,7 @@ import org.apache.flink.streaming.api.datastream.QueryableStateStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunction;
+import org.apache.flink.streaming.api.graph.StreamGraph;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
@@ -158,12 +160,17 @@ public abstract class AbstractQueryableStateTestBase {
         final int numKeys = 256;
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setStateBackend(stateBackend);
         env.setParallelism(maxParallelism);
         // Very important, because cluster is shared between tests and we
         // don't explicitly check that all slots are available before
         // submitting.
-        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(Integer.MAX_VALUE, 1000L));
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, Integer.MAX_VALUE);
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY, Duration.ofMillis(1000));
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
 
         DataStream<Tuple2<Integer, Long>> source = env.addSource(new TestKeyRangeSource(numKeys));
 
@@ -183,8 +190,10 @@ public abstract class AbstractQueryableStateTestBase {
                         })
                 .asQueryableState(queryName, reducingState);
 
+        StreamGraph streamGraph = env.getStreamGraph();
+        streamGraph.setStateBackend(stateBackend);
         try (AutoCancellableJob autoCancellableJob =
-                new AutoCancellableJob(deadline, clusterClient, env)) {
+                new AutoCancellableJob(deadline, clusterClient, streamGraph)) {
 
             final JobID jobId = autoCancellableJob.getJobId();
             final JobGraph jobGraph = autoCancellableJob.getJobGraph();
@@ -262,12 +271,17 @@ public abstract class AbstractQueryableStateTestBase {
         final int numKeys = 256;
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setStateBackend(stateBackend);
         env.setParallelism(maxParallelism);
         // Very important, because cluster is shared between tests and we
         // don't explicitly check that all slots are available before
         // submitting.
-        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(Integer.MAX_VALUE, 1000L));
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, Integer.MAX_VALUE);
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY, Duration.ofMillis(1000));
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
 
         DataStream<Tuple2<Integer, Long>> source = env.addSource(new TestKeyRangeSource(numKeys));
 
@@ -304,7 +318,9 @@ public abstract class AbstractQueryableStateTestBase {
                         .asQueryableState(queryName);
 
         // Submit the job graph
-        final JobGraph jobGraph = env.getStreamGraph().getJobGraph();
+        StreamGraph streamGraph = env.getStreamGraph();
+        streamGraph.setStateBackend(stateBackend);
+        final JobGraph jobGraph = streamGraph.getJobGraph();
 
         clusterClient
                 .submitJob(jobGraph)
@@ -338,12 +354,17 @@ public abstract class AbstractQueryableStateTestBase {
         final long numElements = 1024L;
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setStateBackend(stateBackend);
         env.setParallelism(maxParallelism);
         // Very important, because cluster is shared between tests and we
         // don't explicitly check that all slots are available before
         // submitting.
-        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(Integer.MAX_VALUE, 1000L));
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, Integer.MAX_VALUE);
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY, Duration.ofMillis(1000));
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
 
         DataStream<Tuple2<Integer, Long>> source =
                 env.addSource(new TestAscendingValueSource(numElements));
@@ -363,8 +384,10 @@ public abstract class AbstractQueryableStateTestBase {
                         })
                 .asQueryableState("hakuna", valueState);
 
+        StreamGraph streamGraph = env.getStreamGraph();
+        streamGraph.setStateBackend(stateBackend);
         try (AutoCancellableJob autoCancellableJob =
-                new AutoCancellableJob(deadline, clusterClient, env)) {
+                new AutoCancellableJob(deadline, clusterClient, streamGraph)) {
 
             final JobID jobId = autoCancellableJob.getJobId();
             final JobGraph jobGraph = autoCancellableJob.getJobGraph();
@@ -386,12 +409,17 @@ public abstract class AbstractQueryableStateTestBase {
                 createLoaderWithCustomKryoSerializer(customSerializerClassName);
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setStateBackend(stateBackend);
         env.setParallelism(maxParallelism);
         // Very important, because cluster is shared between tests and we
         // don't explicitly check that all slots are available before
         // submitting.
-        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(Integer.MAX_VALUE, 1000L));
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, Integer.MAX_VALUE);
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY, Duration.ofMillis(1000));
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
 
         // Custom serializer is not needed, it's used just to check if serialization works.
         env.getConfig()
@@ -418,8 +446,10 @@ public abstract class AbstractQueryableStateTestBase {
                         })
                 .asQueryableState(stateName, valueState);
 
+        StreamGraph streamGraph = env.getStreamGraph();
+        streamGraph.setStateBackend(stateBackend);
         try (AutoCancellableJob autoCancellableJob =
-                new AutoCancellableJob(deadline, clusterClient, env)) {
+                new AutoCancellableJob(deadline, clusterClient, streamGraph)) {
 
             final JobID jobId = autoCancellableJob.getJobId();
             final JobGraph jobGraph = autoCancellableJob.getJobGraph();
@@ -456,9 +486,14 @@ public abstract class AbstractQueryableStateTestBase {
         final long numElements = 1024L;
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setStateBackend(stateBackend);
         env.setParallelism(maxParallelism);
-        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(Integer.MAX_VALUE, 1000L));
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, Integer.MAX_VALUE);
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY, Duration.ofMillis(1000));
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
 
         DataStream<Tuple2<Integer, Long>> source =
                 env.addSource(new TestAscendingValueSource(numElements));
@@ -476,8 +511,10 @@ public abstract class AbstractQueryableStateTestBase {
                         })
                 .asQueryableState("hakuna", valueState);
 
+        StreamGraph streamGraph = env.getStreamGraph();
+        streamGraph.setStateBackend(stateBackend);
         try (AutoCancellableJob closableJobGraph =
-                new AutoCancellableJob(deadline, clusterClient, env)) {
+                new AutoCancellableJob(deadline, clusterClient, streamGraph)) {
 
             clusterClient.submitJob(closableJobGraph.getJobGraph()).get();
 
@@ -547,12 +584,17 @@ public abstract class AbstractQueryableStateTestBase {
         final long numElements = 1024L;
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setStateBackend(stateBackend);
         env.setParallelism(maxParallelism);
         // Very important, because clusterClient is shared between tests and we
         // don't explicitly check that all slots are available before
         // submitting.
-        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(Integer.MAX_VALUE, 1000L));
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, Integer.MAX_VALUE);
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY, Duration.ofMillis(1000));
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
 
         DataStream<Tuple2<Integer, Long>> source =
                 env.addSource(new TestAscendingValueSource(numElements));
@@ -574,8 +616,10 @@ public abstract class AbstractQueryableStateTestBase {
                                 })
                         .asQueryableState("hakuna", valueState);
 
+        StreamGraph streamGraph = env.getStreamGraph();
+        streamGraph.setStateBackend(stateBackend);
         try (AutoCancellableJob autoCancellableJob =
-                new AutoCancellableJob(deadline, clusterClient, env)) {
+                new AutoCancellableJob(deadline, clusterClient, streamGraph)) {
 
             final JobID jobId = autoCancellableJob.getJobId();
             final JobGraph jobGraph = autoCancellableJob.getJobGraph();
@@ -608,12 +652,17 @@ public abstract class AbstractQueryableStateTestBase {
         final long numElements = 1024L;
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setStateBackend(stateBackend);
         env.setParallelism(maxParallelism);
         // Very important, because cluster is shared between tests and we
         // don't explicitly check that all slots are available before
         // submitting.
-        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(Integer.MAX_VALUE, 1000L));
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, Integer.MAX_VALUE);
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY, Duration.ofMillis(1000));
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
 
         DataStream<Tuple2<Integer, Long>> source =
                 env.addSource(new TestAscendingValueSource(numElements));
@@ -635,8 +684,10 @@ public abstract class AbstractQueryableStateTestBase {
                                 })
                         .asQueryableState("hakuna", valueState);
 
+        StreamGraph streamGraph = env.getStreamGraph();
+        streamGraph.setStateBackend(stateBackend);
         try (AutoCancellableJob autoCancellableJob =
-                new AutoCancellableJob(deadline, clusterClient, env)) {
+                new AutoCancellableJob(deadline, clusterClient, streamGraph)) {
 
             final JobID jobId = autoCancellableJob.getJobId();
             final JobGraph jobGraph = autoCancellableJob.getJobGraph();
@@ -677,12 +728,17 @@ public abstract class AbstractQueryableStateTestBase {
         final long numElements = 1024L;
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setStateBackend(stateBackend);
         env.setParallelism(maxParallelism);
         // Very important, because cluster is shared between tests and we
         // don't explicitly check that all slots are available before
         // submitting.
-        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(Integer.MAX_VALUE, 1000L));
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, Integer.MAX_VALUE);
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY, Duration.ofMillis(1000));
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
 
         DataStream<Tuple2<Integer, Long>> source =
                 env.addSource(new TestAscendingValueSource(numElements));
@@ -705,8 +761,10 @@ public abstract class AbstractQueryableStateTestBase {
         final ValueStateDescriptor<Tuple2<Integer, Long>> stateDesc =
                 (ValueStateDescriptor<Tuple2<Integer, Long>>) queryableState.getStateDescriptor();
 
+        StreamGraph streamGraph = env.getStreamGraph();
+        streamGraph.setStateBackend(stateBackend);
         try (AutoCancellableJob autoCancellableJob =
-                new AutoCancellableJob(deadline, clusterClient, env)) {
+                new AutoCancellableJob(deadline, clusterClient, streamGraph)) {
 
             final JobID jobId = autoCancellableJob.getJobId();
             final JobGraph jobGraph = autoCancellableJob.getJobGraph();
@@ -727,12 +785,17 @@ public abstract class AbstractQueryableStateTestBase {
         final long numElements = 1024L;
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setStateBackend(stateBackend);
         env.setParallelism(maxParallelism);
         // Very important, because cluster is shared between tests and we
         // don't explicitly check that all slots are available before
         // submitting.
-        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(Integer.MAX_VALUE, 1000L));
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, Integer.MAX_VALUE);
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY, Duration.ofMillis(1000));
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
 
         DataStream<Tuple2<Integer, Long>> source =
                 env.addSource(new TestAscendingValueSource(numElements));
@@ -751,8 +814,10 @@ public abstract class AbstractQueryableStateTestBase {
                         })
                 .asQueryableState("jungle", reducingState);
 
+        StreamGraph streamGraph = env.getStreamGraph();
+        streamGraph.setStateBackend(stateBackend);
         try (AutoCancellableJob autoCancellableJob =
-                new AutoCancellableJob(deadline, clusterClient, env)) {
+                new AutoCancellableJob(deadline, clusterClient, streamGraph)) {
 
             final JobID jobId = autoCancellableJob.getJobId();
             final JobGraph jobGraph = autoCancellableJob.getJobGraph();
@@ -804,12 +869,17 @@ public abstract class AbstractQueryableStateTestBase {
         final long numElements = 1024L;
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setStateBackend(stateBackend);
         env.setParallelism(maxParallelism);
         // Very important, because cluster is shared between tests and we
         // don't explicitly check that all slots are available before
         // submitting.
-        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(Integer.MAX_VALUE, 1000L));
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, Integer.MAX_VALUE);
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY, Duration.ofMillis(1000));
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
 
         DataStream<Tuple2<Integer, Long>> source =
                 env.addSource(new TestAscendingValueSource(numElements));
@@ -851,8 +921,10 @@ public abstract class AbstractQueryableStateTestBase {
                             }
                         });
 
+        StreamGraph streamGraph = env.getStreamGraph();
+        streamGraph.setStateBackend(stateBackend);
         try (AutoCancellableJob autoCancellableJob =
-                new AutoCancellableJob(deadline, clusterClient, env)) {
+                new AutoCancellableJob(deadline, clusterClient, streamGraph)) {
 
             final JobID jobId = autoCancellableJob.getJobId();
             final JobGraph jobGraph = autoCancellableJob.getJobGraph();
@@ -907,12 +979,17 @@ public abstract class AbstractQueryableStateTestBase {
         final long numElements = 1024L;
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setStateBackend(stateBackend);
         env.setParallelism(maxParallelism);
         // Very important, because cluster is shared between tests and we
         // don't explicitly check that all slots are available before
         // submitting.
-        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(Integer.MAX_VALUE, 1000L));
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, Integer.MAX_VALUE);
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY, Duration.ofMillis(1000));
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
 
         DataStream<Tuple2<Integer, Long>> source =
                 env.addSource(new TestAscendingValueSource(numElements));
@@ -950,8 +1027,10 @@ public abstract class AbstractQueryableStateTestBase {
                             }
                         });
 
+        StreamGraph streamGraph = env.getStreamGraph();
+        streamGraph.setStateBackend(stateBackend);
         try (AutoCancellableJob autoCancellableJob =
-                new AutoCancellableJob(deadline, clusterClient, env)) {
+                new AutoCancellableJob(deadline, clusterClient, streamGraph)) {
 
             final JobID jobId = autoCancellableJob.getJobId();
             final JobGraph jobGraph = autoCancellableJob.getJobGraph();
@@ -1011,12 +1090,17 @@ public abstract class AbstractQueryableStateTestBase {
         final long numElements = 1024L;
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setStateBackend(stateBackend);
         env.setParallelism(maxParallelism);
         // Very important, because cluster is shared between tests and we
         // don't explicitly check that all slots are available before
         // submitting.
-        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(Integer.MAX_VALUE, 1000L));
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, Integer.MAX_VALUE);
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY, Duration.ofMillis(1000));
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
 
         DataStream<Tuple2<Integer, Long>> source =
                 env.addSource(new TestAscendingValueSource(numElements));
@@ -1040,8 +1124,10 @@ public abstract class AbstractQueryableStateTestBase {
                         BasicTypeInfo.STRING_TYPE_INFO,
                         new AggregatingTestOperator(aggrStateDescriptor));
 
+        StreamGraph streamGraph = env.getStreamGraph();
+        streamGraph.setStateBackend(stateBackend);
         try (AutoCancellableJob autoCancellableJob =
-                new AutoCancellableJob(deadline, clusterClient, env)) {
+                new AutoCancellableJob(deadline, clusterClient, streamGraph)) {
 
             final JobID jobId = autoCancellableJob.getJobId();
             final JobGraph jobGraph = autoCancellableJob.getJobGraph();
@@ -1298,11 +1384,11 @@ public abstract class AbstractQueryableStateTestBase {
         AutoCancellableJob(
                 Deadline deadline,
                 final ClusterClient<?> clusterClient,
-                final StreamExecutionEnvironment env) {
-            Preconditions.checkNotNull(env);
+                final StreamGraph streamGraph) {
+            Preconditions.checkNotNull(streamGraph);
 
             this.clusterClient = Preconditions.checkNotNull(clusterClient);
-            this.jobGraph = env.getStreamGraph().getJobGraph();
+            this.jobGraph = streamGraph.getJobGraph();
 
             this.jobId = Preconditions.checkNotNull(jobGraph.getJobID());
 

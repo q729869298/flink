@@ -20,7 +20,6 @@ package org.apache.flink.test.checkpointing;
 
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.functions.ReduceFunction;
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.java.tuple.Tuple;
@@ -31,6 +30,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.HighAvailabilityOptions;
 import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.configuration.NettyShuffleEnvironmentOptions;
+import org.apache.flink.configuration.RestartStrategyOptions;
 import org.apache.flink.configuration.RpcOptions;
 import org.apache.flink.configuration.TaskManagerOptions;
 import org.apache.flink.contrib.streaming.state.EmbeddedRocksDBStateBackend;
@@ -45,6 +45,7 @@ import org.apache.flink.runtime.testutils.ZooKeeperTestUtils;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.streaming.api.functions.windowing.RichWindowFunction;
+import org.apache.flink.streaming.api.graph.StreamGraph;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
@@ -283,8 +284,14 @@ public class EventTimeWindowCheckpointingITCase extends TestLogger {
             StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
             env.setParallelism(PARALLELISM);
             env.enableCheckpointing(100);
-            env.setRestartStrategy(RestartStrategies.fixedDelayRestart(1, 0));
-            env.setStateBackend(this.stateBackend);
+            Configuration configuration = new Configuration();
+            configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+            configuration.set(RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, 1);
+            configuration.set(
+                    RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY,
+                    Duration.ofMillis(0));
+            env.configure(configuration, Thread.currentThread().getContextClassLoader());
+
             env.getConfig().setUseSnapshotCompression(true);
 
             env.addSource(
@@ -347,7 +354,10 @@ public class EventTimeWindowCheckpointingITCase extends TestLogger {
                                             numKeys, numElementsPerKey, windowSize)))
                     .setParallelism(1);
 
-            env.execute("Tumbling Window Test");
+            StreamGraph streamGraph = env.getStreamGraph();
+            streamGraph.setStateBackend(this.stateBackend);
+            streamGraph.setJobName("Tumbling Window Test");
+            env.execute(streamGraph);
         } catch (Exception e) {
             e.printStackTrace();
             fail(e.getMessage());
@@ -374,8 +384,14 @@ public class EventTimeWindowCheckpointingITCase extends TestLogger {
             env.setParallelism(PARALLELISM);
             env.setMaxParallelism(maxParallelism);
             env.enableCheckpointing(100);
-            env.setRestartStrategy(RestartStrategies.fixedDelayRestart(1, 0));
-            env.setStateBackend(this.stateBackend);
+            Configuration configuration = new Configuration();
+            configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+            configuration.set(RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, 1);
+            configuration.set(
+                    RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY,
+                    Duration.ofMillis(0));
+            env.configure(configuration, Thread.currentThread().getContextClassLoader());
+
             env.getConfig().setUseSnapshotCompression(true);
 
             env.addSource(
@@ -444,7 +460,10 @@ public class EventTimeWindowCheckpointingITCase extends TestLogger {
                                             numKeys, numElementsPerKey, windowSize)))
                     .setParallelism(1);
 
-            env.execute("Tumbling Window Test");
+            StreamGraph streamGraph = env.getStreamGraph();
+            streamGraph.setStateBackend(this.stateBackend);
+            streamGraph.setJobName("Tumbling Window Test");
+            env.execute(streamGraph);
         } catch (Exception e) {
             e.printStackTrace();
             fail(e.getMessage());
@@ -463,8 +482,14 @@ public class EventTimeWindowCheckpointingITCase extends TestLogger {
             env.setMaxParallelism(2 * PARALLELISM);
             env.setParallelism(PARALLELISM);
             env.enableCheckpointing(100);
-            env.setRestartStrategy(RestartStrategies.fixedDelayRestart(1, 0));
-            env.setStateBackend(this.stateBackend);
+            Configuration configuration = new Configuration();
+            configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+            configuration.set(RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, 1);
+            configuration.set(
+                    RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY,
+                    Duration.ofMillis(0));
+            env.configure(configuration, Thread.currentThread().getContextClassLoader());
+
             env.getConfig().setUseSnapshotCompression(true);
 
             env.addSource(
@@ -528,7 +553,10 @@ public class EventTimeWindowCheckpointingITCase extends TestLogger {
                                             numKeys, numElementsPerKey, windowSlide)))
                     .setParallelism(1);
 
-            env.execute("Tumbling Window Test");
+            StreamGraph streamGraph = env.getStreamGraph();
+            streamGraph.setStateBackend(this.stateBackend);
+            streamGraph.setJobName("Tumbling Window Test");
+            env.execute(streamGraph);
         } catch (Exception e) {
             e.printStackTrace();
             fail(e.getMessage());
@@ -545,8 +573,14 @@ public class EventTimeWindowCheckpointingITCase extends TestLogger {
             StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
             env.setParallelism(PARALLELISM);
             env.enableCheckpointing(100);
-            env.setRestartStrategy(RestartStrategies.fixedDelayRestart(1, 0));
-            env.setStateBackend(this.stateBackend);
+            Configuration configuration = new Configuration();
+            configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+            configuration.set(RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, 1);
+            configuration.set(
+                    RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY,
+                    Duration.ofMillis(0));
+            env.configure(configuration, Thread.currentThread().getContextClassLoader());
+
             env.getConfig().setUseSnapshotCompression(true);
 
             env.addSource(
@@ -611,7 +645,10 @@ public class EventTimeWindowCheckpointingITCase extends TestLogger {
                                             numKeys, numElementsPerKey, windowSize)))
                     .setParallelism(1);
 
-            env.execute("Tumbling Window Test");
+            StreamGraph streamGraph = env.getStreamGraph();
+            streamGraph.setStateBackend(this.stateBackend);
+            streamGraph.setJobName("Tumbling Window Test");
+            env.execute(streamGraph);
         } catch (Exception e) {
             e.printStackTrace();
             fail(e.getMessage());
@@ -629,8 +666,14 @@ public class EventTimeWindowCheckpointingITCase extends TestLogger {
             StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
             env.setParallelism(PARALLELISM);
             env.enableCheckpointing(100);
-            env.setRestartStrategy(RestartStrategies.fixedDelayRestart(1, 0));
-            env.setStateBackend(this.stateBackend);
+            Configuration configuration = new Configuration();
+            configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+            configuration.set(RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, 1);
+            configuration.set(
+                    RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY,
+                    Duration.ofMillis(0));
+            env.configure(configuration, Thread.currentThread().getContextClassLoader());
+
             env.getConfig().setUseSnapshotCompression(true);
 
             env.addSource(
@@ -698,7 +741,10 @@ public class EventTimeWindowCheckpointingITCase extends TestLogger {
                                             numKeys, numElementsPerKey, windowSlide)))
                     .setParallelism(1);
 
-            env.execute("Tumbling Window Test");
+            StreamGraph streamGraph = env.getStreamGraph();
+            streamGraph.setStateBackend(this.stateBackend);
+            streamGraph.setJobName("Tumbling Window Test");
+            env.execute(streamGraph);
         } catch (Exception e) {
             e.printStackTrace();
             fail(e.getMessage());

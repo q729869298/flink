@@ -21,12 +21,10 @@ package org.apache.flink.table.planner.utils;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.JobExecutionResult;
 import org.apache.flink.api.common.cache.DistributedCache;
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.dag.Transformation;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.core.execution.CheckpointingMode;
-import org.apache.flink.runtime.state.StateBackend;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -195,40 +193,6 @@ public class DummyStreamExecutionEnvironment extends StreamExecutionEnvironment 
     @Override
     public CheckpointingMode getCheckpointingConsistencyMode() {
         return realExecEnv.getCheckpointingConsistencyMode();
-    }
-
-    @Override
-    public StreamExecutionEnvironment setStateBackend(StateBackend backend) {
-        throw new UnsupportedOperationException(
-                "This is a dummy StreamExecutionEnvironment, setStateBackend method is unsupported.");
-    }
-
-    @Override
-    public StateBackend getStateBackend() {
-        return realExecEnv.getStateBackend();
-    }
-
-    @Override
-    public void setRestartStrategy(
-            RestartStrategies.RestartStrategyConfiguration restartStrategyConfiguration) {
-        throw new UnsupportedOperationException(
-                "This is a dummy StreamExecutionEnvironment, setRestartStrategy method is unsupported.");
-    }
-
-    @Override
-    public RestartStrategies.RestartStrategyConfiguration getRestartStrategy() {
-        return realExecEnv.getRestartStrategy();
-    }
-
-    @Override
-    public void setNumberOfExecutionRetries(int numberOfExecutionRetries) {
-        throw new UnsupportedOperationException(
-                "This is a dummy StreamExecutionEnvironment, setNumberOfExecutionRetries method is unsupported.");
-    }
-
-    @Override
-    public int getNumberOfExecutionRetries() {
-        return realExecEnv.getNumberOfExecutionRetries();
     }
 
     @Override

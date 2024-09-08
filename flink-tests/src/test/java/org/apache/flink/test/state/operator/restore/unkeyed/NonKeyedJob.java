@@ -20,10 +20,10 @@ package org.apache.flink.test.state.operator.restore.unkeyed;
 
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.RichMapFunction;
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.RestartStrategyOptions;
 import org.apache.flink.core.execution.CheckpointingMode;
 import org.apache.flink.runtime.state.memory.MemoryStateBackend;
 import org.apache.flink.streaming.api.checkpoint.ListCheckpointed;
@@ -31,6 +31,7 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunction;
+import org.apache.flink.streaming.api.graph.StreamGraph;
 import org.apache.flink.test.state.operator.restore.ExecutionMode;
 
 import org.junit.Assert;
@@ -59,9 +60,9 @@ public class NonKeyedJob {
         StreamExecutionEnvironment env =
                 StreamExecutionEnvironment.createLocalEnvironmentWithWebUI(config);
         env.enableCheckpointing(500, CheckpointingMode.EXACTLY_ONCE);
-        env.setRestartStrategy(RestartStrategies.noRestart());
-
-        env.setStateBackend(new MemoryStateBackend());
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "none");
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
 
         /** Source -> StatefulMap1 -> CHAIN(StatefulMap2 -> Map -> StatefulMap3) */
         DataStream<Integer> source = createSource(env, ExecutionMode.GENERATE);
@@ -79,7 +80,10 @@ public class NonKeyedJob {
         SingleOutputStreamOperator<Integer> third =
                 createThirdStatefulMap(ExecutionMode.GENERATE, stateless);
 
-        env.execute("job");
+        StreamGraph streamGraph = env.getStreamGraph();
+        streamGraph.setStateBackend(new MemoryStateBackend());
+        streamGraph.setJobName("job");
+        env.execute(streamGraph);
     }
 
     public static SingleOutputStreamOperator<Integer> createSource(

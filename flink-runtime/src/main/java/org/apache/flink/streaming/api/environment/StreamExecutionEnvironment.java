@@ -34,7 +34,6 @@ import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.api.common.operators.ResourceSpec;
 import org.apache.flink.api.common.operators.SlotSharingGroup;
 import org.apache.flink.api.common.operators.util.SlotSharingGroupUtils;
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.connector.source.Boundedness;
@@ -61,7 +60,6 @@ import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.configuration.PipelineOptions;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.configuration.RestOptions;
-import org.apache.flink.configuration.StateBackendOptions;
 import org.apache.flink.configuration.StateChangelogOptions;
 import org.apache.flink.connector.datagen.functions.FromElementsGeneratorFunction;
 import org.apache.flink.connector.datagen.source.DataGeneratorSource;
@@ -78,7 +76,6 @@ import org.apache.flink.core.fs.Path;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.scheduler.ClusterDatasetCorruptedException;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
-import org.apache.flink.runtime.state.StateBackend;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
@@ -193,16 +190,6 @@ public class StreamExecutionEnvironment implements AutoCloseable {
     protected final List<Transformation<?>> transformations = new ArrayList<>();
 
     private final Map<AbstractID, CacheTransformation<?>> cachedTransformations = new HashMap<>();
-
-    /**
-     * The state backend used for storing k/v state and state snapshots.
-     *
-     * @deprecated The field is marked as deprecated because starting from Flink 1.19, the usage of
-     *     all complex Java objects related to configuration, including their getter and setter
-     *     methods, should be replaced by ConfigOption. In a future major version of Flink, this
-     *     field will be removed entirely.
-     */
-    @Deprecated private StateBackend defaultStateBackend;
 
     /** The time characteristic used by the data streams. */
     private TimeCharacteristic timeCharacteristic = DEFAULT_TIME_CHARACTERISTIC;
@@ -684,70 +671,6 @@ public class StreamExecutionEnvironment implements AutoCloseable {
     }
 
     /**
-     * Sets the state backend that describes how to store operator. It defines the data structures
-     * that hold state during execution (for example hash tables, RocksDB, or other data stores).
-     *
-     * <p>State managed by the state backend includes both keyed state that is accessible on {@link
-     * org.apache.flink.streaming.api.datastream.KeyedStream keyed streams}, as well as state
-     * maintained directly by the user code that implements {@link
-     * org.apache.flink.streaming.api.checkpoint.CheckpointedFunction CheckpointedFunction}.
-     *
-     * <p>The {@link org.apache.flink.runtime.state.hashmap.HashMapStateBackend} maintains state in
-     * heap memory, as objects. It is lightweight without extra dependencies, but is limited to JVM
-     * heap memory.
-     *
-     * <p>In contrast, the {@code EmbeddedRocksDBStateBackend} stores its state in an embedded
-     * {@code RocksDB} instance. This state backend can store very large state that exceeds memory
-     * and spills to local disk. All key/value state (including windows) is stored in the key/value
-     * index of RocksDB.
-     *
-     * <p>In both cases, fault tolerance is managed via the jobs {@link
-     * org.apache.flink.runtime.state.CheckpointStorage} which configures how and where state
-     * backends persist during a checkpoint.
-     *
-     * @deprecated The method is marked as deprecated because starting from Flink 1.19, the usage of
-     *     all complex Java objects related to configuration, including their getter and setter
-     *     methods, should be replaced by ConfigOption. In a future major version of Flink, this
-     *     method will be removed entirely. It is recommended to switch to using the ConfigOptions
-     *     provided for configuring state backend like the following code snippet:
-     *     <pre>{@code
-     * Configuration config = new Configuration();
-     * config.set(StateBackendOptions.STATE_BACKEND, "hashmap");
-     * StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment(config);
-     * }</pre>
-     *     For more details on using ConfigOption for state backend configuration, please refer to
-     *     the Flink documentation: <a
-     *     href="https://nightlies.apache.org/flink/flink-docs-stable/docs/ops/state/state_backends">state-backends</a>
-     * @return This StreamExecutionEnvironment itself, to allow chaining of function calls.
-     * @see #getStateBackend()
-     * @see CheckpointConfig#setCheckpointStorage( org.apache.flink.runtime.state.CheckpointStorage)
-     */
-    @Deprecated
-    @PublicEvolving
-    public StreamExecutionEnvironment setStateBackend(StateBackend backend) {
-        this.defaultStateBackend = Preconditions.checkNotNull(backend);
-        return this;
-    }
-
-    /**
-     * Gets the state backend that defines how to store and checkpoint state.
-     *
-     * @deprecated The method is marked as deprecated because starting from Flink 1.19, the usage of
-     *     all complex Java objects related to configuration, including their getter and setter
-     *     methods, should be replaced by ConfigOption. In a future major version of Flink, this
-     *     method will be removed entirely. It is recommended to find which state backend is used by
-     *     state backend ConfigOption. For more details on using ConfigOption for state backend
-     *     configuration, please refer to the Flink documentation: <a
-     *     href="https://nightlies.apache.org/flink/flink-docs-stable/docs/ops/state/state_backends">state-backends</a>
-     * @see #setStateBackend(StateBackend)
-     */
-    @Deprecated
-    @PublicEvolving
-    public StateBackend getStateBackend() {
-        return defaultStateBackend;
-    }
-
-    /**
      * Enable the change log for current state backend. This change log allows operators to persist
      * state changes in a very fine-grained manner. Currently, the change log only applies to keyed
      * state, so non-keyed operator state and channel state are persisted as usual. The 'state' here
@@ -851,72 +774,6 @@ public class StreamExecutionEnvironment implements AutoCloseable {
     public Path getDefaultSavepointDirectory() {
         String path = this.configuration.get(CheckpointingOptions.SAVEPOINT_DIRECTORY);
         return path == null ? null : new Path(path);
-    }
-
-    /**
-     * Sets the restart strategy configuration. The configuration specifies which restart strategy
-     * will be used for the execution graph in case of a restart.
-     *
-     * @deprecated The method is marked as deprecated because starting from Flink 1.19, the usage of
-     *     all complex Java objects related to configuration, including their getter and setter
-     *     methods, should be replaced by ConfigOption. In a future major version of Flink, this
-     *     method will be removed entirely. It is recommended to switch to using the ConfigOptions
-     *     provided by {@link org.apache.flink.configuration.RestartStrategyOptions} for configuring
-     *     restart strategies.
-     * @param restartStrategyConfiguration Restart strategy configuration to be set
-     */
-    @Deprecated
-    @PublicEvolving
-    public void setRestartStrategy(
-            RestartStrategies.RestartStrategyConfiguration restartStrategyConfiguration) {
-        config.setRestartStrategy(restartStrategyConfiguration);
-    }
-
-    /**
-     * Returns the specified restart strategy configuration.
-     *
-     * @deprecated The method is marked as deprecated because starting from Flink 1.19, the usage of
-     *     all complex Java objects related to configuration, including their getter and setter
-     *     methods, should be replaced by ConfigOption. In a future major version of Flink, this
-     *     method will be removed entirely. It is recommended to switch to using the ConfigOptions
-     *     provided by {@link org.apache.flink.configuration.RestartStrategyOptions} for configuring
-     *     restart strategies.
-     * @return The restart strategy configuration to be used
-     */
-    @Deprecated
-    @PublicEvolving
-    public RestartStrategies.RestartStrategyConfiguration getRestartStrategy() {
-        return config.getRestartStrategy();
-    }
-
-    /**
-     * Sets the number of times that failed tasks are re-executed. A value of zero effectively
-     * disables fault tolerance. A value of {@code -1} indicates that the system default value (as
-     * defined in the configuration) should be used.
-     *
-     * @param numberOfExecutionRetries The number of times the system will try to re-execute failed
-     *     tasks.
-     * @deprecated This method will be replaced by {@link #setRestartStrategy}. The {@link
-     *     RestartStrategies#fixedDelayRestart(int, Duration)} contains the number of execution
-     *     retries.
-     */
-    @Deprecated
-    @PublicEvolving
-    public void setNumberOfExecutionRetries(int numberOfExecutionRetries) {
-        config.setNumberOfExecutionRetries(numberOfExecutionRetries);
-    }
-
-    /**
-     * Gets the number of times the system will try to re-execute failed tasks. A value of {@code
-     * -1} indicates that the system default value (as defined in the configuration) should be used.
-     *
-     * @return The number of times the system will try to re-execute failed tasks.
-     * @deprecated This method will be replaced by {@link #getRestartStrategy}.
-     */
-    @Deprecated
-    @PublicEvolving
-    public int getNumberOfExecutionRetries() {
-        return config.getNumberOfExecutionRetries();
     }
 
     // --------------------------------------------------------------------------------------------
@@ -1135,11 +992,6 @@ public class StreamExecutionEnvironment implements AutoCloseable {
 
         config.configure(configuration, classLoader);
         checkpointCfg.configure(configuration);
-
-        // reset state backend for backward compatibility
-        configuration
-                .getOptional(StateBackendOptions.STATE_BACKEND)
-                .ifPresent(ignored -> this.defaultStateBackend = null);
     }
 
     private void registerCustomListeners(
@@ -2569,7 +2421,6 @@ public class StreamExecutionEnvironment implements AutoCloseable {
         // stream graph generation.
         return new StreamGraphGenerator(
                         new ArrayList<>(transformations), config, checkpointCfg, configuration)
-                .setStateBackend(defaultStateBackend)
                 .setTimeCharacteristic(getStreamTimeCharacteristic())
                 .setSlotSharingGroupResource(slotSharingGroupResources);
     }

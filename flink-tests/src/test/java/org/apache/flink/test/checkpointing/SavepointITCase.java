@@ -24,7 +24,6 @@ import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.functions.RichFlatMapFunction;
 import org.apache.flink.api.common.functions.RichMapFunction;
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
@@ -40,6 +39,7 @@ import org.apache.flink.configuration.ClusterOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ExternalizedCheckpointRetention;
 import org.apache.flink.configuration.MemorySize;
+import org.apache.flink.configuration.RestartStrategyOptions;
 import org.apache.flink.configuration.StateBackendOptions;
 import org.apache.flink.configuration.TaskManagerOptions;
 import org.apache.flink.contrib.streaming.state.EmbeddedRocksDBStateBackend;
@@ -252,7 +252,9 @@ public class SavepointITCase extends TestLogger {
                                 .build());
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.getConfig().setRestartStrategy(RestartStrategies.noRestart());
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "none");
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
         env.addSource(new InfiniteTestSource())
                 .setParallelism(1)
                 .name("Infinite Source")
@@ -315,7 +317,12 @@ public class SavepointITCase extends TestLogger {
                                 .build());
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.getConfig().setRestartStrategy(RestartStrategies.fixedDelayRestart(3, 10));
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, 3);
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY, Duration.ofMillis(10));
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
         env.setParallelism(1);
         env.addSource(new InfiniteTestSource())
                 .name("Infinite Source")
@@ -465,12 +472,14 @@ public class SavepointITCase extends TestLogger {
         final int numSlotsPerTaskManager = 2;
         final int parallelism = numTaskManagers * numSlotsPerTaskManager;
 
-        final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setStateBackend(new EmbeddedRocksDBStateBackend(true));
+        Configuration configuration = new Configuration();
+        configuration.set(
+                CheckpointingOptions.CHECKPOINTS_DIRECTORY, folder.newFolder().toURI().toString());
+        final StreamExecutionEnvironment env =
+                StreamExecutionEnvironment.getExecutionEnvironment(configuration);
         env.getCheckpointConfig()
                 .setExternalizedCheckpointRetention(
                         ExternalizedCheckpointRetention.RETAIN_ON_CANCELLATION);
-        env.getCheckpointConfig().setCheckpointStorage(folder.newFolder().toURI());
         env.setParallelism(parallelism);
 
         final SharedReference<CountDownLatch> counter =
@@ -513,7 +522,9 @@ public class SavepointITCase extends TestLogger {
                         })
                 .setParallelism(1);
 
-        final JobGraph jobGraph = env.getStreamGraph().getJobGraph();
+        StreamGraph streamGraph = env.getStreamGraph();
+        streamGraph.setStateBackend(new EmbeddedRocksDBStateBackend(true));
+        final JobGraph jobGraph = streamGraph.getJobGraph();
 
         MiniClusterWithClientResource cluster =
                 new MiniClusterWithClientResource(
@@ -1048,8 +1059,13 @@ public class SavepointITCase extends TestLogger {
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(parallelism);
-        env.getConfig()
-                .setRestartStrategy(RestartStrategies.fixedDelayRestart(Integer.MAX_VALUE, 0L));
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, Integer.MAX_VALUE);
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY, Duration.ofMillis(0));
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
         env.addSource(new InfiniteTestSource())
                 .name("Infinite test source")
                 .sinkTo(new DiscardingSink<>());
@@ -1134,9 +1150,14 @@ public class SavepointITCase extends TestLogger {
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(1);
-        env.getConfig()
-                .setRestartStrategy(
-                        RestartStrategies.fixedDelayRestart(expectedMaximumNumberOfRestarts, 0));
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS,
+                expectedMaximumNumberOfRestarts);
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY, Duration.ofMillis(0));
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
         env.addSource(failingSource)
                 .name("Failing Source")
                 .map(
@@ -1360,9 +1381,14 @@ public class SavepointITCase extends TestLogger {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(parallelism);
         env.disableOperatorChaining();
-        env.getConfig()
-                .setRestartStrategy(
-                        RestartStrategies.fixedDelayRestart(numberOfRetries, restartDelay));
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "fixeddelay");
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, numberOfRetries);
+        configuration.set(
+                RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY,
+                Duration.ofMillis(restartDelay));
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
 
         DataStream<Integer> stream =
                 env.addSource(new InfiniteTestSource()).shuffle().map(new StatefulCounter());

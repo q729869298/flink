@@ -19,10 +19,13 @@
 package org.apache.flink.test.checkpointing;
 
 import org.apache.flink.api.common.JobID;
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
+import org.apache.flink.configuration.CheckpointingOptions;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.IllegalConfigurationException;
 import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.configuration.RestartStrategyOptions;
 import org.apache.flink.core.fs.CloseableRegistry;
 import org.apache.flink.runtime.checkpoint.CheckpointFailureManager;
 import org.apache.flink.runtime.checkpoint.CheckpointOptions;
@@ -31,6 +34,7 @@ import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.state.CheckpointMetadataOutputStream;
 import org.apache.flink.runtime.state.CheckpointStorage;
 import org.apache.flink.runtime.state.CheckpointStorageAccess;
+import org.apache.flink.runtime.state.CheckpointStorageFactory;
 import org.apache.flink.runtime.state.CheckpointStorageLocation;
 import org.apache.flink.runtime.state.CheckpointStreamFactory;
 import org.apache.flink.runtime.state.CompletedCheckpointStorageLocation;
@@ -53,6 +57,7 @@ import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.sink.v2.DiscardingSink;
 import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunction;
+import org.apache.flink.streaming.api.graph.StreamGraph;
 import org.apache.flink.streaming.api.graph.StreamingJobGraphGenerator;
 import org.apache.flink.test.util.MiniClusterWithClientResource;
 import org.apache.flink.test.util.TestUtils;
@@ -87,9 +92,15 @@ public class CheckpointFailureManagerITCase extends TestLogger {
     public void testFinalizationFailureCounted() throws Exception {
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.enableCheckpointing(10);
-        env.getCheckpointConfig().setCheckpointStorage(new FailingFinalizationCheckpointStorage());
+        env.configure(
+                new Configuration()
+                        .set(
+                                CheckpointingOptions.CHECKPOINT_STORAGE,
+                                "org.apache.flink.test.checkpointing.CheckpointFailureManagerITCase$FailingFinalizationCheckpointStorageFactory"));
         env.getCheckpointConfig().setTolerableCheckpointFailureNumber(0);
-        env.setRestartStrategy(RestartStrategies.noRestart());
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "none");
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
         env.fromSequence(Long.MIN_VALUE, Long.MAX_VALUE).sinkTo(new DiscardingSink<>());
         JobGraph jobGraph = StreamingJobGraphGenerator.createJobGraph(env.getStreamGraph());
         try {
@@ -112,10 +123,13 @@ public class CheckpointFailureManagerITCase extends TestLogger {
     public void testAsyncCheckpointFailureTriggerJobFailed() throws Exception {
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.enableCheckpointing(500);
-        env.setRestartStrategy(RestartStrategies.noRestart());
-        env.setStateBackend(new AsyncFailureStateBackend());
+        Configuration configuration = new Configuration();
+        configuration.set(RestartStrategyOptions.RESTART_STRATEGY, "none");
+        env.configure(configuration, Thread.currentThread().getContextClassLoader());
         env.addSource(new StringGeneratingSourceFunction()).sinkTo(new DiscardingSink<>());
-        JobGraph jobGraph = StreamingJobGraphGenerator.createJobGraph(env.getStreamGraph());
+        StreamGraph streamGraph = env.getStreamGraph();
+        streamGraph.setStateBackend(new AsyncFailureStateBackend());
+        JobGraph jobGraph = StreamingJobGraphGenerator.createJobGraph(streamGraph);
         try {
             // assert that the job only execute checkpoint once and only failed once.
             TestUtils.submitJobAndWaitForResult(
@@ -229,6 +243,16 @@ public class CheckpointFailureManagerITCase extends TestLogger {
         @Override
         public AsyncFailureStateBackend configure(ReadableConfig config, ClassLoader classLoader) {
             return this;
+        }
+    }
+
+    public static class FailingFinalizationCheckpointStorageFactory
+            implements CheckpointStorageFactory<FailingFinalizationCheckpointStorage> {
+        @Override
+        public FailingFinalizationCheckpointStorage createFromConfig(
+                ReadableConfig config, ClassLoader classLoader)
+                throws IllegalConfigurationException {
+            return new FailingFinalizationCheckpointStorage();
         }
     }
 
