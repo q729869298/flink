@@ -215,6 +215,14 @@ public class HadoopFileSystem extends FileSystem {
         return new HadoopRecoverableWriter(fs);
     }
 
+    @Override
+    public RecoverableWriter createRecoverableWriter(boolean noLocalWrite) throws IOException {
+        // This writer is only supported on a subset of file systems, and on
+        // specific versions. We check these schemes and versions eagerly for better error
+        // messages in the constructor of the writer.
+        return new HadoopRecoverableWriter(fs, noLocalWrite);
+    }
+
     // ------------------------------------------------------------------------
     //  Utilities
     // ------------------------------------------------------------------------
