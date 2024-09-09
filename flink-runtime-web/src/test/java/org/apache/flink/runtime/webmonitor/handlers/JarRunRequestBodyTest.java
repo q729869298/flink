@@ -19,7 +19,7 @@
 package org.apache.flink.runtime.webmonitor.handlers;
 
 import org.apache.flink.api.common.JobID;
-import org.apache.flink.core.execution.RestoreMode;
+import org.apache.flink.core.execution.RecoveryClaimMode;
 import org.apache.flink.runtime.rest.messages.RestRequestMarshallingTestBase;
 import org.apache.flink.testutils.junit.extensions.parameterized.NoOpTestExtension;
 
@@ -49,7 +49,7 @@ class JarRunRequestBodyTest extends RestRequestMarshallingTestBase<JarRunRequest
                 new JobID(),
                 true,
                 "foo/bar",
-                RestoreMode.CLAIM,
+                RecoveryClaimMode.CLAIM,
                 Collections.singletonMap("key", "value"));
     }
 
