@@ -96,7 +96,7 @@ public class SavepointRestoreSettings implements Serializable {
     }
 
     /** Tells how to restore from the given savepoint. */
-    public @Nonnull RecoveryClaimMode getRestoreMode() {
+    public @Nonnull RecoveryClaimMode getRecoveryClaimMode() {
         return recoveryClaimMode;
     }
 
