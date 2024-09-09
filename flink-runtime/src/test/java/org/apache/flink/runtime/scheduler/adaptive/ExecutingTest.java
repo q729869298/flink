@@ -20,7 +20,6 @@ package org.apache.flink.runtime.scheduler.adaptive;
 
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.JobStatus;
-import org.apache.flink.api.common.time.Time;
 import org.apache.flink.core.execution.SavepointFormatType;
 import org.apache.flink.runtime.JobException;
 import org.apache.flink.runtime.blob.BlobWriter;
@@ -968,7 +967,7 @@ class ExecutingTest {
 
             initialize(
                     1,
-                    Time.milliseconds(1L),
+                    Duration.ofMillis(1L),
                     1L,
                     new DefaultSubtaskAttemptNumberStore(Collections.emptyList()));
             mockExecutionVertex = executionVertexSupplier.apply(this);
@@ -989,7 +988,7 @@ class ExecutingTest {
         @Nullable private Throwable markFailed = null;
 
         public FailOnDeployMockExecutionVertex(ExecutionJobVertex jobVertex) {
-            super(jobVertex, 1, new IntermediateResult[] {}, Time.milliseconds(1L), 1L, 1, 0);
+            super(jobVertex, 1, new IntermediateResult[] {}, Duration.ofMillis(1L), 1L, 1, 0);
         }
 
         @Override
@@ -1013,7 +1012,7 @@ class ExecutingTest {
         private ExecutionState mockedExecutionState = ExecutionState.RUNNING;
 
         MockExecutionVertex(ExecutionJobVertex jobVertex) {
-            super(jobVertex, 1, new IntermediateResult[] {}, Time.milliseconds(1L), 1L, 1, 0);
+            super(jobVertex, 1, new IntermediateResult[] {}, Duration.ofMillis(1L), 1L, 1, 0);
         }
 
         @Override

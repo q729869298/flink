@@ -18,7 +18,7 @@
 
 package org.apache.flink.api.common.time;
 
-import org.apache.flink.annotation.PublicEvolving;
+import org.apache.flink.annotation.Internal;
 
 import javax.annotation.Nullable;
 
@@ -32,10 +32,10 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
 /**
  * The definition of a time interval. Similar to a simpler version of {@link java.time.Duration}.
  *
- * @deprecated Use {@link Duration}
+ * @deprecated Use {@link Duration}. Time needs to be kept until all external libraries remove this.
  */
 @Deprecated
-@PublicEvolving
+@Internal
 public final class Time implements Serializable {
 
     private static final long serialVersionUID = -350254188460915999L;

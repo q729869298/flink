@@ -19,7 +19,6 @@
 package org.apache.flink.runtime.rest.handler.job;
 
 import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.api.common.time.Time;
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.executiongraph.AccessExecution;
 import org.apache.flink.runtime.executiongraph.AccessExecutionVertex;
@@ -51,6 +50,7 @@ import org.apache.flink.shaded.curator5.com.google.common.collect.Iterables;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -73,7 +73,7 @@ public class JobExceptionsHandler
 
     public JobExceptionsHandler(
             GatewayRetriever<? extends RestfulGateway> leaderRetriever,
-            Time timeout,
+            Duration timeout,
             Map<String, String> responseHeaders,
             MessageHeaders<
                             EmptyRequestBody,
