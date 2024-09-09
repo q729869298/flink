@@ -136,7 +136,7 @@ public class JarRunRequestBody extends JarRequestBody {
 
     @Nullable
     @JsonIgnore
-    public RecoveryClaimMode getRestoreMode() {
+    public RecoveryClaimMode getRecoveryClaimMode() {
         return recoveryClaimMode == null ? deprecatedRecoveryClaimMode : recoveryClaimMode;
     }
 
